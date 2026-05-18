@@ -1,0 +1,574 @@
+import { randomUUID } from "node:crypto";
+import request from "supertest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { newDb } from "pg-mem";
+import { createApp } from "../app.js";
+import { runMigrations } from "../db/setup.js";
+
+async function createTestApp() {
+  const db = newDb();
+  const adapter = db.adapters.createPg();
+  const pool = new adapter.Pool();
+
+  await runMigrations(pool);
+
+  return {
+    app: createApp(pool),
+    pool
+  };
+}
+
+async function insertUser(
+  pool: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+  input: { id: string; email: string; displayName: string; globalRole: string }
+) {
+  await pool.query(
+    `
+      insert into users (id, email, display_name, global_role, status)
+      values ($1, $2, $3, $4, 'active')
+    `,
+    [input.id, input.email, input.displayName, input.globalRole]
+  );
+}
+
+async function addCaseMember(pool: { query: (text: string, params?: unknown[]) => Promise<unknown> }, caseId: string, userId: string, addedByUserId: string) {
+  await pool.query(
+    `
+      insert into case_members (case_id, user_id, case_role, added_by_user_id)
+      values ($1, $2, 'member', $3)
+    `,
+    [caseId, userId, addedByUserId]
+  );
+}
+
+async function addIncidentMember(
+  pool: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+  incidentId: string,
+  userId: string,
+  addedByUserId: string
+) {
+  await pool.query(
+    `
+      insert into incident_members (incident_id, user_id, incident_role, added_by_user_id)
+      values ($1, $2, 'analyst', $3)
+    `,
+    [incidentId, userId, addedByUserId]
+  );
+}
+
+describe("Forenotes API", () => {
+  let app: ReturnType<typeof createApp>;
+  let pool: Awaited<ReturnType<typeof createTestApp>>["pool"];
+  let commanderId: string;
+  let analystId: string;
+  let analystTwoId: string;
+
+  beforeEach(async () => {
+    const setup = await createTestApp();
+    app = setup.app;
+    pool = setup.pool;
+    commanderId = randomUUID();
+    analystId = randomUUID();
+    analystTwoId = randomUUID();
+
+    await insertUser(pool, {
+      id: commanderId,
+      email: "commander@example.com",
+      displayName: "Commander",
+      globalRole: "commander"
+    });
+
+    await insertUser(pool, {
+      id: analystId,
+      email: "analyst@example.com",
+      displayName: "Analyst",
+      globalRole: "analyst"
+    });
+
+    await insertUser(pool, {
+      id: analystTwoId,
+      email: "analyst2@example.com",
+      displayName: "Analyst Two",
+      globalRole: "analyst"
+    });
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).get("/api/auth/me");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
+  });
+
+  it("creates a case and incident for a permitted user", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case One",
+        clientName: "Acme",
+        status: "open"
+      });
+
+    expect(caseResponse.status).toBe(201);
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident One",
+        status: "open",
+        severity: "high"
+      });
+
+    expect(incidentResponse.status).toBe(201);
+    expect(incidentResponse.body.incident.case_id).toBe(caseId);
+  });
+
+  it("blocks cross-incident evidence linking", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Scope Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident B",
+        status: "open",
+        severity: "high"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Credential theft",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/indicators`)
+      .set("x-user-id", analystId)
+      .send({
+        indicatorType: "domain",
+        value: "evil.example"
+      });
+    const indicatorId = indicatorResponse.body.indicator.id as string;
+
+    const linkResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/findings/${findingId}/evidence-links`)
+      .set("x-user-id", analystId)
+      .send({
+        evidenceType: "indicator",
+        evidenceId: indicatorId
+      });
+
+    expect(linkResponse.status).toBe(409);
+    expect(linkResponse.body.error).toBe("Cross-incident evidence links are not allowed");
+  });
+
+  it("creates notifications for other incident members when a finding is created", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Notify Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Notify Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Suspicious logon",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(notificationsResponse.body.notifications).toHaveLength(1);
+    expect(notificationsResponse.body.notifications[0].event_type).toBe("finding.created");
+    expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
+  });
+
+  it("creates task assignment notifications and blocks cross-incident task links", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Task Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Task Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Task Incident B",
+        status: "open",
+        severity: "high"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Collect triage evidence",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystId
+      });
+
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/indicators`)
+      .set("x-user-id", analystId)
+      .send({
+        indicatorType: "url",
+        value: "https://bad.example/path"
+      });
+    const indicatorId = indicatorResponse.body.indicator.id as string;
+
+    const linkResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/tasks/${taskId}/links`)
+      .set("x-user-id", commanderId)
+      .send({
+        entityType: "indicator",
+        entityId: indicatorId
+      });
+
+    expect(linkResponse.status).toBe(409);
+    expect(linkResponse.body.error).toBe("Cross-incident task links are not allowed");
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { event_type: string }) => notification.event_type === "task.assigned"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps custom tags scoped to their case and exposes seeded ATT&CK tags globally", async () => {
+    const caseAResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case A",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseAId = caseAResponse.body.case.id as string;
+
+    const caseBResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case B",
+        clientName: "Contoso",
+        status: "open"
+      });
+    const caseBId = caseBResponse.body.case.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseAId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Ransomware",
+        color: "#ff0000"
+      });
+
+    expect(customTagResponse.status).toBe(201);
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const updateCustomTagResponse = await request(app)
+      .patch(`/api/cases/${caseAId}/custom-tags/${customTagId}`)
+      .set("x-user-id", commanderId)
+      .send({
+        color: "#cc0000"
+      });
+
+    expect(updateCustomTagResponse.status).toBe(200);
+    expect(updateCustomTagResponse.body.customTag.color).toBe("#cc0000");
+
+    const caseATagsResponse = await request(app)
+      .get(`/api/cases/${caseAId}/custom-tags`)
+      .set("x-user-id", commanderId);
+
+    expect(caseATagsResponse.status).toBe(200);
+    expect(caseATagsResponse.body.customTags).toHaveLength(1);
+    expect(caseATagsResponse.body.customTags[0].name).toBe("Ransomware");
+
+    const caseBTagsResponse = await request(app)
+      .get(`/api/cases/${caseBId}/custom-tags`)
+      .set("x-user-id", commanderId);
+
+    expect(caseBTagsResponse.status).toBe(200);
+    expect(caseBTagsResponse.body.customTags).toHaveLength(0);
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+
+    expect(attackTagsResponse.status).toBe(200);
+    expect(attackTagsResponse.body.attackTags.length).toBeGreaterThan(0);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1003")
+    ).toBe(true);
+
+    const deleteCustomTagResponse = await request(app)
+      .delete(`/api/cases/${caseAId}/custom-tags/${customTagId}`)
+      .set("x-user-id", commanderId);
+
+    expect(deleteCustomTagResponse.status).toBe(204);
+  });
+
+  it("manages case and incident membership with notifications", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Membership Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const addCaseMemberResponse = await request(app)
+      .post(`/api/cases/${caseId}/members`)
+      .set("x-user-id", commanderId)
+      .send({
+        userId: analystTwoId,
+        caseRole: "member"
+      });
+
+    expect(addCaseMemberResponse.status).toBe(204);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Membership Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const addIncidentMemberResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/members`)
+      .set("x-user-id", commanderId)
+      .send({
+        userId: analystTwoId,
+        incidentRole: "analyst"
+      });
+
+    expect(addIncidentMemberResponse.status).toBe(204);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystTwoId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { event_type: string }) => notification.event_type === "case.member_added"
+      )
+    ).toBe(true);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { event_type: string }) => notification.event_type === "incident.member_added"
+      )
+    ).toBe(true);
+  });
+
+  it("supports scoped search and audit log reads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Search Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Search Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({
+        name: "CrowdStrike Hunt",
+        language: "spl",
+        queryBody: "index=main credential_access"
+      });
+
+    const searchResponse = await request(app)
+      .get(`/api/search?q=credential&incidentId=${incidentId}`)
+      .set("x-user-id", analystId);
+
+    expect(searchResponse.status).toBe(200);
+    expect(searchResponse.body.results).toHaveLength(1);
+    expect(searchResponse.body.results[0].entity_type).toBe("query");
+
+    const forbiddenAuditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", analystId);
+
+    expect(forbiddenAuditResponse.status).toBe(403);
+
+    const auditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(auditResponse.status).toBe(200);
+    expect(auditResponse.body.auditLogs.length).toBeGreaterThan(0);
+  });
+
+  it("supports update and delete flows for incident records", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "CRUD Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "CRUD Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "host-01",
+        os: "Windows"
+      });
+    expect(systemResponse.status).toBe(201);
+    const systemId = systemResponse.body.system.id as string;
+
+    const patchSystemResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/systems/${systemId}`)
+      .set("x-user-id", analystId)
+      .send({
+        owner: "SOC",
+        notes: "critical asset"
+      });
+    expect(patchSystemResponse.status).toBe(200);
+    expect(patchSystemResponse.body.system.owner).toBe("SOC");
+
+    const deleteSystemResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/systems/${systemId}`)
+      .set("x-user-id", commanderId);
+    expect(deleteSystemResponse.status).toBe(204);
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", analystId)
+      .send({
+        username: "alice",
+        domain: "corp"
+      });
+    expect(accountResponse.status).toBe(201);
+    const accountId = accountResponse.body.account.id as string;
+
+    const patchAccountResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/accounts/${accountId}`)
+      .set("x-user-id", analystId)
+      .send({
+        status: "disabled"
+      });
+    expect(patchAccountResponse.status).toBe(200);
+    expect(patchAccountResponse.body.account.status).toBe("disabled");
+  });
+});
