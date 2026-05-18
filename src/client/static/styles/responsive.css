@@ -18,8 +18,6 @@
   }
 
   .context-bar,
-  .workspace-grid,
-  .workspace-grid.is-collapsed,
   .admin-grid {
     grid-template-columns: 1fr;
   }

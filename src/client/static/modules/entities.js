@@ -194,7 +194,7 @@ export const ENTITY_DEFINITIONS = {
       { name: "language", label: "Language", type: "text", required: true },
       { name: "ownerUserId", label: "Owner", type: "member-select" },
       { name: "description", label: "Description", type: "textarea", span: 2 },
-      { name: "queryBody", label: "Query Body", type: "textarea", span: 2, required: true }
+      { name: "queryBody", label: "Query Body", type: "code", span: 2, required: true }
     ],
     values: (item) => ({
       name: item?.name || "",

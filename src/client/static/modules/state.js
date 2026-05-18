@@ -68,7 +68,6 @@ export const state = {
   ui: {
     activeSection: "dashboard",
     sidebarExpanded: true,
-    notificationPanelOpen: true,
     taskView: "board",
     modal: null,
     inlineEdit: null,

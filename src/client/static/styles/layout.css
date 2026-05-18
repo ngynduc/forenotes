@@ -254,17 +254,7 @@
   box-shadow: var(--shadow);
 }
 
-.workspace-grid {
-  grid-template-columns: minmax(0, 1fr) 320px;
-  align-items: start;
-}
-
-.workspace-grid.is-collapsed {
-  grid-template-columns: minmax(0, 1fr) 54px;
-}
-
 .operational-area,
-.notification-rail,
 .member-list,
 .notification-list {
   display: grid;

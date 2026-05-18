@@ -13,18 +13,23 @@ import {
 } from "./actions.js";
 import { moveTask } from "./render/tasks.js";
 import { setFlash, state } from "./state.js";
+import { initCodeEditors } from "./code-editor.js";
 
 export function initEvents(render) {
+  const wrappedRender = () => {
+    render();
+    initCodeEditors(document.querySelector("#app"));
+  };
   const root = document.querySelector("#app");
-  root.addEventListener("click", (event) => handleClick(event, render));
-  root.addEventListener("change", (event) => handleChange(event, render));
-  root.addEventListener("input", (event) => handleInput(event, render));
-  root.addEventListener("focusout", (event) => handleFocusOut(event, render));
-  root.addEventListener("submit", (event) => handleSubmit(event, render));
+  root.addEventListener("click", (event) => handleClick(event, wrappedRender));
+  root.addEventListener("change", (event) => handleChange(event, wrappedRender));
+  root.addEventListener("input", (event) => handleInput(event, wrappedRender));
+  root.addEventListener("focusout", (event) => handleFocusOut(event, wrappedRender));
+  root.addEventListener("submit", (event) => handleSubmit(event, wrappedRender));
   root.addEventListener("dragstart", handleDragStart);
   root.addEventListener("dragover", handleDragOver);
-  root.addEventListener("drop", (event) => handleDrop(event, render));
-  document.addEventListener("keydown", (event) => handleKeydown(event, render));
+  root.addEventListener("drop", (event) => handleDrop(event, wrappedRender));
+  document.addEventListener("keydown", (event) => handleKeydown(event, wrappedRender));
 }
 
 async function handleClick(event, render) {
@@ -51,8 +56,6 @@ async function handleClick(event, render) {
     openModal(entityType, id);
   } else if (action === "close-modal") {
     state.ui.modal = null;
-  } else if (action === "toggle-notifications") {
-    state.ui.notificationPanelOpen = !state.ui.notificationPanelOpen;
   } else if (action === "edit-cell") {
     startInlineEdit(entityType, id, target.dataset.field);
   } else if (action === "save-inline") {

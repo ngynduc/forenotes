@@ -75,7 +75,6 @@ function renderSidebarPanel() {
 /* ── Top Bar (inside app-main) ── */
 
 function renderTopBar() {
-  const unseen = state.notifications.filter((entry) => entry.unseen).length;
   const selectedCase = activeCase();
   return `
     <header class="app-header" aria-label="Session toolbar">
@@ -94,9 +93,6 @@ function renderTopBar() {
         <select data-action="change-active-user" aria-label="Active user">
           ${state.users.map((user) => renderOptions([ {value: user.id, label: `${user.display_name} (${user.global_role})` }], state.activeUserId)).join("")}
         </select>
-        <button class="ghost-button notification-trigger" type="button" data-action="toggle-notifications">
-          ${iconSVG("notifications")}${unseen ? ` ${unseen}` : ""}
-        </button>
       </div>
     </header>
   `;
@@ -137,10 +133,7 @@ function renderWorkspace() {
     <main class="workspace-root">
       ${renderContextBar()}
       ${renderFlash()}
-      <div class="workspace-grid ${state.ui.notificationPanelOpen ? "has-notifications" : "is-collapsed"}">
-        <section class="operational-area">${renderActiveSection()}</section>
-        ${renderNotificationPanel()}
-      </div>
+      <div class="operational-area">${renderActiveSection()}</div>
     </main>
   `;
 }
@@ -255,41 +248,6 @@ function renderAuditSection() {
   return renderTablePanel("audit", state.auditLogs, TABLE_DEFINITIONS.audit);
 }
 
-/* ── Notification Panel ── */
-
-function renderNotificationPanel() {
-  if (!state.ui.notificationPanelOpen) {
-    return `
-      <aside class="notification-rail is-minimized">
-        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Expand notification panel">${iconSVG("notifications")}</button>
-      </aside>
-    `;
-  }
-
-  return `
-    <aside class="notification-rail">
-      <div class="section-header">
-        <div>
-          <h2>Notifications</h2>
-          <p>${state.notifications.filter((entry) => entry.unseen).length} unread</p>
-        </div>
-        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Collapse notification panel">${iconSVG("chevron-right")}</button>
-      </div>
-      <div class="notification-list">
-        ${state.notifications.slice(0, 8).map(renderNotificationItem).join("") || `<div class="empty-state">No notifications yet.</div>`}
-      </div>
-    </aside>
-  `;
-}
-
-function renderNotificationItem(entry) {
-  return `
-    <button class="notification-item ${entry.unseen ? "is-unread" : ""}" type="button" data-action="open-notification" data-id="${escapeHtml(entry.id)}">
-      <strong>${escapeHtml(entry.title)}</strong>
-      <span>${escapeHtml(entry.event_type)} · ${escapeHtml(entry.entity_type || "event")}</span>
-    </button>
-  `;
-}
 
 /* ── Flash ── */
 

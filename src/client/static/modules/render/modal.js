@@ -71,6 +71,9 @@ function renderFieldControl(field, value) {
   if (field.type === "textarea") {
     return `<textarea name="${escapeHtml(field.name)}" ${field.required ? "required" : ""} ${field.autofocus ? 'data-autofocus="true"' : ""}>${escapeHtml(value)}</textarea>`;
   }
+  if (field.type === "code") {
+    return renderCodeEditor(field, value);
+  }
   if (isSelect(field.type)) {
     return `
       <select name="${escapeHtml(field.name)}" ${field.required ? "required" : ""} ${field.autofocus ? 'data-autofocus="true"' : ""}>
@@ -117,4 +120,28 @@ function isSelect(type) {
 
 function closeIcon() {
   return `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17" /></svg>`;
+}
+
+function renderCodeEditor(field, value) {
+  return `
+    <div class="code-editor-wrapper" data-language="${escapeHtml(field.language || "spl")}">
+      <div class="code-editor-toolbar">
+        <span class="code-editor-lang">${escapeHtml((field.language || "spl").toUpperCase())}</span>
+        <button class="code-editor-copy ghost-button" type="button" aria-label="Copy to clipboard">Copy</button>
+      </div>
+      <div class="code-editor-body">
+        <div class="code-editor-gutter"></div>
+        <div class="code-editor-highlight">
+          <pre aria-hidden="true"><code></code></pre>
+          <textarea
+            name="${escapeHtml(field.name)}"
+            ${field.required ? "required" : ""}
+            spellcheck="false"
+            autocomplete="off"
+            autocorrect="off"
+          >${escapeHtml(value)}</textarea>
+        </div>
+      </div>
+    </div>
+  `;
 }
