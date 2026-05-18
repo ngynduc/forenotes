@@ -1,6 +1,6 @@
-import { activeCase, activeIncident, state, WORKSPACE_SECTIONS } from "../state.js";
+import { activeCase, activeIncident, SIDEBAR_NAV_ITEMS, state } from "../state.js";
 import { can, permissionAttrs } from "../permissions.js";
-import { escapeHtml, renderOptions, roleLabel } from "../helpers.js";
+import { escapeHtml, formatDateTime, renderOptions, roleLabel } from "../helpers.js";
 import { renderModal } from "./modal.js";
 import { renderTablePanel } from "./table.js";
 import { TABLE_DEFINITIONS } from "../tableDefinitions.js";
@@ -11,48 +11,98 @@ const root = document.querySelector("#app");
 
 export function renderApp() {
   root.innerHTML = `
-    <div class="app-shell">
-      ${renderTopNavigation()}
-      ${state.ui.activeSection === "cases" ? renderCasesLanding() : renderWorkspace()}
+    <div class="app-shell ${state.ui.sidebarExpanded ? "" : "sidebar-collapsed"}">
+      ${renderSidebarRail()}
+      ${renderSidebarPanel()}
+      <div class="app-main">
+        ${renderTopBar()}
+        ${state.ui.activeSection === "cases" || state.ui.activeSection === "dashboard" ? renderCasesLanding() : renderWorkspace()}
+      </div>
     </div>
     ${renderModal()}
   `;
   focusActiveControl();
 }
 
-function renderTopNavigation() {
-  const unseen = state.notifications.filter((entry) => entry.unseen).length;
+/* ── Sidebar Icon Rail (always visible) ── */
+
+function renderSidebarRail() {
   return `
-    <header class="app-header">
-      <button class="brand-mark" type="button" data-action="set-section" data-section="cases" aria-label="Open cases">
-        <span class="brand-icon">F</span>
-        <span>
+    <nav class="sidebar-rail" aria-label="Icon navigation">
+      <button class="rail-item rail-brand" type="button" data-action="set-section" data-section="dashboard" aria-label="Dashboard">
+        <span class="rail-brand-icon">F</span>
+      </button>
+      <div class="rail-sep" aria-hidden="true"></div>
+      ${SIDEBAR_NAV_ITEMS
+        .filter((item) => item.key !== "dashboard")
+        .map((item) => `
+          <button class="rail-item ${state.ui.activeSection === item.key ? "is-active" : ""}" type="button" data-action="set-section" data-section="${escapeHtml(item.key)}" aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}">
+            ${iconSVG(item.icon)}
+          </button>
+        `).join("")}
+      <div class="rail-spacer" aria-hidden="true"></div>
+      <button class="rail-item" type="button" data-action="toggle-sidebar" aria-label="${state.ui.sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}" title="${state.ui.sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}">
+        ${state.ui.sidebarExpanded ? iconSVG("chevron-left") : iconSVG("chevron-right")}
+      </button>
+    </nav>
+  `;
+}
+
+/* ── Sidebar Expanded Panel ── */
+
+function renderSidebarPanel() {
+  return `
+    <aside class="sidebar-panel" aria-label="Workspace navigation">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-icon">F</span>
+        <div class="sidebar-brand-text">
           <strong>Forenotes</strong>
           <small>Investigation workspace</small>
-        </span>
-      </button>
-      <nav class="header-nav" aria-label="Workspace navigation">
-        <button class="${navClass("cases")}" type="button" data-action="set-section" data-section="cases">Cases</button>
-        ${WORKSPACE_SECTIONS
-          .filter((section) => !section.permission || can(section.permission))
-          .map((section) => `<button class="${navClass(section.key)}" type="button" data-action="set-section" data-section="${escapeHtml(section.key)}">${escapeHtml(section.label)}</button>`)
-          .join("")}
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        ${SIDEBAR_NAV_ITEMS.map((item) => `
+          <button class="sidebar-nav-item ${state.ui.activeSection === item.key ? "is-active" : ""}" type="button" data-action="set-section" data-section="${escapeHtml(item.key)}">
+            ${iconSVG(item.icon)}
+            <span>${escapeHtml(item.label)}</span>
+          </button>
+        `).join("")}
       </nav>
-      <div class="session-tools">
+    </aside>
+  `;
+}
+
+/* ── Top Bar (inside app-main) ── */
+
+function renderTopBar() {
+  const unseen = state.notifications.filter((entry) => entry.unseen).length;
+  const selectedCase = activeCase();
+  return `
+    <header class="app-header" aria-label="Session toolbar">
+      <div class="header-context">
+        ${selectedCase ? `
+          <span class="context-breadcrumb">
+            <span class="context-breadcrumb-case">${escapeHtml(selectedCase.case_name)}</span>
+            ${activeIncident() ? `<span class="context-breadcrumb-sep" aria-hidden="true">/</span><span class="context-breadcrumb-incident">${escapeHtml(activeIncident().name)}</span>` : ""}
+          </span>
+        ` : `<span class="context-breadcrumb is-dimmed">No case selected</span>`}
+      </div>
+      <div class="header-tools">
         <form class="global-search" data-form="global-search">
           <input type="search" name="query" placeholder="Search current scope" value="${escapeHtml(state.ui.globalSearch)}" />
-          <button class="secondary-button" type="submit">Search</button>
         </form>
         <select data-action="change-active-user" aria-label="Active user">
-          ${state.users.map((user) => renderOptions([{ value: user.id, label: `${user.display_name} (${user.global_role})` }], state.activeUserId)).join("")}
+          ${state.users.map((user) => renderOptions([ {value: user.id, label: `${user.display_name} (${user.global_role})` }], state.activeUserId)).join("")}
         </select>
         <button class="ghost-button notification-trigger" type="button" data-action="toggle-notifications">
-          Notifications${unseen ? ` (${unseen})` : ""}
+          ${iconSVG("notifications")}${unseen ? ` ${unseen}` : ""}
         </button>
       </div>
     </header>
   `;
 }
+
+/* ── Cases Landing ── */
 
 function renderCasesLanding() {
   return `
@@ -61,7 +111,7 @@ function renderCasesLanding() {
       <section class="landing-header">
         <div>
           <h1>Current Cases</h1>
-          <p>Start from the active case list. Open a case to enter the incident workspace.</p>
+          <p>Select a case to enter the investigation workspace, or create a new case.</p>
         </div>
         <button class="primary-button" type="button" data-action="open-modal" data-entity="case" ${permissionAttrs("case:create", "create cases")}>Create Case</button>
       </section>
@@ -69,6 +119,8 @@ function renderCasesLanding() {
     </main>
   `;
 }
+
+/* ── Workspace ── */
 
 function renderWorkspace() {
   if (!state.selectedCaseId) {
@@ -93,6 +145,8 @@ function renderWorkspace() {
   `;
 }
 
+/* ── Context Bar ── */
+
 function renderContextBar() {
   const selectedCase = activeCase();
   const selectedIncident = activeIncident();
@@ -102,7 +156,7 @@ function renderContextBar() {
       <label class="context-item context-select">
         <span>Incident</span>
         <select data-action="select-incident-context">
-          ${state.incidents.length ? state.incidents.map((incident) => renderOptions([{ value: incident.id, label: incident.name }], state.selectedIncidentId)).join("") : '<option value="">No incidents</option>'}
+          ${state.incidents.length ? state.incidents.map((incident) => renderOptions([ {value: incident.id, label: incident.name }], state.selectedIncidentId)).join("") : '<option value="">No incidents</option>'}
         </select>
       </label>
       <div class="context-item"><span>Role</span><strong>${escapeHtml(roleLabel(selectedCase?.user_case_role || state.currentUser?.globalRole))}</strong></div>
@@ -110,6 +164,8 @@ function renderContextBar() {
     </section>
   `;
 }
+
+/* ── Active Section Router ── */
 
 function renderActiveSection() {
   switch (state.ui.activeSection) {
@@ -122,20 +178,75 @@ function renderActiveSection() {
       return renderTablePanel("timeline", state.timelineEvents, TABLE_DEFINITIONS.timeline);
     case "tasks":
       return renderTasksView();
+    case "entities":
+      return renderEntitiesSection();
     case "queries":
       return renderTablePanel("queries", state.queries, TABLE_DEFINITIONS.queries);
+    case "tags":
+      return renderTablePanel("customTags", state.customTags, TABLE_DEFINITIONS.customTags);
     case "notifications":
       return renderTablePanel("notifications", state.notifications, TABLE_DEFINITIONS.notifications, {
         extraActions: `<button class="secondary-button" type="button" data-action="mark-all-read">Mark Visible Read</button>`
       });
     case "audit":
       return renderAuditSection();
-    case "admin":
+    case "settings":
       return renderAdminView();
     default:
       return renderTablePanel("findings", state.findings, TABLE_DEFINITIONS.findings);
   }
 }
+
+/* ── Entities Combined Section ── */
+
+function renderEntitiesSection() {
+  if (!state.selectedIncidentId) {
+    return `<section class="panel"><div class="empty-state is-large">Select an incident to browse entities.</div></section>`;
+  }
+  return `
+    ${renderTablePanel("indicators", state.indicators, {
+      entityType: "indicator",
+      title: "Indicators",
+      subtitle: "IOCs and detection indicators scoped to this incident.",
+      createLabel: "Add Indicator",
+      emptyLabel: "No indicators for this incident.",
+      columns: [
+        { key: "type", label: "Type", sortKey: "type", title: true },
+        { key: "value", label: "Value", sortKey: "value" },
+        { key: "severity", label: "Severity", sortKey: "severity", badge: "priority" },
+        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+      ]
+    })}
+    ${renderTablePanel("systems", state.systems, {
+      entityType: "system",
+      title: "Systems",
+      subtitle: "Affected systems in this incident.",
+      createLabel: "Add System",
+      emptyLabel: "No systems for this incident.",
+      columns: [
+        { key: "hostname", label: "Hostname", sortKey: "hostname", title: true },
+        { key: "os", label: "OS", sortKey: "os" },
+        { key: "status", label: "Status", sortKey: "status", badge: "status" },
+        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+      ]
+    })}
+    ${renderTablePanel("accounts", state.accounts, {
+      entityType: "account",
+      title: "Accounts",
+      subtitle: "User accounts relevant to this incident.",
+      createLabel: "Add Account",
+      emptyLabel: "No accounts for this incident.",
+      columns: [
+        { key: "username", label: "Username", sortKey: "username", title: true },
+        { key: "type", label: "Type", sortKey: "type" },
+        { key: "status", label: "Status", sortKey: "status", badge: "status" },
+        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+      ]
+    })}
+  `;
+}
+
+/* ── Audit ── */
 
 function renderAuditSection() {
   if (!can("audit:read")) {
@@ -144,11 +255,13 @@ function renderAuditSection() {
   return renderTablePanel("audit", state.auditLogs, TABLE_DEFINITIONS.audit);
 }
 
+/* ── Notification Panel ── */
+
 function renderNotificationPanel() {
   if (!state.ui.notificationPanelOpen) {
     return `
       <aside class="notification-rail is-minimized">
-        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Expand notification panel">${bellIcon()}</button>
+        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Expand notification panel">${iconSVG("notifications")}</button>
       </aside>
     `;
   }
@@ -160,7 +273,7 @@ function renderNotificationPanel() {
           <h2>Notifications</h2>
           <p>${state.notifications.filter((entry) => entry.unseen).length} unread</p>
         </div>
-        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Collapse notification panel">${chevronIcon()}</button>
+        <button class="icon-button" type="button" data-action="toggle-notifications" aria-label="Collapse notification panel">${iconSVG("chevron-right")}</button>
       </div>
       <div class="notification-list">
         ${state.notifications.slice(0, 8).map(renderNotificationItem).join("") || `<div class="empty-state">No notifications yet.</div>`}
@@ -178,13 +291,13 @@ function renderNotificationItem(entry) {
   `;
 }
 
+/* ── Flash ── */
+
 function renderFlash() {
   return state.ui.flash ? `<div class="${state.ui.flash.kind === "error" ? "error-banner" : "success-banner"}">${escapeHtml(state.ui.flash.message)}</div>` : "";
 }
 
-function navClass(key) {
-  return `nav-link ${state.ui.activeSection === key ? "is-active" : ""}`;
-}
+/* ── Helpers ── */
 
 function focusActiveControl() {
   requestAnimationFrame(() => {
@@ -196,10 +309,22 @@ function focusActiveControl() {
   });
 }
 
-function bellIcon() {
-  return `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z" /><path d="M10 21h4" /></svg>`;
-}
+/* ── SVG Icons ── */
 
-function chevronIcon() {
-  return `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></svg>`;
+function iconSVG(name) {
+  const icons = {
+    dashboard: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.4"/><rect x="14" y="3" width="7" height="7" rx="1.4"/><rect x="3" y="14" width="7" height="7" rx="1.4"/><rect x="14" y="14" width="7" height="7" rx="1.4"/></svg>`,
+    cases: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 7v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1.5l-1.2-2.4A1 1 0 0 0 15.5 4h-7a1 1 0 0 0-.8.6L6.5 7H5a2 2 0 0 0-2 2z"/><path d="M3 13h18"/></svg>`,
+    findings: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.4"/><line x1="16" y1="16" x2="21" y2="21"/></svg>`,
+    timeline: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>`,
+    tasks: `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="9 11 11 13 15 9"/><rect x="4" y="4" width="16" height="16" rx="2.4"/></svg>`,
+    entities: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="1.4"/><rect x="13" y="2" width="9" height="9" rx="1.4"/><rect x="2" y="13" width="9" height="9" rx="1.4"/><rect x="13" y="13" width="9" height="9" rx="1.4"/></svg>`,
+    queries: `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+    tags: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 9.5 9.5 3l9 1.5L20 13.5 13.5 20z"/><circle cx="15.5" cy="8.5" r="1.2"/></svg>`,
+    notifications: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z"/><path d="M10 21h4"/></svg>`,
+    settings: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10 2.1 2.1M4.9 19.1l2.1-2.1m10-10 2.1-2.1"/></svg>`,
+    "chevron-left": `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>`,
+    "chevron-right": `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`
+  };
+  return icons[name] || "";
 }

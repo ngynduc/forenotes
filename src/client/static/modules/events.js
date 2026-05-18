@@ -19,6 +19,7 @@ export function initEvents(render) {
   root.addEventListener("click", (event) => handleClick(event, render));
   root.addEventListener("change", (event) => handleChange(event, render));
   root.addEventListener("input", (event) => handleInput(event, render));
+  root.addEventListener("focusout", (event) => handleFocusOut(event, render));
   root.addEventListener("submit", (event) => handleSubmit(event, render));
   root.addEventListener("dragstart", handleDragStart);
   root.addEventListener("dragover", handleDragOver);
@@ -31,12 +32,17 @@ async function handleClick(event, render) {
   if (!target) {
     return;
   }
+  if (event.target.matches("select, option, input, textarea")) {
+    return;
+  }
   const action = target.dataset.action;
   const id = target.dataset.id || "";
   const entityType = target.dataset.entity || "";
 
   if (action === "set-section") {
     state.ui.activeSection = target.dataset.section;
+  } else if (action === "toggle-sidebar") {
+    state.ui.sidebarExpanded = !state.ui.sidebarExpanded;
   } else if (action === "refresh") {
     await refreshAll();
   } else if (action === "select-case") {
@@ -133,6 +139,12 @@ function handleInput(event, render) {
     const tableState = state.ui.table[target.dataset.table];
     tableState.search = target.value;
     tableState.page = 1;
+  }
+}
+
+function handleFocusOut(event, render) {
+  if (event.target.matches("[data-action='table-search']")) {
+    // re-render on blur so table reflects applied filter
     render();
   }
 }
@@ -198,6 +210,11 @@ async function handleKeydown(event, render) {
   if (event.key === "Enter" && state.ui.inlineEdit && event.target.matches("[data-inline-input]")) {
     event.preventDefault();
     await saveInlineEdit();
+    render();
+    return;
+  }
+  if (event.key === "Enter" && event.target.matches("[data-action='table-search']")) {
+    event.preventDefault();
     render();
   }
 }

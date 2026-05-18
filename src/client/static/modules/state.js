@@ -18,14 +18,17 @@ export const TASK_BOARD_COLUMNS = [
   { value: "done", label: "Done" }
 ];
 
-export const WORKSPACE_SECTIONS = [
-  { key: "findings", label: "Findings", description: "Investigation findings" },
-  { key: "timeline", label: "Timeline", description: "Chronological investigation events" },
-  { key: "tasks", label: "Tasks", description: "Operational coordination" },
-  { key: "queries", label: "Queries", description: "Stored detections and hunts" },
-  { key: "notifications", label: "Notifications", description: "Activity awareness" },
-  { key: "audit", label: "Audit Logs", description: "Accountability review", permission: "audit:read" },
-  { key: "admin", label: "Members/Admin", description: "Access and collaboration" }
+export const SIDEBAR_NAV_ITEMS = [
+  { key: "dashboard", label: "Dashboard", icon: "dashboard" },
+  { key: "cases", label: "Cases", icon: "cases" },
+  { key: "findings", label: "Findings", icon: "findings" },
+  { key: "timeline", label: "Timeline", icon: "timeline" },
+  { key: "tasks", label: "Tasks", icon: "tasks" },
+  { key: "entities", label: "Entities", icon: "entities" },
+  { key: "queries", label: "Queries", icon: "queries" },
+  { key: "tags", label: "Tags", icon: "tags" },
+  { key: "notifications", label: "Notifications", icon: "notifications" },
+  { key: "settings", label: "Settings", icon: "settings" }
 ];
 
 export function makeTableState(sortField, sortDir = "desc") {
@@ -63,7 +66,8 @@ export const state = {
   auditLogs: [],
   searchResults: [],
   ui: {
-    activeSection: "cases",
+    activeSection: "dashboard",
+    sidebarExpanded: true,
     notificationPanelOpen: true,
     taskView: "board",
     modal: null,

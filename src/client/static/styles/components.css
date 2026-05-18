@@ -68,7 +68,88 @@ p,
   flex-wrap: wrap;
 }
 
-.nav-link,
+/* ── Sidebar Rail Items ── */
+
+.rail-item {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+.rail-item svg {
+  width: 19px;
+  height: 19px;
+}
+
+.rail-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+}
+
+.rail-item.is-active {
+  background: rgba(15, 118, 110, 0.18);
+  color: #5eead4;
+}
+
+.rail-brand {
+  margin-bottom: var(--space-1);
+  color: #5eead4;
+  font-weight: 800;
+}
+
+.rail-brand-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ── Sidebar Panel Items ── */
+
+.sidebar-nav-item {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 8px var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion), color var(--motion), border-color var(--motion);
+  border-left: 2px solid transparent;
+}
+
+.sidebar-nav-item svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e5e7eb;
+}
+
+.sidebar-nav-item.is-active {
+  background: rgba(15, 118, 110, 0.12);
+  color: #f9fafb;
+  font-weight: 600;
+  border-left-color: #0f766e;
+}
+
+/* ── Buttons ── */
+
 .primary-button,
 .secondary-button,
 .ghost-button,
@@ -80,18 +161,6 @@ p,
   background: var(--surface);
   color: var(--text);
   transition: background-color var(--motion), border-color var(--motion), box-shadow var(--motion);
-}
-
-.nav-link {
-  padding: 8px 11px;
-  white-space: nowrap;
-}
-
-.nav-link:hover,
-.nav-link.is-active {
-  background: var(--primary-soft);
-  border-color: rgba(15, 118, 110, 0.28);
-  color: var(--primary-strong);
 }
 
 .primary-button,
@@ -135,10 +204,11 @@ p,
   padding: 0;
 }
 
+/* ── Forms ── */
+
 .global-search {
   display: grid;
-  grid-template-columns: minmax(160px, 220px) auto;
-  gap: var(--space-2);
+  grid-template-columns: minmax(160px, 220px);
 }
 
 input,
@@ -165,6 +235,8 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
 }
 
+/* ── Context ── */
+
 .context-item {
   display: grid;
   gap: var(--space-1);
@@ -173,6 +245,8 @@ textarea:focus {
 .context-item strong {
   font-size: 14px;
 }
+
+/* ── Banners ── */
 
 .error-banner,
 .success-banner,
@@ -202,6 +276,8 @@ textarea:focus {
 .empty-state.is-large {
   padding: var(--space-8);
 }
+
+/* ── Badges ── */
 
 .status-badge,
 .priority-badge {

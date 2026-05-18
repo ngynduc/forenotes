@@ -1,5 +1,22 @@
+/* ── Medium: auto-collapse sidebar panel ── */
+
 @media (max-width: 1120px) {
-  .app-header,
+  .app-shell {
+    grid-template-columns: 48px 0 minmax(0, 1fr);
+  }
+
+  .app-shell .sidebar-panel {
+    overflow: hidden;
+    padding: 0;
+    border: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .app-header {
+    padding: var(--space-2) var(--space-4);
+  }
+
   .context-bar,
   .workspace-grid,
   .workspace-grid.is-collapsed,
@@ -7,8 +24,7 @@
     grid-template-columns: 1fr;
   }
 
-  .session-tools {
-    justify-content: start;
+  .header-tools {
     flex-wrap: wrap;
   }
 
@@ -17,11 +33,26 @@
   }
 }
 
+/* ── Small: compact padding ── */
+
 @media (max-width: 720px) {
   .app-header,
   .page-shell,
   .workspace-root {
     padding: var(--space-4);
+  }
+
+  .app-shell {
+    grid-template-columns: 40px 0 minmax(0, 1fr);
+  }
+
+  .sidebar-rail {
+    padding: var(--space-1) 0;
+  }
+
+  .rail-item {
+    width: 32px;
+    height: 32px;
   }
 
   .landing-header,
