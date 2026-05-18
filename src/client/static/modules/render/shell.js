@@ -6,6 +6,7 @@ import { renderTablePanel } from "./table.js";
 import { TABLE_DEFINITIONS } from "../tableDefinitions.js";
 import { renderTasksView } from "./tasks.js";
 import { renderAdminView } from "./admin.js";
+import { renderDashboardView } from "./dashboard.js";
 
 const root = document.querySelector("#app");
 
@@ -16,12 +17,22 @@ export function renderApp() {
       ${renderSidebarPanel()}
       <div class="app-main">
         ${renderTopBar()}
-        ${state.ui.activeSection === "cases" || state.ui.activeSection === "dashboard" ? renderCasesLanding() : renderWorkspace()}
+        ${renderMainContent()}
       </div>
     </div>
     ${renderModal()}
   `;
   focusActiveControl();
+}
+
+function renderMainContent() {
+  if (state.ui.activeSection === "dashboard") {
+    return renderDashboardView();
+  }
+  if (state.ui.activeSection === "cases") {
+    return renderCasesLanding();
+  }
+  return renderWorkspace();
 }
 
 /* ── Sidebar Icon Rail (always visible) ── */

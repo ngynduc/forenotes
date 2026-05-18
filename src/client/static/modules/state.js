@@ -68,6 +68,7 @@ export const state = {
   notifications: [],
   auditLogs: [],
   searchResults: [],
+  dashboardSummary: null,
   ui: {
     activeSection: "dashboard",
     sidebarExpanded: true,

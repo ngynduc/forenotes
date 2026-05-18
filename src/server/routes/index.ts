@@ -7,6 +7,7 @@ import { createNotificationRoutes } from "./notificationRoutes.js";
 import { createSearchRoutes } from "./searchRoutes.js";
 import { createTagRoutes } from "./tagRoutes.js";
 import { createAuditLogRoutes } from "./auditLogRoutes.js";
+import { createDashboardRoutes } from "./dashboardRoutes.js";
 import { createUserRoutes } from "./userRoutes.js";
 
 export function createRoutes(database: Database) {
@@ -18,6 +19,7 @@ export function createRoutes(database: Database) {
   router.use("/api", createTagRoutes(database));
   router.use("/api", createSearchRoutes(database));
   router.use("/api", createAuditLogRoutes(database));
+  router.use("/api/dashboard", createDashboardRoutes(database));
   router.use("/api/notifications", createNotificationRoutes(database));
   return router;
 }

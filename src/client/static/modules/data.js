@@ -13,7 +13,7 @@ export async function refreshAll() {
   }
 
   await hydrateSession();
-  await Promise.all([loadCases(), loadAttackTags(), refreshNotifications()]);
+  await Promise.all([loadCases(), loadAttackTags(), refreshNotifications(), loadDashboardSummary()]);
 
   if (state.selectedCaseId && !state.cases.some((entry) => entry.id === state.selectedCaseId)) {
     state.selectedCaseId = "";
@@ -112,6 +112,14 @@ export async function refreshNotifications() {
   }
 }
 
+export async function loadDashboardSummary() {
+  try {
+    state.dashboardSummary = (await api("/api/dashboard", "GET")).summary;
+  } catch {
+    state.dashboardSummary = null;
+  }
+}
+
 export async function refreshAuditLogs() {
   if (!can("audit:read")) {
     state.auditLogs = [];
@@ -154,11 +162,13 @@ export async function refreshAfterEntityChange(entityType) {
     await loadCases();
     await refreshCaseScope();
     await refreshNotifications();
+    await loadDashboardSummary();
     return;
   }
   if (entityType === "incident" || entityType === "incident_member" || requiresIncident(entityType)) {
     await refreshCaseScope();
     await refreshNotifications();
+    await loadDashboardSummary();
     return;
   }
 }

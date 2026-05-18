@@ -26,6 +26,9 @@
 .sidebar-rail {
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2) 0;
@@ -50,6 +53,9 @@
 .sidebar-panel {
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   background: #1f2937;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   z-index: 20;
@@ -100,11 +106,15 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
 }
 
 .sidebar-footer {
+  position: sticky;
+  bottom: 0;
   padding: var(--space-2);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #1f2937;
 }
 
 .sidebar-collapse-btn {

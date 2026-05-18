@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { refreshAfterEntityChange, refreshNotifications, requiresCase, requiresIncident } from "./data.js";
+import { loadDashboardSummary, refreshAfterEntityChange, refreshNotifications, requiresCase, requiresIncident } from "./data.js";
 import { ENTITY_DEFINITIONS } from "./entities.js";
 import { cleanObject } from "./helpers.js";
 import { MEMBERSHIP_ENTITY_DEFINITIONS } from "./membershipEntities.js";
@@ -146,6 +146,7 @@ export async function markNotificationRead(notificationId) {
   try {
     await api(`/api/notifications/${notificationId}/read`, "POST");
     await refreshNotifications();
+    await loadDashboardSummary();
     setFlash("success", "Notification marked as read.");
   } catch (error) {
     setFlash("error", error instanceof Error ? error.message : String(error));
@@ -158,6 +159,7 @@ export async function markAllVisibleNotificationsRead() {
     await api(`/api/notifications/${notificationId}/read`, "POST");
   }
   await refreshNotifications();
+  await loadDashboardSummary();
   setFlash("success", "Visible notifications marked as read.");
 }
 
@@ -169,6 +171,7 @@ export async function openNotification(notificationId) {
   if (notification.unseen) {
     await api(`/api/notifications/${notificationId}/read`, "POST");
     await refreshNotifications();
+    await loadDashboardSummary();
   }
   if (notification.entity_type === "finding") {
     state.ui.activeSection = "findings";

@@ -290,6 +290,116 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
   });
 
+  it("returns permission-scoped dashboard metrics and recent activity", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Dashboard Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Dashboard Incident",
+        status: "open",
+        severity: "critical"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Privilege escalation",
+        status: "confirmed",
+        severity: "high"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Contain affected host",
+        status: "todo",
+        priority: "critical",
+        dueAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      });
+    const taskId = taskResponse.body.task.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Initial access confirmed",
+        eventTime: new Date().toISOString(),
+        source: "EDR"
+      });
+
+    await pool.query("update incidents set updated_at = now() - interval '4 days' where id = $1", [incidentId]);
+    await pool.query("update findings set created_at = now() - interval '9 days' where id = $1", [findingId]);
+    await pool.query("update tasks set due_at = now() - interval '2 hours' where id = $1", [taskId]);
+
+    const hiddenCaseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Commander Only",
+        clientName: "Private",
+        status: "open"
+      });
+    const hiddenCaseId = hiddenCaseResponse.body.case.id as string;
+
+    const hiddenIncidentResponse = await request(app)
+      .post(`/api/cases/${hiddenCaseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Hidden Incident",
+        status: "open",
+        severity: "high"
+      });
+    const hiddenIncidentId = hiddenIncidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${hiddenIncidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Hidden finding",
+        status: "confirmed"
+      });
+
+    const response = await request(app)
+      .get("/api/dashboard")
+      .set("x-user-id", analystId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.metrics.totalCases).toBe(1);
+    expect(response.body.summary.metrics.openIncidents).toBe(1);
+    expect(response.body.summary.metrics.unresolvedFindings).toBe(1);
+    expect(response.body.summary.metrics.overdueTasks).toBe(1);
+    expect(response.body.summary.metrics.unreadNotifications).toBe(1);
+    expect(response.body.summary.sla.staleIncidents).toBe(1);
+    expect(response.body.summary.sla.agingFindings).toBe(1);
+    expect(response.body.summary.breakdowns.incidentSeverity).toEqual([
+      { value: "critical", count: 1 }
+    ]);
+    expect(response.body.summary.breakdowns.taskStatus).toEqual([
+      { value: "todo", count: 1 }
+    ]);
+    expect(response.body.summary.recentActivity.some((entry: { title: string }) => entry.title === "Hidden finding")).toBe(false);
+    expect(response.body.summary.recentActivity.some((entry: { title: string }) => entry.title === "Contain affected host")).toBe(true);
+    expect(response.body.summary.activity).toHaveLength(7);
+  });
+
   it("defaults finding and timeline owner to actor on create", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
