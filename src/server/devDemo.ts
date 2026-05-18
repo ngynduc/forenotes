@@ -214,6 +214,91 @@ async function startDemoServer() {
     dueAt: "2026-05-18T10:00:00.000Z"
   });
 
+  const forensicTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Acquire forensic images of finance-ws17 and hr-ws03",
+    description: "Full disk and memory images from both workstations that executed the phishing payload.",
+    status: "in_progress",
+    priority: "high",
+    assigneeUserId: analyst.id,
+    ownerUserId: lead.id,
+    dueAt: "2026-05-18T18:00:00.000Z"
+  });
+
+  const edrTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Deploy EDR sensors to all unmonitored file servers",
+    description: "Coverage gap on 4 file servers in the backup subnet. Deploy and validate telemetry ingestion.",
+    status: "in_progress",
+    priority: "high",
+    assigneeUserId: analyst.id,
+    ownerUserId: lead.id,
+    dueAt: "2026-05-19T09:00:00.000Z"
+  });
+
+  const blockTask = await createTask(pool, commander, {
+    incidentId: demoIncident.id,
+    title: "Block attacker IoCs at perimeter firewall",
+    description: "Push domain, IP, and URL indicators to edge firewalls and web proxies across all sites.",
+    status: "todo",
+    priority: "critical",
+    assigneeUserId: lead.id,
+    ownerUserId: commander.id,
+    dueAt: "2026-05-18T14:00:00.000Z"
+  });
+
+  const timelineTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Build master incident timeline in shared workspace",
+    description: "Consolidate all timeline events, findings, and evidence into a single chronological view.",
+    status: "todo",
+    priority: "medium",
+    assigneeUserId: analyst.id,
+    ownerUserId: lead.id,
+    dueAt: "2026-05-19T17:00:00.000Z"
+  });
+
+  const emailTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Pull and preserve phishing email headers from all recipients",
+    description: "Collect raw SMTP headers for the 14 users who received the initial lure email.",
+    status: "todo",
+    priority: "medium",
+    assigneeUserId: analyst.id,
+    ownerUserId: lead.id
+  });
+
+  const credTask = await createTask(pool, commander, {
+    incidentId: demoIncident.id,
+    title: "Force password reset for all accounts in Domain Admins group",
+    description: "Pending CAB approval. Scope includes 22 accounts across the domain.",
+    status: "blocked",
+    priority: "critical",
+    assigneeUserId: lead.id,
+    ownerUserId: commander.id,
+    dueAt: "2026-05-19T12:00:00.000Z"
+  });
+
+  const vendorTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Engage IR retainer firm for after-hours coverage",
+    description: "Waiting on procurement to approve the SOW for CrowdStrike Falcon Complete.",
+    status: "blocked",
+    priority: "low",
+    assigneeUserId: analyst.id,
+    ownerUserId: lead.id
+  });
+
+  const doneTask = await createTask(pool, lead, {
+    incidentId: demoIncident.id,
+    title: "Notify executive leadership of incident declaration",
+    description: "Send initial breach notification to CISO, CTO, and General Counsel per IR plan.",
+    status: "done",
+    priority: "critical",
+    assigneeUserId: lead.id,
+    ownerUserId: commander.id
+  });
+
   await createTaskLink(pool, lead, {
     incidentId: demoIncident.id,
     taskId: containmentTask.id,
