@@ -21,6 +21,7 @@ export function renderModal() {
   const permission = actionPermission(modal.entityType, mode);
   const values = definition.values(item);
   const fields = definition.fields(item, mode);
+  const supplemental = renderSupplementalSections(modal.entityType, item, mode);
 
   return `
     <div class="modal-backdrop" role="presentation">
@@ -38,6 +39,7 @@ export function renderModal() {
           <div class="modal-grid">
             ${fields.map((field) => renderField(field, values[field.name] ?? "")).join("")}
           </div>
+          ${supplemental}
           <div class="modal-actions">
             <div class="toolbar-group">
               <button class="primary-button" type="button" data-action="submit-modal" ${permission && !canAccessEntity(modal.entityType, mode, item) ? "disabled" : ""}>
@@ -145,6 +147,91 @@ function renderCodeEditor(field, value) {
           >${escapeHtml(value)}</textarea>
         </div>
       </div>
+    </div>
+  `;
+}
+
+function renderSupplementalSections(entityType, item, mode) {
+  if (mode !== "update" || !item) {
+    return "";
+  }
+  if (entityType === "finding" || entityType === "timeline_event") {
+    return renderTagManagementSection(entityType, item);
+  }
+  return "";
+}
+
+function renderTagManagementSection(entityType, item) {
+  const updateAllowed = canAccessEntity(entityType, "update", item);
+  const attackTags = Array.isArray(item.attack_tags) ? item.attack_tags : [];
+  const customTags = Array.isArray(item.custom_tags) ? item.custom_tags : [];
+  const availableAttackTags = state.attackTags.filter((tag) => !attackTags.some((attached) => attached.id === tag.id));
+  const availableCustomTags = state.customTags.filter((tag) => !customTags.some((attached) => attached.id === tag.id));
+
+  return `
+    <section class="modal-section">
+      <div class="modal-section-header">
+        <div>
+          <h3>Tags</h3>
+          <p>Show and attach tags directly on this ${escapeHtml(entityType === "finding" ? "finding" : "timeline event")}.</p>
+        </div>
+      </div>
+      <div class="tag-section-grid">
+        <div class="tag-group">
+          <strong>Custom Tags</strong>
+          <div class="tag-pill-list">
+            ${renderTagPills(customTags, "custom")}
+          </div>
+          ${renderAttachTagForm(entityType, item.id, "custom", availableCustomTags, updateAllowed)}
+        </div>
+        <div class="tag-group">
+          <strong>MITRE ATT&CK</strong>
+          <div class="tag-pill-list">
+            ${renderTagPills(attackTags, "attack")}
+          </div>
+          ${renderAttachTagForm(entityType, item.id, "attack", availableAttackTags, updateAllowed)}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderTagPills(tags, kind) {
+  if (!tags.length) {
+    return `<span class="muted">No ${escapeHtml(kind === "attack" ? "ATT&CK" : "custom")} tags attached.</span>`;
+  }
+  return tags.map((tag) => {
+    if (kind === "attack") {
+      const label = [tag.attack_id, tag.name].filter(Boolean).join(" · ");
+      return `<span class="tag-pill tag-pill-attack">${escapeHtml(label)}</span>`;
+    }
+    const style = tag.color ? ` style="--tag-color: ${escapeHtml(tag.color)}"` : "";
+    return `<span class="tag-pill tag-pill-custom"${style}>${escapeHtml(tag.name)}</span>`;
+  }).join("");
+}
+
+function renderAttachTagForm(entityType, itemId, tagType, options, updateAllowed) {
+  const disabled = !updateAllowed || !options.length;
+  const label = tagType === "attack" ? "Attach ATT&CK tag" : "Attach custom tag";
+  const selectOptions = tagType === "attack"
+    ? options.map((tag) => ({ value: tag.id, label: `${tag.attack_id} · ${tag.name}` }))
+    : options.map((tag) => ({ value: tag.id, label: tag.name }));
+
+  return `
+    <div class="tag-attach-form" data-tag-attach="true">
+      <select name="tagId" ${disabled ? "disabled" : ""} aria-label="${escapeHtml(label)}">
+        <option value="">${escapeHtml(options.length ? label : "No more tags available")}</option>
+        ${renderOptions(selectOptions, "")}
+      </select>
+      <button
+        class="secondary-button"
+        type="button"
+        data-action="attach-tag"
+        data-entity="${escapeHtml(entityType)}"
+        data-id="${escapeHtml(itemId)}"
+        data-tag-type="${escapeHtml(tagType)}"
+        ${disabled ? "disabled" : ""}
+      >Attach</button>
     </div>
   `;
 }

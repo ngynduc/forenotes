@@ -1,4 +1,4 @@
-import { compactText, formatDate, formatDateTime, roleLabel, summarizeJson } from "./helpers.js";
+import { compactText, escapeHtml, formatDate, formatDateTime, roleLabel, summarizeJson } from "./helpers.js";
 import { state } from "./state.js";
 
 export const TABLE_DEFINITIONS = {
@@ -41,6 +41,7 @@ export const TABLE_DEFINITIONS = {
       { key: "status", label: "Status", sortKey: "status", editable: true, badge: "status" },
       { key: "severity", label: "Severity", sortKey: "severity", editable: true, badge: "priority" },
       { key: "confidence", label: "Confidence", sortKey: "confidence", editable: true },
+      { key: "custom_tags", label: "Tags", sortKey: "tag_summary", format: (_value, row) => formatTagPills(row), html: true },
       { key: "owner_user_id", label: "Owner", sortKey: "owner_user_id", editable: true, format: formatMemberName },
       { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
     ]
@@ -55,6 +56,7 @@ export const TABLE_DEFINITIONS = {
       { key: "event_time", label: "Timestamp", sortKey: "event_time", editable: true, format: formatDateTime },
       { key: "title", label: "Event", sortKey: "title", title: true, editable: true },
       { key: "source", label: "Source", sortKey: "source", editable: true },
+      { key: "custom_tags", label: "Tags", sortKey: "tag_summary", format: (_value, row) => formatTagPills(row), html: true },
       { key: "owner_user_id", label: "Owner", sortKey: "owner_user_id", editable: true, format: formatMemberName },
       { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
     ]
@@ -140,6 +142,18 @@ export const TABLE_DEFINITIONS = {
       { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
     ]
   },
+  attackTags: {
+    entityType: "attack_tag",
+    title: "MITRE ATT&CK Tags",
+    subtitle: "Global built-in ATT&CK tactics and techniques available to every case.",
+    emptyLabel: "No ATT&CK tags are available.",
+    columns: [
+      { key: "attack_id", label: "ATT&CK ID", sortKey: "attack_id", title: true },
+      { key: "name", label: "Name", sortKey: "name" },
+      { key: "type", label: "Type", sortKey: "type" },
+      { key: "tactic", label: "Tactic", sortKey: "tactic" }
+    ]
+  },
   indicators: {
     entityType: "indicator",
     title: "Indicators",
@@ -213,4 +227,25 @@ function compactId(value) {
 function compactActor(value) {
   const user = state.users.find((entry) => entry.id === value);
   return user ? user.display_name : compactId(value);
+}
+
+function formatTagPills(row) {
+  const customTags = Array.isArray(row.custom_tags) ? row.custom_tags : [];
+  const attackTags = Array.isArray(row.attack_tags) ? row.attack_tags : [];
+  const labels = [
+    ...customTags.map((tag) => {
+      const style = tag.color ? ` style="--tag-color: ${escapeHtml(tag.color)}"` : "";
+      return `<span class="tag-pill tag-pill-custom tag-pill-table"${style}>${escapeHtml(tag.name)}</span>`;
+    }),
+    ...attackTags.map((tag) => {
+      const label = [tag.attack_id, tag.name].filter(Boolean).join(" · ");
+      return `<span class="tag-pill tag-pill-attack tag-pill-table">${escapeHtml(compactText(label, 32))}</span>`;
+    })
+  ];
+
+  if (!labels.length) {
+    return `<span class="muted">None</span>`;
+  }
+
+  return `<div class="tag-pill-list tag-pill-list-table">${labels.join("")}</div>`;
 }

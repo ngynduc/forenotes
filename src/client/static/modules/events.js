@@ -1,6 +1,7 @@
 import { refreshAll, selectCase, selectIncident } from "./data.js";
 import {
   deleteEntity,
+  attachTag,
   markAllVisibleNotificationsRead,
   markNotificationRead,
   openModal,
@@ -94,6 +95,10 @@ async function handleTableActions(action, target, id, entityType) {
     await deleteEntity(entityType, id);
   } else if (action === "remove-member") {
     await removeMember(target.dataset.scope, id);
+  } else if (action === "attach-tag") {
+    const container = target.closest("[data-tag-attach]");
+    const select = container?.querySelector("select[name='tagId']");
+    await attachTag(entityType, id, target.dataset.tagType, select?.value || "");
   }
 }
 

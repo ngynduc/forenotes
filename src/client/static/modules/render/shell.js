@@ -182,7 +182,10 @@ function renderActiveSection() {
     case "queries":
       return renderTablePanel("queries", state.queries, TABLE_DEFINITIONS.queries);
     case "tags":
-      return renderTablePanel("customTags", state.customTags, TABLE_DEFINITIONS.customTags);
+      return `
+        ${renderTablePanel("customTags", state.customTags, TABLE_DEFINITIONS.customTags)}
+        ${renderTablePanel("attackTags", state.attackTags, TABLE_DEFINITIONS.attackTags)}
+      `;
     case "notifications":
       return renderTablePanel("notifications", state.notifications, TABLE_DEFINITIONS.notifications, {
         extraActions: `<button class="secondary-button" type="button" data-action="mark-all-read">Mark Visible Read</button>`

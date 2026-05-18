@@ -22,7 +22,38 @@ export async function listTimelineEvents(database: Database, userId: string, inc
     "select * from timeline_events where incident_id = $1 order by event_time desc, created_at desc",
     [incidentId]
   );
-  return result.rows;
+  return Promise.all(
+    result.rows.map(async (row) => {
+      const [attackTagsResult, customTagsResult] = await Promise.all([
+        database.query(
+          `
+            select at.id, at.attack_id, at.name, at.type, at.tactic
+            from timeline_event_attack_tags teat
+            inner join attack_tags at on at.id = teat.attack_tag_id
+            where teat.incident_id = $1 and teat.timeline_event_id = $2
+            order by at.attack_id asc
+          `,
+          [incidentId, row.id]
+        ),
+        database.query(
+          `
+            select ct.id, ct.name, ct.color
+            from timeline_event_custom_tags tect
+            inner join custom_tags ct on ct.id = tect.custom_tag_id
+            where tect.incident_id = $1 and tect.timeline_event_id = $2
+            order by ct.name asc
+          `,
+          [incidentId, row.id]
+        )
+      ]);
+
+      return {
+        ...row,
+        attack_tags: attackTagsResult.rows,
+        custom_tags: customTagsResult.rows
+      };
+    })
+  );
 }
 
 export async function createTimelineEvent(database: Database, user: AuthenticatedUser, input: CreateTimelineEventInput) {

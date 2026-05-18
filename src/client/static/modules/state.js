@@ -83,6 +83,7 @@ export const state = {
       timeline: makeTableState("event_time"),
       tasks: makeTableState("updated_at"),
       queries: makeTableState("updated_at"),
+      attackTags: makeTableState("attack_id", "asc"),
       indicators: makeTableState("updated_at"),
       systems: makeTableState("updated_at"),
       accounts: makeTableState("updated_at"),

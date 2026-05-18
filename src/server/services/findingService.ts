@@ -21,7 +21,38 @@ interface CreateFindingInput {
 export async function listFindings(database: Database, userId: string, incidentId: string) {
   await requireIncidentMembership(database, userId, incidentId);
   const result = await database.query("select * from findings where incident_id = $1 order by created_at desc", [incidentId]);
-  return result.rows;
+  return Promise.all(
+    result.rows.map(async (row) => {
+      const [attackTagsResult, customTagsResult] = await Promise.all([
+        database.query(
+          `
+            select at.id, at.attack_id, at.name, at.type, at.tactic
+            from finding_attack_tags fat
+            inner join attack_tags at on at.id = fat.attack_tag_id
+            where fat.incident_id = $1 and fat.finding_id = $2
+            order by at.attack_id asc
+          `,
+          [incidentId, row.id]
+        ),
+        database.query(
+          `
+            select ct.id, ct.name, ct.color
+            from finding_custom_tags fct
+            inner join custom_tags ct on ct.id = fct.custom_tag_id
+            where fct.incident_id = $1 and fct.finding_id = $2
+            order by ct.name asc
+          `,
+          [incidentId, row.id]
+        )
+      ]);
+
+      return {
+        ...row,
+        attack_tags: attackTagsResult.rows,
+        custom_tags: customTagsResult.rows
+      };
+    })
+  );
 }
 
 export async function createFinding(database: Database, user: AuthenticatedUser, input: CreateFindingInput) {

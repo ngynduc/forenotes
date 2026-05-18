@@ -192,7 +192,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-shrink: 0;
+  flex: 1 1 420px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .brand-mark,

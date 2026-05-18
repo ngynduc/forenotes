@@ -60,6 +60,33 @@ export async function submitModal(form) {
   }
 }
 
+export async function attachTag(entityType, recordId, tagType, tagId) {
+  if (!entityType || !recordId || !tagType || !state.selectedIncidentId) {
+    setFlash("error", "Missing tag attachment context.");
+    return;
+  }
+
+  const selectedTagId = String(tagId || "");
+  if (!selectedTagId) {
+    setFlash("error", "Select a tag first.");
+    return;
+  }
+
+  const entityRoute = entityType === "finding"
+    ? `/api/incidents/${state.selectedIncidentId}/findings/${recordId}`
+    : `/api/incidents/${state.selectedIncidentId}/timeline-events/${recordId}`;
+  const suffix = tagType === "attack" ? "attack-tags" : "custom-tags";
+  const payloadKey = tagType === "attack" ? "attackTagId" : "customTagId";
+
+  try {
+    await api(`${entityRoute}/${suffix}`, "POST", { [payloadKey]: selectedTagId });
+    setFlash("success", "Tag attached.");
+    await refreshAfterEntityChange(entityType);
+  } catch (error) {
+    setFlash("error", error instanceof Error ? error.message : String(error));
+  }
+}
+
 export function startInlineEdit(entityType, id, field) {
   const definition = ALL_ENTITIES[entityType];
   const row = findEntityItem(entityType, id);

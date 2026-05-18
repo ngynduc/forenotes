@@ -24,6 +24,7 @@
 
   .header-tools {
     flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .kanban-grid {

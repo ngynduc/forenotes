@@ -66,6 +66,46 @@ p,
   flex-wrap: wrap;
 }
 
+.tag-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-pill-list-table {
+  gap: 6px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tag-pill-table {
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  max-width: 100%;
+}
+
+.tag-pill-attack {
+  border-color: rgba(15, 118, 110, 0.28);
+  background: var(--primary-soft);
+}
+
+.tag-pill-custom {
+  border-color: color-mix(in srgb, var(--tag-color, var(--border)) 45%, white);
+  background: color-mix(in srgb, var(--tag-color, var(--surface-muted)) 12%, white);
+}
+
 /* ── Sidebar Rail Items ── */
 
 .rail-item {
@@ -243,7 +283,8 @@ p,
 
 .global-search {
   display: grid;
-  grid-template-columns: minmax(160px, 220px);
+  grid-template-columns: minmax(280px, min(44vw, 420px));
+  min-width: 0;
 }
 
 input,

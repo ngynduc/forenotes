@@ -146,6 +146,9 @@ function renderCellDisplay(row, column) {
   if (column.badge) {
     return `<span class="${column.badge}-badge is-${rawValue}">${escapeHtml(rawValue || "n/a")}</span>`;
   }
+  if (column.html) {
+    return value;
+  }
   if (column.title) {
     return `<span class="row-title">${escapeHtml(value)}</span><span class="row-subtle">${escapeHtml(compactText(row.description || row.summary || row.query_body || row.id))}</span>`;
   }
@@ -166,6 +169,9 @@ function renderActions(row, entityType) {
   }
   if (entityType === "audit" || entityType === "search_result") {
     return `<span class="muted">Review</span>`;
+  }
+  if (entityType === "attack_tag") {
+    return `<span class="muted">Built-in</span>`;
   }
   if (!ALL_ENTITIES[entityType]) {
     return `<span class="muted">-</span>`;

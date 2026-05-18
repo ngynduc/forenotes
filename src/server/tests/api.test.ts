@@ -630,6 +630,217 @@ describe("Forenotes API", () => {
     expect(deleteCustomTagResponse.status).toBe(204);
   });
 
+  it("returns attached tags on finding and timeline lists so the UI can render them", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Tag Visibility Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Tag Visibility Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Lateral Movement",
+        color: "#2255aa"
+      });
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+    const attackTagId = attackTagsResponse.body.attackTags.find((tag: { attack_id: string }) => tag.attack_id === "T1003")?.id as
+      | string
+      | undefined;
+    expect(attackTagId).toBeTruthy();
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Credential dumping detected",
+        status: "confirmed",
+        severity: "high"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "LSASS access observed",
+        eventTime: new Date().toISOString(),
+        source: "EDR"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const attachFindingCustomTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({ customTagId });
+    expect(attachFindingCustomTagResponse.status).toBe(204);
+
+    const attachFindingAttackTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", commanderId)
+      .send({ attackTagId });
+    expect(attachFindingAttackTagResponse.status).toBe(204);
+
+    const attachTimelineCustomTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({ customTagId });
+    expect(attachTimelineCustomTagResponse.status).toBe(204);
+
+    const attachTimelineAttackTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/attack-tags`)
+      .set("x-user-id", commanderId)
+      .send({ attackTagId });
+    expect(attachTimelineAttackTagResponse.status).toBe(204);
+
+    const findingsListResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId);
+    expect(findingsListResponse.status).toBe(200);
+    expect(findingsListResponse.body.findings[0].custom_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: customTagId, name: "Lateral Movement" })])
+    );
+    expect(findingsListResponse.body.findings[0].attack_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: attackTagId, attack_id: "T1003" })])
+    );
+
+    const timelineListResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId);
+    expect(timelineListResponse.status).toBe(200);
+    expect(timelineListResponse.body.timelineEvents[0].custom_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: customTagId, name: "Lateral Movement" })])
+    );
+    expect(timelineListResponse.body.timelineEvents[0].attack_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: attackTagId, attack_id: "T1003" })])
+    );
+  });
+
+  it("searches incident records by attached tags and returns tag entities in scoped results", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Search Tags Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Search Tags Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Beaconing",
+        color: "#2244aa"
+      });
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+    const attackTagId = attackTagsResponse.body.attackTags.find((tag: { attack_id: string }) => tag.attack_id === "T1003")?.id as
+      | string
+      | undefined;
+    expect(attackTagId).toBeTruthy();
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Host artifact review",
+        status: "confirmed",
+        severity: "medium"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Analyst triage step",
+        eventTime: new Date().toISOString(),
+        source: "Console"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/findings/${findingId}/custom-tags`)
+        .set("x-user-id", commanderId)
+        .send({ customTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/custom-tags`)
+        .set("x-user-id", commanderId)
+        .send({ customTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+        .set("x-user-id", commanderId)
+        .send({ attackTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/attack-tags`)
+        .set("x-user-id", commanderId)
+        .send({ attackTagId })
+    ).toHaveProperty("status", 204);
+
+    const customTagSearchResponse = await request(app)
+      .get(`/api/search?q=beacon&incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(customTagSearchResponse.status).toBe(200);
+    expect(customTagSearchResponse.body.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entity_type: "custom_tag", entity_id: customTagId }),
+        expect.objectContaining({ entity_type: "finding", entity_id: findingId }),
+        expect.objectContaining({ entity_type: "timeline_event", entity_id: timelineEventId })
+      ])
+    );
+
+    const attackTagSearchResponse = await request(app)
+      .get(`/api/search?q=T1003&incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(attackTagSearchResponse.status).toBe(200);
+    expect(attackTagSearchResponse.body.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entity_type: "attack_tag", entity_id: attackTagId }),
+        expect.objectContaining({ entity_type: "finding", entity_id: findingId }),
+        expect.objectContaining({ entity_type: "timeline_event", entity_id: timelineEventId })
+      ])
+    );
+  });
+
   it("manages case and incident membership with notifications", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
@@ -736,8 +947,9 @@ describe("Forenotes API", () => {
       .set("x-user-id", analystId);
 
     expect(searchResponse.status).toBe(200);
-    expect(searchResponse.body.results).toHaveLength(1);
-    expect(searchResponse.body.results[0].entity_type).toBe("query");
+    expect(searchResponse.body.results).toEqual(
+      expect.arrayContaining([expect.objectContaining({ entity_type: "query" })])
+    );
 
     const forbiddenAuditResponse = await request(app)
       .get(`/api/audit-logs?incidentId=${incidentId}`)
