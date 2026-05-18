@@ -17,6 +17,18 @@ export function can(permission) {
   return !permission || state.permissions.includes(permission);
 }
 
+export function canUpdateTask(task) {
+  return can("task:update") || (Boolean(task) && task.assignee_user_id === state.currentUser?.id);
+}
+
+export function canAccessEntity(entityType, mode, item = null) {
+  const permission = actionPermission(entityType, mode);
+  if (entityType === "task" && mode === "update") {
+    return canUpdateTask(item);
+  }
+  return can(permission);
+}
+
 export function actionPermission(entityType, mode) {
   return ENTITY_PERMISSIONS[entityType]?.[mode] || null;
 }

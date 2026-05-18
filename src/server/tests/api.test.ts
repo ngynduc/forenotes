@@ -370,6 +370,79 @@ describe("Forenotes API", () => {
     ).toBe(true);
   });
 
+  it("allows an assigned analyst to update their task but not reassign it", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Assigned Task Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Assigned Task Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Contain host",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystId
+      });
+
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const assigneeUpdateResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystId)
+      .send({
+        status: "in_progress",
+        description: "Host isolation started."
+      });
+
+    expect(assigneeUpdateResponse.status).toBe(200);
+    expect(assigneeUpdateResponse.body.task.status).toBe("in_progress");
+    expect(assigneeUpdateResponse.body.task.description).toBe("Host isolation started.");
+
+    const assigneeReassignResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystId)
+      .send({
+        assigneeUserId: analystTwoId
+      });
+
+    expect(assigneeReassignResponse.status).toBe(403);
+    expect(assigneeReassignResponse.body.error).toBe("Missing permission: task:assign");
+
+    const otherAnalystUpdateResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystTwoId)
+      .send({
+        status: "done"
+      });
+
+    expect(otherAnalystUpdateResponse.status).toBe(403);
+    expect(otherAnalystUpdateResponse.body.error).toBe("Missing permission: task:update");
+  });
+
   it("keeps custom tags scoped to their case and exposes seeded ATT&CK tags globally", async () => {
     const caseAResponse = await request(app)
       .post("/api/cases")

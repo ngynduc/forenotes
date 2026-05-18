@@ -1,7 +1,7 @@
 import { ENTITY_DEFINITIONS } from "../entities.js";
 import { MEMBERSHIP_ENTITY_DEFINITIONS, memberOptions } from "../membershipEntities.js";
 import { requiresCase, requiresIncident } from "../data.js";
-import { actionPermission, can, permissionAttrs } from "../permissions.js";
+import { actionPermission, canAccessEntity, permissionAttrs } from "../permissions.js";
 import { comparableValue, compactText, escapeHtml, renderOptions } from "../helpers.js";
 import { makeTableState, state } from "../state.js";
 
@@ -124,14 +124,14 @@ function renderCell(row, column, entityType) {
 
   const display = renderCellDisplay(row, column);
   const editable = Boolean(column.editable && ALL_ENTITIES[entityType]?.inline?.[column.key]);
-  const permission = actionPermission(entityType, "update");
+  const canUpdate = canAccessEntity(entityType, "update", row);
 
   return `
     <td>
       <button
         class="cell-button ${editable ? "is-editable" : ""}"
         type="button"
-        data-action="${editable && can(permission) ? "edit-cell" : column.title && ALL_ENTITIES[entityType] ? "open-modal" : "noop"}"
+        data-action="${editable && canUpdate ? "edit-cell" : column.title && ALL_ENTITIES[entityType] ? "open-modal" : "noop"}"
         data-entity="${escapeHtml(entityType)}"
         data-id="${escapeHtml(row.id)}"
         data-field="${escapeHtml(column.key)}"

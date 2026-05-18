@@ -52,6 +52,7 @@ export const PERMISSION_KEYS = [
   "indicator:delete",
   "task:create",
   "task:update",
+  // Reserved for owner/assignee changes so task assignees can update task progress without reassign rights.
   "task:assign",
   "task:link",
   "query:create",

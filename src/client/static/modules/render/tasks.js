@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { refreshIncidentScope } from "../data.js";
-import { permissionAttrs } from "../permissions.js";
+import { canUpdateTask, permissionAttrs } from "../permissions.js";
 import { escapeHtml } from "../helpers.js";
 import { state, TASK_BOARD_COLUMNS } from "../state.js";
 import { TABLE_DEFINITIONS, formatMemberName } from "../tableDefinitions.js";
@@ -53,8 +53,9 @@ function renderTaskColumn(column) {
 }
 
 function renderTaskCard(task) {
+  const canUpdate = canUpdateTask(task);
   return `
-    <article class="kanban-card" draggable="true" data-drag-task="${escapeHtml(task.id)}">
+    <article class="kanban-card" ${canUpdate ? `draggable="true" data-drag-task="${escapeHtml(task.id)}"` : ""}>
       <button class="row-link" type="button" data-action="open-modal" data-entity="task" data-id="${escapeHtml(task.id)}">
         <span class="row-title">${escapeHtml(task.title)}</span>
         <span class="row-subtle">${escapeHtml(task.description || "No description")}</span>

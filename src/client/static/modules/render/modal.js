@@ -1,6 +1,6 @@
 import { ENTITY_DEFINITIONS } from "../entities.js";
 import { availableCaseUserOptions, availableIncidentUserOptions, memberOptions, MEMBERSHIP_ENTITY_DEFINITIONS } from "../membershipEntities.js";
-import { actionPermission, can, permissionMessage } from "../permissions.js";
+import { actionPermission, can, canAccessEntity, permissionMessage } from "../permissions.js";
 import { escapeHtml, renderOptions } from "../helpers.js";
 import { state } from "../state.js";
 
@@ -33,14 +33,14 @@ export function renderModal() {
           </div>
           <button class="icon-button" type="button" data-action="close-modal" aria-label="Close modal">${closeIcon()}</button>
         </div>
-        ${permission && !can(permission) ? `<div class="error-banner">${escapeHtml(permissionMessage(permission, mode))}</div>` : ""}
+        ${permission && !canAccessEntity(modal.entityType, mode, item) ? `<div class="error-banner">${escapeHtml(permissionMessage(permission, mode))}</div>` : ""}
         <form class="modal-form" data-form="modal" data-entity="${escapeHtml(modal.entityType)}" data-id="${escapeHtml(modal.itemId || "")}">
           <div class="modal-grid">
             ${fields.map((field) => renderField(field, values[field.name] ?? "")).join("")}
           </div>
           <div class="modal-actions">
             <div class="toolbar-group">
-              <button class="primary-button" type="button" data-action="submit-modal" ${permission && !can(permission) ? "disabled" : ""}>
+              <button class="primary-button" type="button" data-action="submit-modal" ${permission && !canAccessEntity(modal.entityType, mode, item) ? "disabled" : ""}>
                 ${escapeHtml(modal.itemId ? definition.updateAction : definition.createAction)}
               </button>
               <button class="ghost-button" type="button" data-action="close-modal">Cancel</button>

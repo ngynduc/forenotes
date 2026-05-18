@@ -35,6 +35,34 @@ interface CreateTaskLinkInput {
 
 type UpdateTaskInput = Partial<Omit<CreateTaskInput, "incidentId">>;
 
+function isTaskAssignee(userId: string, task: { assignee_user_id?: string | null }) {
+  return Boolean(task.assignee_user_id && task.assignee_user_id === userId);
+}
+
+async function requireTaskUpdateAccess(database: Database, user: AuthenticatedUser, task: { assignee_user_id?: string | null }) {
+  if (isTaskAssignee(user.id, task)) {
+    return;
+  }
+
+  await requirePermission(database, user, "task:update");
+}
+
+async function requireTaskAssignmentAccess(
+  database: Database,
+  user: AuthenticatedUser,
+  existingTask: { assignee_user_id?: string | null; owner_user_id?: string | null },
+  input: UpdateTaskInput
+) {
+  const assigneeChanged = input.assigneeUserId !== undefined && input.assigneeUserId !== existingTask.assignee_user_id;
+  const ownerChanged = input.ownerUserId !== undefined && input.ownerUserId !== existingTask.owner_user_id;
+
+  if (!assigneeChanged && !ownerChanged) {
+    return;
+  }
+
+  await requirePermission(database, user, "task:assign");
+}
+
 export async function listTasks(database: Database, userId: string, incidentId: string) {
   await requireIncidentMembership(database, userId, incidentId);
   const result = await database.query("select * from tasks where incident_id = $1 order by created_at desc", [incidentId]);
@@ -157,16 +185,18 @@ export async function updateTask(
   taskId: string,
   input: UpdateTaskInput
 ) {
-  await requirePermission(database, user, "task:update");
   await requireIncidentMembership(database, user.id, incidentId);
-
-  if (input.assigneeUserId) {
-    await requireIncidentMembership(database, input.assigneeUserId, incidentId);
-  }
 
   const existing = await database.query("select * from tasks where id = $1 and incident_id = $2", [taskId, incidentId]);
   if (existing.rowCount === 0) {
     throw new AppError(404, "Task not found");
+  }
+
+  await requireTaskUpdateAccess(database, user, existing.rows[0]);
+  await requireTaskAssignmentAccess(database, user, existing.rows[0], input);
+
+  if (input.assigneeUserId) {
+    await requireIncidentMembership(database, input.assigneeUserId, incidentId);
   }
 
   const next = {

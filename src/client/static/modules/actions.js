@@ -3,7 +3,7 @@ import { refreshAfterEntityChange, refreshNotifications, requiresCase, requiresI
 import { ENTITY_DEFINITIONS } from "./entities.js";
 import { cleanObject } from "./helpers.js";
 import { MEMBERSHIP_ENTITY_DEFINITIONS } from "./membershipEntities.js";
-import { actionPermission, can, permissionMessage } from "./permissions.js";
+import { actionPermission, canAccessEntity, permissionMessage } from "./permissions.js";
 import { findEntityItem } from "./render/modal.js";
 import { inlineOptions } from "./render/table.js";
 import { clearFlash, setFlash, state } from "./state.js";
@@ -25,8 +25,10 @@ export function openModal(entityType, itemId = "") {
     setFlash("error", `Unknown entity type: ${entityType}`);
     return;
   }
-  const permission = actionPermission(entityType, itemId ? "update" : "create");
-  if (permission && !can(permission)) {
+  const mode = itemId ? "update" : "create";
+  const permission = actionPermission(entityType, mode);
+  const item = itemId ? findEntityItem(entityType, itemId) : null;
+  if (permission && !canAccessEntity(entityType, mode, item)) {
     setFlash("error", permissionMessage(permission, itemId ? "edit this record" : "create this record"));
     return;
   }
@@ -39,8 +41,9 @@ export async function submitModal(form) {
   const definition = ALL_ENTITIES[entityType];
   const mode = itemId ? "update" : "create";
   const permission = actionPermission(entityType, mode);
+  const item = itemId ? findEntityItem(entityType, itemId) : null;
 
-  if (permission && !can(permission)) {
+  if (permission && !canAccessEntity(entityType, mode, item)) {
     setFlash("error", permissionMessage(permission, mode));
     return;
   }
@@ -61,8 +64,7 @@ export function startInlineEdit(entityType, id, field) {
   const definition = ALL_ENTITIES[entityType];
   const row = findEntityItem(entityType, id);
   const inlineDefinition = definition?.inline?.[field];
-  const permission = actionPermission(entityType, "update");
-  if (!row || !inlineDefinition || !can(permission)) {
+  if (!row || !inlineDefinition || !canAccessEntity(entityType, "update", row)) {
     return;
   }
   const rawValue = row[field];
