@@ -291,64 +291,84 @@ textarea:focus {
 }
 
 .priority-badge {
-  color: var(--warning);
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.priority-badge.is-low {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.priority-badge.is-medium {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.priority-badge.is-high {
+  color: #b45309;
   background: #fff8e6;
 }
 
-/* ── Code Editor ── */
+.priority-badge.is-critical {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+/* ── Modern Code Editor ── */
 
 .code-editor-wrapper {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
   overflow: hidden;
-  background: #1a1e2b;
+  background: #111827;
   transition: border-color var(--motion), box-shadow var(--motion);
 }
 
 .code-editor-wrapper:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  border-color: rgba(45, 212, 191, 0.45);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.1);
 }
 
 .code-editor-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: #141722;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 7px 10px;
+  background: #0f172a;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .code-editor-lang {
   font-size: 11px;
   font-weight: 650;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #5eead4;
+  color: #94a3b8;
 }
 
 .code-editor-copy {
-  font-size: 11px;
-  padding: 4px 10px;
   min-height: 26px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
-  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
   cursor: pointer;
-  transition: background-color var(--motion), color var(--motion);
+  transition: border-color var(--motion), color var(--motion), background-color var(--motion);
 }
 
 .code-editor-copy:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.28);
   color: #e5e7eb;
 }
 
 .code-editor-body {
   display: grid;
-  grid-template-columns: 3em 1fr;
+  grid-template-columns: 44px minmax(0, 1fr);
   overflow: hidden;
-  position: relative;
 }
 
 .code-editor-gutter {
@@ -356,33 +376,34 @@ textarea:focus {
   text-align: right;
   user-select: none;
   overflow: hidden;
-  background: #141722;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0f172a;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .code-editor-gutter span {
   display: block;
-  padding: 0 10px 0 0;
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+  padding-right: 10px;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
   font-size: 13px;
-  line-height: 1.62;
-  color: #4b5563;
+  line-height: 1.6;
+  color: #475569;
 }
 
 .code-editor-highlight {
   position: relative;
   min-height: 240px;
+  background: #111827;
 }
 
 .code-editor-highlight pre,
 .code-editor-highlight textarea {
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
   font-size: 13px;
-  line-height: 1.62;
+  line-height: 1.6;
   tab-size: 2;
   white-space: pre;
   word-wrap: normal;
-  padding: 12px;
+  padding: 12px 14px;
   margin: 0;
   min-height: 240px;
   max-height: 480px;
@@ -397,7 +418,9 @@ textarea:focus {
   z-index: 1;
 }
 
-.code-editor-highlight pre::-webkit-scrollbar { display: none; }
+.code-editor-highlight pre::-webkit-scrollbar {
+  display: none;
+}
 
 .code-editor-highlight pre code {
   font-family: inherit;
@@ -412,7 +435,7 @@ textarea:focus {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: rgba(229, 231, 235, 0.35);
+  color: rgba(229, 231, 235, 0.32);
   caret-color: #5eead4;
   resize: vertical;
   outline: none;
@@ -421,12 +444,12 @@ textarea:focus {
 }
 
 .code-editor-highlight textarea::selection {
-  background: rgba(94, 234, 212, 0.25);
+  background: rgba(45, 212, 191, 0.22);
 }
 
-/* syntax token colors — rendered in the pre overlay */
+/* syntax token colors */
 .tk-keyword { color: #c084fc; }
-.tk-string  { color: #6ee7b7; }
-.tk-comment { color: #6b7280; font-style: italic; }
-.tk-number  { color: #f9a86b; }
+.tk-string  { color: #86efac; }
+.tk-comment { color: #64748b; font-style: italic; }
+.tk-number  { color: #fdba74; }
 .tk-plain   { color: #e5e7eb; }

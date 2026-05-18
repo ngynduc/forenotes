@@ -144,7 +144,7 @@ function renderCellDisplay(row, column) {
   const rawValue = row[column.key];
   let value = column.format ? column.format(rawValue, row) : rawValue || "-";
   if (column.badge) {
-    return `<span class="${column.badge === "priority" ? "priority-badge" : "status-badge"}">${escapeHtml(rawValue || "n/a")}</span>`;
+    return `<span class="${column.badge === "priority" ? `priority-badge is-${rawValue}` : "status-badge"}">${escapeHtml(rawValue || "n/a")}</span>`;
   }
   if (column.title) {
     return `<span class="row-title">${escapeHtml(value)}</span><span class="row-subtle">${escapeHtml(compactText(row.description || row.summary || row.query_body || row.id))}</span>`;

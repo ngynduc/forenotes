@@ -3,7 +3,7 @@ import { refreshIncidentScope } from "../data.js";
 import { permissionAttrs } from "../permissions.js";
 import { escapeHtml } from "../helpers.js";
 import { state, TASK_BOARD_COLUMNS } from "../state.js";
-import { TABLE_DEFINITIONS } from "../tableDefinitions.js";
+import { TABLE_DEFINITIONS, formatMemberName } from "../tableDefinitions.js";
 import { renderTablePanel } from "./table.js";
 
 export function renderTasksView() {
@@ -52,8 +52,8 @@ function renderTaskCard(task) {
         <span class="row-subtle">${escapeHtml(task.description || "No description")}</span>
       </button>
       <div class="board-card-meta">
-        <span class="priority-badge">${escapeHtml(task.priority)}</span>
-        <span>${escapeHtml(task.assignee_user_id ? "Assigned" : "Unassigned")}</span>
+        <span class="priority-badge is-${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span>
+        <span>${escapeHtml(formatMemberName(task.assignee_user_id))}</span>
       </div>
     </article>
   `;

@@ -197,45 +197,9 @@ function renderEntitiesSection() {
     return `<section class="panel"><div class="empty-state is-large">Select an incident to browse entities.</div></section>`;
   }
   return `
-    ${renderTablePanel("indicators", state.indicators, {
-      entityType: "indicator",
-      title: "Indicators",
-      subtitle: "IOCs and detection indicators scoped to this incident.",
-      createLabel: "Add Indicator",
-      emptyLabel: "No indicators for this incident.",
-      columns: [
-        { key: "type", label: "Type", sortKey: "type", title: true },
-        { key: "value", label: "Value", sortKey: "value" },
-        { key: "severity", label: "Severity", sortKey: "severity", badge: "priority" },
-        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
-      ]
-    })}
-    ${renderTablePanel("systems", state.systems, {
-      entityType: "system",
-      title: "Systems",
-      subtitle: "Affected systems in this incident.",
-      createLabel: "Add System",
-      emptyLabel: "No systems for this incident.",
-      columns: [
-        { key: "hostname", label: "Hostname", sortKey: "hostname", title: true },
-        { key: "os", label: "OS", sortKey: "os" },
-        { key: "status", label: "Status", sortKey: "status", badge: "status" },
-        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
-      ]
-    })}
-    ${renderTablePanel("accounts", state.accounts, {
-      entityType: "account",
-      title: "Accounts",
-      subtitle: "User accounts relevant to this incident.",
-      createLabel: "Add Account",
-      emptyLabel: "No accounts for this incident.",
-      columns: [
-        { key: "username", label: "Username", sortKey: "username", title: true },
-        { key: "type", label: "Type", sortKey: "type" },
-        { key: "status", label: "Status", sortKey: "status", badge: "status" },
-        { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
-      ]
-    })}
+    ${renderTablePanel("indicators", state.indicators, TABLE_DEFINITIONS.indicators)}
+    ${renderTablePanel("systems", state.systems, TABLE_DEFINITIONS.systems)}
+    ${renderTablePanel("accounts", state.accounts, TABLE_DEFINITIONS.accounts)}
   `;
 }
 

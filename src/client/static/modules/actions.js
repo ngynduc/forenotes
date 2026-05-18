@@ -20,6 +20,11 @@ export function openModal(entityType, itemId = "") {
     setFlash("error", "Select an incident first.");
     return;
   }
+  const definition = ALL_ENTITIES[entityType];
+  if (!definition) {
+    setFlash("error", `Unknown entity type: ${entityType}`);
+    return;
+  }
   const permission = actionPermission(entityType, itemId ? "update" : "create");
   if (permission && !can(permission)) {
     setFlash("error", permissionMessage(permission, itemId ? "edit this record" : "create this record"));

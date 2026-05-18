@@ -168,7 +168,7 @@ export function requiresCase(entityType) {
 }
 
 export function requiresIncident(entityType) {
-  return ["finding", "timeline_event", "task", "query", "incident_member"].includes(entityType);
+  return ["finding", "timeline_event", "task", "query", "indicator", "system", "account", "incident_member"].includes(entityType);
 }
 
 function ensureActiveUser() {

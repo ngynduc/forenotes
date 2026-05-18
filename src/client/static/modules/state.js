@@ -7,6 +7,9 @@ export const OPTION_SETS = {
   confidence: ["low", "medium", "high"],
   taskStatus: ["todo", "in_progress", "blocked", "done"],
   taskPriority: ["low", "medium", "high", "critical"],
+  indicatorType: ["host", "ip", "domain", "url", "email", "file_hash", "registry", "mutex", "process", "user_agent", "other"],
+  accountStatus: ["active", "disabled", "compromised", "locked"],
+  systemStatus: ["online", "offline", "compromised", "unknown"],
   globalRole: ["commander", "response_lead", "analyst"],
   evidenceType: ["timeline_event", "indicator", "system", "account", "query"]
 };
@@ -80,6 +83,9 @@ export const state = {
       timeline: makeTableState("event_time"),
       tasks: makeTableState("updated_at"),
       queries: makeTableState("updated_at"),
+      indicators: makeTableState("updated_at"),
+      systems: makeTableState("updated_at"),
+      accounts: makeTableState("updated_at"),
       notifications: makeTableState("created_at"),
       audit: makeTableState("created_at"),
       users: makeTableState("display_name", "asc"),

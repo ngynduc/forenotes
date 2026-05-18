@@ -140,6 +140,48 @@ export const TABLE_DEFINITIONS = {
       { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
     ]
   },
+  indicators: {
+    entityType: "indicator",
+    title: "Indicators",
+    subtitle: "IOCs and detection indicators scoped to this incident.",
+    createLabel: "Add Indicator",
+    emptyLabel: "No indicators for this incident.",
+    columns: [
+      { key: "indicator_type", label: "Type", sortKey: "indicator_type", title: true, editable: true },
+      { key: "value", label: "Value", sortKey: "value", editable: true },
+      { key: "confidence", label: "Confidence", sortKey: "confidence" },
+      { key: "source", label: "Source", sortKey: "source" },
+      { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+    ]
+  },
+  systems: {
+    entityType: "system",
+    title: "Systems",
+    subtitle: "Affected systems in this incident.",
+    createLabel: "Add System",
+    emptyLabel: "No systems for this incident.",
+    columns: [
+      { key: "hostname", label: "Hostname", sortKey: "hostname", title: true, editable: true },
+      { key: "ip_address", label: "IP Address", sortKey: "ip_address" },
+      { key: "os", label: "OS", sortKey: "os", editable: true },
+      { key: "status", label: "Status", sortKey: "status", editable: true, badge: "status" },
+      { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+    ]
+  },
+  accounts: {
+    entityType: "account",
+    title: "Accounts",
+    subtitle: "User accounts relevant to this incident.",
+    createLabel: "Add Account",
+    emptyLabel: "No accounts for this incident.",
+    columns: [
+      { key: "username", label: "Username", sortKey: "username", title: true, editable: true },
+      { key: "domain", label: "Domain", sortKey: "domain" },
+      { key: "status", label: "Status", sortKey: "status", editable: true, badge: "status" },
+      { key: "owner", label: "Owner", sortKey: "owner" },
+      { key: "updated_at", label: "Updated", sortKey: "updated_at", format: formatDateTime }
+    ]
+  },
   search: {
     entityType: "search_result",
     title: "Search Results",
@@ -155,7 +197,7 @@ export const TABLE_DEFINITIONS = {
   }
 };
 
-function formatMemberName(value) {
+export function formatMemberName(value) {
   if (!value) {
     return "Unassigned";
   }

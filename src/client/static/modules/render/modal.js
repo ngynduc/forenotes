@@ -13,6 +13,9 @@ export function renderModal() {
 
   const modal = state.ui.modal;
   const definition = ALL_ENTITIES[modal.entityType];
+  if (!definition) {
+    return `<div class="error-banner">Unknown entity type: ${escapeHtml(modal.entityType)}</div>`;
+  }
   const item = modal.itemId ? findEntityItem(modal.entityType, modal.itemId) : null;
   const mode = modal.itemId ? "update" : "create";
   const permission = actionPermission(modal.entityType, mode);

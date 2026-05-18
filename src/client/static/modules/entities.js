@@ -209,5 +209,112 @@ export const ENTITY_DEFINITIONS = {
       language: { type: "text", payloadKey: "language" },
       owner_user_id: { type: "member-select", payloadKey: "ownerUserId" }
     }
+  },
+  indicator: {
+    collection: "indicators",
+    label: "Indicator",
+    createTitle: "Add Indicator",
+    editTitle: "Indicator Detail",
+    createAction: "Save Indicator",
+    updateAction: "Save Indicator",
+    create: () => ({ url: `/api/incidents/${state.selectedIncidentId}/indicators`, method: "POST" }),
+    update: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/indicators/${id}`, method: "PATCH" }),
+    delete: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/indicators/${id}`, method: "DELETE" }),
+    fields: () => [
+      { name: "indicatorType", label: "Type", type: "select", options: OPTION_SETS.indicatorType, required: true, autofocus: true },
+      { name: "value", label: "Value", type: "text", required: true },
+      { name: "confidence", label: "Confidence", type: "select", options: ["", ...OPTION_SETS.confidence] },
+      { name: "source", label: "Source", type: "text" },
+      { name: "firstSeenAt", label: "First Seen", type: "datetime-local" },
+      { name: "lastSeenAt", label: "Last Seen", type: "datetime-local" },
+      { name: "description", label: "Description", type: "textarea", span: 2 }
+    ],
+    values: (item) => ({
+      indicatorType: item?.indicator_type || "host",
+      value: item?.value || "",
+      confidence: item?.confidence || "",
+      source: item?.source || "",
+      firstSeenAt: toLocalInputValue(item?.first_seen_at),
+      lastSeenAt: toLocalInputValue(item?.last_seen_at),
+      description: item?.description || ""
+    }),
+    fromForm: (data) => cleanObject({
+      ...data,
+      firstSeenAt: localDateTimeToIso(data.firstSeenAt),
+      lastSeenAt: localDateTimeToIso(data.lastSeenAt)
+    }),
+    inline: {
+      indicator_type: { type: "select", payloadKey: "indicatorType", options: OPTION_SETS.indicatorType },
+      value: { type: "text", payloadKey: "value" },
+      confidence: { type: "select", payloadKey: "confidence", options: ["", ...OPTION_SETS.confidence] },
+      source: { type: "text", payloadKey: "source" }
+    }
+  },
+  system: {
+    collection: "systems",
+    label: "System",
+    createTitle: "Add System",
+    editTitle: "System Detail",
+    createAction: "Save System",
+    updateAction: "Save System",
+    create: () => ({ url: `/api/incidents/${state.selectedIncidentId}/systems`, method: "POST" }),
+    update: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/systems/${id}`, method: "PATCH" }),
+    delete: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/systems/${id}`, method: "DELETE" }),
+    fields: () => [
+      { name: "hostname", label: "Hostname", type: "text", required: true, autofocus: true },
+      { name: "ipAddress", label: "IP Address", type: "text" },
+      { name: "os", label: "OS", type: "text" },
+      { name: "status", label: "Status", type: "select", options: ["", ...OPTION_SETS.systemStatus] },
+      { name: "owner", label: "Owner", type: "text" },
+      { name: "notes", label: "Notes", type: "textarea", span: 2 }
+    ],
+    values: (item) => ({
+      hostname: item?.hostname || "",
+      ipAddress: item?.ip_address || "",
+      os: item?.os || "",
+      status: item?.status || "",
+      owner: item?.owner || "",
+      notes: item?.notes || ""
+    }),
+    fromForm: (data) => cleanObject(data),
+    inline: {
+      hostname: { type: "text", payloadKey: "hostname" },
+      ip_address: { type: "text", payloadKey: "ipAddress" },
+      os: { type: "text", payloadKey: "os" },
+      status: { type: "select", payloadKey: "status", options: ["", ...OPTION_SETS.systemStatus] },
+      owner: { type: "text", payloadKey: "owner" }
+    }
+  },
+  account: {
+    collection: "accounts",
+    label: "Account",
+    createTitle: "Add Account",
+    editTitle: "Account Detail",
+    createAction: "Save Account",
+    updateAction: "Save Account",
+    create: () => ({ url: `/api/incidents/${state.selectedIncidentId}/accounts`, method: "POST" }),
+    update: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/accounts/${id}`, method: "PATCH" }),
+    delete: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/accounts/${id}`, method: "DELETE" }),
+    fields: () => [
+      { name: "username", label: "Username", type: "text", required: true, autofocus: true },
+      { name: "domain", label: "Domain", type: "text" },
+      { name: "status", label: "Status", type: "select", options: ["", ...OPTION_SETS.accountStatus] },
+      { name: "owner", label: "Owner", type: "text" },
+      { name: "notes", label: "Notes", type: "textarea", span: 2 }
+    ],
+    values: (item) => ({
+      username: item?.username || "",
+      domain: item?.domain || "",
+      status: item?.status || "",
+      owner: item?.owner || "",
+      notes: item?.notes || ""
+    }),
+    fromForm: (data) => cleanObject(data),
+    inline: {
+      username: { type: "text", payloadKey: "username" },
+      domain: { type: "text", payloadKey: "domain" },
+      status: { type: "select", payloadKey: "status", options: ["", ...OPTION_SETS.accountStatus] },
+      owner: { type: "text", payloadKey: "owner" }
+    }
   }
 };
