@@ -18,6 +18,8 @@ import {
   deleteCustomTag,
   listAttackTags,
   listCustomTags,
+  listFindingTags,
+  listTimelineEventTags,
   updateCustomTag
 } from "../services/tagService.js";
 
@@ -98,6 +100,16 @@ export function createTagRoutes(database: Database) {
     })
   );
 
+  router.get(
+    "/incidents/:incidentId/timeline-events/:timelineEventId/tags",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const timelineEventId = getRequiredParam(request.params.timelineEventId, "timelineEventId");
+      response.json(await listTimelineEventTags(database, user.id, incidentId, timelineEventId));
+    })
+  );
+
   router.post(
     "/incidents/:incidentId/findings/:findingId/attack-tags",
     asyncHandler(async (request, response) => {
@@ -107,6 +119,16 @@ export function createTagRoutes(database: Database) {
       const payload = attachAttackTagSchema.parse(request.body);
       await attachAttackTagToFinding(database, user, { incidentId, findingId, ...payload });
       response.status(204).send();
+    })
+  );
+
+  router.get(
+    "/incidents/:incidentId/findings/:findingId/tags",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const findingId = getRequiredParam(request.params.findingId, "findingId");
+      response.json(await listFindingTags(database, user.id, incidentId, findingId));
     })
   );
 

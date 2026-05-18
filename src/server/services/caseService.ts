@@ -17,11 +17,34 @@ interface CreateCaseInput {
 export async function listCases(database: Database, userId: string) {
   const result = await database.query(
     `
-      select c.id, c.case_name, c.client_name, c.start_date, c.end_date, c.status, c.summary, c.created_at, c.updated_at
+      select
+        c.id,
+        c.case_name,
+        c.client_name,
+        c.start_date,
+        c.end_date,
+        c.status,
+        c.summary,
+        c.created_at,
+        c.updated_at,
+        cm.case_role as user_case_role,
+        count(i.id) filter (where i.status <> 'closed')::int as active_incidents
       from cases c
       inner join case_members cm on cm.case_id = c.id
+      left join incidents i on i.case_id = c.id
       where cm.user_id = $1
-      order by c.created_at desc
+      group by
+        c.id,
+        c.case_name,
+        c.client_name,
+        c.start_date,
+        c.end_date,
+        c.status,
+        c.summary,
+        c.created_at,
+        c.updated_at,
+        cm.case_role
+      order by c.updated_at desc
     `,
     [userId]
   );

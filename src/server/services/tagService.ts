@@ -40,6 +40,75 @@ interface AttachTimelineCustomTagInput {
   customTagId: string;
 }
 
+export async function listFindingTags(database: Database, userId: string, incidentId: string, findingId: string) {
+  await requireIncidentMembership(database, userId, incidentId);
+
+  const [attackTagsResult, customTagsResult] = await Promise.all([
+    database.query(
+      `
+        select at.id, at.attack_id, at.name, at.type, at.tactic
+        from finding_attack_tags fat
+        inner join attack_tags at on at.id = fat.attack_tag_id
+        where fat.incident_id = $1 and fat.finding_id = $2
+        order by at.attack_id asc
+      `,
+      [incidentId, findingId]
+    ),
+    database.query(
+      `
+        select ct.id, ct.name, ct.color
+        from finding_custom_tags fct
+        inner join custom_tags ct on ct.id = fct.custom_tag_id
+        where fct.incident_id = $1 and fct.finding_id = $2
+        order by ct.name asc
+      `,
+      [incidentId, findingId]
+    )
+  ]);
+
+  return {
+    attackTags: attackTagsResult.rows,
+    customTags: customTagsResult.rows
+  };
+}
+
+export async function listTimelineEventTags(
+  database: Database,
+  userId: string,
+  incidentId: string,
+  timelineEventId: string
+) {
+  await requireIncidentMembership(database, userId, incidentId);
+
+  const [attackTagsResult, customTagsResult] = await Promise.all([
+    database.query(
+      `
+        select at.id, at.attack_id, at.name, at.type, at.tactic
+        from timeline_event_attack_tags teat
+        inner join attack_tags at on at.id = teat.attack_tag_id
+        where teat.incident_id = $1 and teat.timeline_event_id = $2
+        order by at.attack_id asc
+      `,
+      [incidentId, timelineEventId]
+    ),
+    database.query(
+      `
+        select ct.id, ct.name, ct.color
+        from timeline_event_custom_tags tect
+        inner join custom_tags ct on ct.id = tect.custom_tag_id
+        where tect.incident_id = $1 and tect.timeline_event_id = $2
+        order by ct.name asc
+      `,
+      [incidentId, timelineEventId]
+    )
+  ]);
+
+  return {
+    attackTags: attackTagsResult.rows,
+    customTags: customTagsResult.rows
+  };
+}
+
 export async function listAttackTags(database: Database) {
   const result = await database.query(
     "select id, attack_id, name, type, tactic, attack_version, external_url from attack_tags order by attack_id asc"

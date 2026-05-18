@@ -100,6 +100,15 @@ describe("Forenotes API", () => {
     expect(response.body.error).toBe("Authentication required");
   });
 
+  it("hydrates authenticated user permissions", async () => {
+    const response = await request(app).get("/api/auth/me").set("x-user-id", commanderId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.user.globalRole).toBe("commander");
+    expect(response.body.permissions).toContain("case:create");
+    expect(response.body.permissions).toContain("audit:read");
+  });
+
   it("creates a case and incident for a permitted user", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
@@ -124,6 +133,49 @@ describe("Forenotes API", () => {
 
     expect(incidentResponse.status).toBe(201);
     expect(incidentResponse.body.incident.case_id).toBe(caseId);
+  });
+
+  it("rejects unauthorized case creation with an explicit permission error", async () => {
+    const response = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", analystId)
+      .send({
+        caseName: "Analyst Case",
+        clientName: "Acme",
+        status: "open"
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Missing permission: case:create");
+  });
+
+  it("blocks non-member access to incident data", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Private Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Private Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystTwoId);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Incident not found");
   });
 
   it("blocks cross-incident evidence linking", async () => {
@@ -449,6 +501,14 @@ describe("Forenotes API", () => {
   });
 
   it("supports scoped search and audit log reads", async () => {
+    const responseLeadId = randomUUID();
+    await insertUser(pool, {
+      id: responseLeadId,
+      email: "lead@example.com",
+      displayName: "Response Lead",
+      globalRole: "response_lead"
+    });
+
     const caseResponse = await request(app)
       .post("/api/cases")
       .set("x-user-id", commanderId)
@@ -471,6 +531,8 @@ describe("Forenotes API", () => {
       });
     const incidentId = incidentResponse.body.incident.id as string;
     await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addCaseMember(pool, caseId, responseLeadId, commanderId);
+    await addIncidentMember(pool, incidentId, responseLeadId, commanderId);
 
     await request(app)
       .post(`/api/incidents/${incidentId}/queries`)
@@ -501,6 +563,13 @@ describe("Forenotes API", () => {
 
     expect(auditResponse.status).toBe(200);
     expect(auditResponse.body.auditLogs.length).toBeGreaterThan(0);
+
+    const leadAuditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", responseLeadId);
+
+    expect(leadAuditResponse.status).toBe(200);
+    expect(leadAuditResponse.body.auditLogs.length).toBeGreaterThan(0);
   });
 
   it("supports update and delete flows for incident records", async () => {

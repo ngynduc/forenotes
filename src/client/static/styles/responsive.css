@@ -1,0 +1,45 @@
+@media (max-width: 1120px) {
+  .app-header,
+  .context-bar,
+  .workspace-grid,
+  .workspace-grid.is-collapsed,
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .session-tools {
+    justify-content: start;
+    flex-wrap: wrap;
+  }
+
+  .kanban-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .app-header,
+  .page-shell,
+  .workspace-root {
+    padding: var(--space-4);
+  }
+
+  .landing-header,
+  .modal-grid,
+  .global-search,
+  .inline-editor,
+  .kanban-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-span-2 {
+    grid-column: span 1;
+  }
+
+  .table-toolbar,
+  .table-footer,
+  .member-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

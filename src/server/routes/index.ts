@@ -7,10 +7,12 @@ import { createNotificationRoutes } from "./notificationRoutes.js";
 import { createSearchRoutes } from "./searchRoutes.js";
 import { createTagRoutes } from "./tagRoutes.js";
 import { createAuditLogRoutes } from "./auditLogRoutes.js";
+import { createUserRoutes } from "./userRoutes.js";
 
 export function createRoutes(database: Database) {
   const router = Router();
   router.use("/api/auth", createAuthRoutes(database));
+  router.use("/api/users", createUserRoutes(database));
   router.use("/api/cases", createCaseRoutes(database));
   router.use("/api/incidents", createIncidentRoutes(database));
   router.use("/api", createTagRoutes(database));

@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import path from "node:path";
 import { ZodError } from "zod";
 import type { Database } from "./db/types.js";
 import { pool } from "./db/pool.js";
@@ -9,12 +10,17 @@ import { createRoutes } from "./routes/index.js";
 export function createApp(database: Database = pool) {
   const app = express();
   app.use(express.json());
+  app.use(express.static(path.resolve("src/client/static")));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
   });
 
   app.use(createRoutes(database));
+
+  app.get("/", (_request, response) => {
+    response.sendFile(path.resolve("src/client/static/index.html"));
+  });
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof ZodError) {

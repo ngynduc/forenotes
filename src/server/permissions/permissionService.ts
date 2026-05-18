@@ -14,6 +14,20 @@ export async function requirePermission(database: Database, user: AuthenticatedU
   }
 }
 
+export async function listUserPermissions(database: Database, user: AuthenticatedUser): Promise<PermissionKey[]> {
+  const result = await database.query<{ permission_key: PermissionKey }>(
+    `
+      select permission_key
+      from role_permissions
+      where role = $1
+      order by permission_key asc
+    `,
+    [user.globalRole]
+  );
+
+  return result.rows.map((row) => row.permission_key);
+}
+
 export async function requireCaseMembership(database: Database, userId: string, caseId: string) {
   const result = await database.query("select 1 from case_members where case_id = $1 and user_id = $2", [
     caseId,
