@@ -68,6 +68,12 @@ function renderSidebarPanel() {
           </button>
         `).join("")}
       </nav>
+      <div class="sidebar-footer">
+        <button class="sidebar-collapse-btn" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar" title="Collapse sidebar">
+          ${iconSVG("chevron-left")}
+          <span>Collapse</span>
+        </button>
+      </div>
     </aside>
   `;
 }

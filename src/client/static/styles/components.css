@@ -352,6 +352,98 @@ textarea:focus {
   background: #fef2f2;
 }
 
+/* ── Status Badge Colors ── */
+
+.status-badge.is-open {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.status-badge.is-closed {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.status-badge.is-contained {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.status-badge.is-draft {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.status-badge.is-confirmed {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.status-badge.is-false_positive {
+  color: #c2410c;
+  background: #fff7ed;
+}
+
+.status-badge.is-resolved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-badge.is-todo {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.status-badge.is-in_progress {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.status-badge.is-blocked {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.status-badge.is-done {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-badge.is-active {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-badge.is-disabled {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.status-badge.is-compromised {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.status-badge.is-locked {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.status-badge.is-online {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-badge.is-offline {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.status-badge.is-unknown {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
 /* ── Modern Code Editor ── */
 
 .code-editor-wrapper {
