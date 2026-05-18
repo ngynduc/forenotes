@@ -98,11 +98,28 @@ export const state = {
   }
 };
 
+let _flashTimer = null;
+
 export function setFlash(kind, message) {
+  if (_flashTimer) {
+    clearTimeout(_flashTimer);
+    _flashTimer = null;
+  }
   state.ui.flash = { kind, message };
+  if (kind === "success") {
+    _flashTimer = setTimeout(() => {
+      state.ui.flash = null;
+      _flashTimer = null;
+      window.dispatchEvent(new CustomEvent("forenotes:rerender"));
+    }, 4000);
+  }
 }
 
 export function clearFlash() {
+  if (_flashTimer) {
+    clearTimeout(_flashTimer);
+    _flashTimer = null;
+  }
   state.ui.flash = null;
 }
 

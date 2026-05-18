@@ -4,6 +4,8 @@ import { renderApp } from "./modules/render/shell.js";
 import { setFlash, state } from "./modules/state.js";
 
 function boot() {
+  window.addEventListener("forenotes:rerender", () => renderApp());
+
   initEvents(async () => {
     renderApp();
   });
