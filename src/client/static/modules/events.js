@@ -46,6 +46,8 @@ async function handleClick(event, render) {
 
   if (action === "set-section") {
     state.ui.activeSection = target.dataset.section;
+  } else if (action === "toggle-task-view") {
+    state.ui.taskView = target.dataset.view;
   } else if (action === "toggle-sidebar") {
     state.ui.sidebarExpanded = !state.ui.sidebarExpanded;
   } else if (action === "refresh") {

@@ -7,20 +7,28 @@ import { TABLE_DEFINITIONS, formatMemberName } from "../tableDefinitions.js";
 import { renderTablePanel } from "./table.js";
 
 export function renderTasksView() {
+  const isBoard = state.ui.taskView === "board";
   return `
     <section class="panel">
       <div class="section-header">
         <div>
-          <h2>Task Kanban</h2>
-          <p>Drag tasks between columns to update operational status.</p>
+          <h2>${isBoard ? "Task Kanban" : "Task Table"}</h2>
+          <p>${isBoard ? "Drag tasks between columns to update operational status." : "Sort and filter the task list."}</p>
         </div>
-        <button class="primary-button" type="button" data-action="open-modal" data-entity="task" ${permissionAttrs("task:create", "create tasks")}>Create Task</button>
+        <div class="toolbar-group">
+          <div class="toggle-group">
+            <button class="toggle-option${isBoard ? " is-active" : ""}" type="button" data-action="toggle-task-view" data-view="board">Kanban</button>
+            <button class="toggle-option${!isBoard ? " is-active" : ""}" type="button" data-action="toggle-task-view" data-view="table">Table</button>
+          </div>
+          <button class="primary-button" type="button" data-action="open-modal" data-entity="task" ${permissionAttrs("task:create", "create tasks")}>Create Task</button>
+        </div>
       </div>
-      <div class="kanban-grid">
-        ${TASK_BOARD_COLUMNS.map(renderTaskColumn).join("")}
-      </div>
+      ${isBoard ? `
+        <div class="kanban-grid">
+          ${TASK_BOARD_COLUMNS.map(renderTaskColumn).join("")}
+        </div>
+      ` : renderTablePanel("tasks", state.tasks, TABLE_DEFINITIONS.tasks)}
     </section>
-    ${renderTablePanel("tasks", state.tasks, TABLE_DEFINITIONS.tasks)}
   `;
 }
 

@@ -148,6 +148,43 @@ p,
 
 /* ── Buttons ── */
 
+/* ── Toggle Group ── */
+
+.toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.toggle-option {
+  min-height: 34px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+.toggle-option:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.toggle-option:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.toggle-option.is-active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+/* ── Buttons ── */
+
 .primary-button,
 .secondary-button,
 .ghost-button,
