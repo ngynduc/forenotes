@@ -29,6 +29,7 @@ export async function createTimelineEvent(database: Database, user: Authenticate
   await requirePermission(database, user, "timeline:create");
   await requireIncidentMembership(database, user.id, input.incidentId);
 
+  const ownerUserId = input.ownerUserId ?? user.id;
   const timelineEventId = randomUUID();
   await database.query(
     `
@@ -44,7 +45,7 @@ export async function createTimelineEvent(database: Database, user: Authenticate
       input.description ?? null,
       input.source ?? null,
       input.rawEvidenceRef ?? null,
-      input.ownerUserId ?? null,
+      ownerUserId,
       user.id
     ]
   );
@@ -55,7 +56,10 @@ export async function createTimelineEvent(database: Database, user: Authenticate
     action: "timeline.create",
     entityType: "timeline_event",
     entityId: timelineEventId,
-    afterJson: input
+    afterJson: {
+      ...input,
+      ownerUserId
+    }
   });
 
   const result = await database.query("select * from timeline_events where id = $1", [timelineEventId]);
@@ -72,6 +76,10 @@ export async function updateTimelineEvent(
   await requirePermission(database, user, "timeline:update");
   await requireIncidentMembership(database, user.id, incidentId);
 
+  if (input.ownerUserId !== undefined) {
+    throw new AppError(400, "Timeline event owner cannot be changed");
+  }
+
   const existing = await database.query("select * from timeline_events where id = $1 and incident_id = $2", [
     timelineEventId,
     incidentId
@@ -87,7 +95,7 @@ export async function updateTimelineEvent(
     description: input.description ?? existing.rows[0].description,
     source: input.source ?? existing.rows[0].source,
     raw_evidence_ref: input.rawEvidenceRef ?? existing.rows[0].raw_evidence_ref,
-    owner_user_id: input.ownerUserId ?? existing.rows[0].owner_user_id
+    owner_user_id: existing.rows[0].owner_user_id
   };
 
   await database.query(

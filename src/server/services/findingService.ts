@@ -28,6 +28,7 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
   await requirePermission(database, user, "finding:create");
   await requireIncidentMembership(database, user.id, input.incidentId);
 
+  const ownerUserId = input.ownerUserId ?? user.id;
   const findingId = randomUUID();
   await database.query(
     `
@@ -45,7 +46,7 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
       input.confidence ?? null,
       input.impact ?? null,
       input.recommendation ?? null,
-      input.ownerUserId ?? null,
+      ownerUserId,
       user.id
     ]
   );
@@ -56,7 +57,10 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
     action: "finding.create",
     entityType: "finding",
     entityId: findingId,
-    afterJson: input
+    afterJson: {
+      ...input,
+      ownerUserId
+    }
   });
 
   const memberResult = await database.query<{ user_id: string }>(
@@ -90,6 +94,10 @@ export async function updateFinding(
   await requirePermission(database, user, "finding:update");
   await requireIncidentMembership(database, user.id, incidentId);
 
+  if (input.ownerUserId !== undefined) {
+    throw new AppError(400, "Finding owner cannot be changed");
+  }
+
   const existing = await database.query("select * from findings where id = $1 and incident_id = $2", [findingId, incidentId]);
   if (existing.rowCount === 0) {
     throw new AppError(404, "Finding not found");
@@ -104,7 +112,7 @@ export async function updateFinding(
     confidence: input.confidence ?? existing.rows[0].confidence,
     impact: input.impact ?? existing.rows[0].impact,
     recommendation: input.recommendation ?? existing.rows[0].recommendation,
-    owner_user_id: input.ownerUserId ?? existing.rows[0].owner_user_id
+    owner_user_id: existing.rows[0].owner_user_id
   };
 
   await database.query(

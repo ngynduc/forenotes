@@ -79,12 +79,11 @@ export const ENTITY_DEFINITIONS = {
     create: () => ({ url: `/api/incidents/${state.selectedIncidentId}/findings`, method: "POST" }),
     update: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/findings/${id}`, method: "PATCH" }),
     delete: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/findings/${id}`, method: "DELETE" }),
-    fields: () => [
+    fields: (_item, mode) => [
       { name: "title", label: "Title", type: "text", required: true, autofocus: true },
       { name: "status", label: "Status", type: "select", options: OPTION_SETS.findingStatus, required: true },
       { name: "severity", label: "Severity", type: "select", options: ["", ...OPTION_SETS.findingSeverity] },
       { name: "confidence", label: "Confidence", type: "select", options: ["", ...OPTION_SETS.confidence] },
-      { name: "ownerUserId", label: "Owner", type: "member-select" },
       { name: "description", label: "Long Description", type: "textarea", span: 2 },
       { name: "impact", label: "Impact", type: "textarea", span: 2 },
       { name: "recommendation", label: "Recommendation", type: "textarea", span: 2 }
@@ -104,8 +103,7 @@ export const ENTITY_DEFINITIONS = {
       title: { type: "text", payloadKey: "title" },
       status: { type: "select", payloadKey: "status", options: OPTION_SETS.findingStatus },
       severity: { type: "select", payloadKey: "severity", options: ["", ...OPTION_SETS.findingSeverity] },
-      confidence: { type: "select", payloadKey: "confidence", options: ["", ...OPTION_SETS.confidence] },
-      owner_user_id: { type: "member-select", payloadKey: "ownerUserId" }
+      confidence: { type: "select", payloadKey: "confidence", options: ["", ...OPTION_SETS.confidence] }
     }
   },
   timeline_event: {
@@ -118,11 +116,10 @@ export const ENTITY_DEFINITIONS = {
     create: () => ({ url: `/api/incidents/${state.selectedIncidentId}/timeline-events`, method: "POST" }),
     update: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/timeline-events/${id}`, method: "PATCH" }),
     delete: (id) => ({ url: `/api/incidents/${state.selectedIncidentId}/timeline-events/${id}`, method: "DELETE" }),
-    fields: () => [
+    fields: (_item, mode) => [
       { name: "title", label: "Title", type: "text", required: true, autofocus: true },
       { name: "eventTime", label: "Event Time", type: "datetime-local", required: true },
       { name: "source", label: "Source", type: "text" },
-      { name: "ownerUserId", label: "Owner", type: "member-select" },
       { name: "description", label: "Details", type: "textarea", span: 2 },
       { name: "rawEvidenceRef", label: "Raw Evidence Ref", type: "text", span: 2 }
     ],
@@ -138,8 +135,7 @@ export const ENTITY_DEFINITIONS = {
     inline: {
       title: { type: "text", payloadKey: "title" },
       event_time: { type: "datetime-local", payloadKey: "eventTime", displayToDraft: toLocalInputValue, draftToPayload: localDateTimeToIso },
-      source: { type: "text", payloadKey: "source" },
-      owner_user_id: { type: "member-select", payloadKey: "ownerUserId" }
+      source: { type: "text", payloadKey: "source" }
     }
   },
   task: {

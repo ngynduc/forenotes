@@ -278,6 +278,7 @@ describe("Forenotes API", () => {
       });
 
     expect(findingResponse.status).toBe(201);
+    expect(findingResponse.body.finding.owner_user_id).toBe(commanderId);
 
     const notificationsResponse = await request(app)
       .get("/api/notifications")
@@ -287,6 +288,120 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.body.notifications).toHaveLength(1);
     expect(notificationsResponse.body.notifications[0].event_type).toBe("finding.created");
     expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
+  });
+
+  it("defaults finding and timeline owner to actor on create", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Owner Default Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Owner Default Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Default finding owner",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+    expect(findingResponse.body.finding.owner_user_id).toBe(analystId);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Default timeline owner",
+        eventTime: new Date().toISOString()
+      });
+
+    expect(timelineResponse.status).toBe(201);
+    expect(timelineResponse.body.timelineEvent.owner_user_id).toBe(analystId);
+  });
+
+  it("blocks owner changes for findings and timeline events", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Owner Immutable Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Owner Immutable Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Immutable finding owner",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const findingPatchResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/findings/${findingId}`)
+      .set("x-user-id", analystId)
+      .send({
+        ownerUserId: analystTwoId
+      });
+
+    expect(findingPatchResponse.status).toBe(400);
+    expect(findingPatchResponse.body.error).toBe("Finding owner cannot be changed");
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Immutable timeline owner",
+        eventTime: new Date().toISOString()
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const timelinePatchResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}`)
+      .set("x-user-id", analystId)
+      .send({
+        ownerUserId: analystTwoId
+      });
+
+    expect(timelinePatchResponse.status).toBe(400);
+    expect(timelinePatchResponse.body.error).toBe("Timeline event owner cannot be changed");
   });
 
   it("creates task assignment notifications and blocks cross-incident task links", async () => {

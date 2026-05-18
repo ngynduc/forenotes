@@ -20,7 +20,7 @@ export function renderModal() {
   const mode = modal.itemId ? "update" : "create";
   const permission = actionPermission(modal.entityType, mode);
   const values = definition.values(item);
-  const fields = definition.fields();
+  const fields = definition.fields(item, mode);
 
   return `
     <div class="modal-backdrop" role="presentation">
