@@ -190,6 +190,40 @@ p,
 
 /* ── Toggle Group ── */
 
+/* ── Entity Tab Bar ── */
+
+.entity-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.entity-tab {
+  min-height: 36px;
+  padding: 8px 18px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--motion), border-color var(--motion);
+}
+
+.entity-tab:hover {
+  color: var(--text);
+}
+
+.entity-tab.is-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 650;
+}
+
+/* ── Toggle Group ── */
+
 .toggle-group {
   display: inline-flex;
   border: 1px solid var(--border);

@@ -73,6 +73,7 @@ export const state = {
     activeSection: "dashboard",
     sidebarExpanded: true,
     taskView: "board",
+    entityTab: "indicators",
     modal: null,
     inlineEdit: null,
     flash: null,

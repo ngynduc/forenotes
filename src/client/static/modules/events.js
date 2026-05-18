@@ -49,6 +49,8 @@ async function handleClick(event, render) {
     state.ui.activeSection = target.dataset.section;
   } else if (action === "toggle-task-view") {
     state.ui.taskView = target.dataset.view;
+  } else if (action === "set-entity-tab") {
+    state.ui.entityTab = target.dataset.entityTab;
   } else if (action === "toggle-sidebar") {
     state.ui.sidebarExpanded = !state.ui.sidebarExpanded;
   } else if (action === "refresh") {

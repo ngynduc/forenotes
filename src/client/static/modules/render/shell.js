@@ -212,15 +212,31 @@ function renderActiveSection() {
 
 /* ── Entities Combined Section ── */
 
+const ENTITY_TABS = [
+  { key: "indicators", label: "Indicators", tableKey: "indicators", collection: "indicators", def: () => TABLE_DEFINITIONS.indicators },
+  { key: "systems", label: "Systems", tableKey: "systems", collection: "systems", def: () => TABLE_DEFINITIONS.systems },
+  { key: "accounts", label: "Accounts", tableKey: "accounts", collection: "accounts", def: () => TABLE_DEFINITIONS.accounts }
+];
+
 function renderEntitiesSection() {
   if (!state.selectedIncidentId) {
     return `<section class="panel"><div class="empty-state is-large">Select an incident to browse entities.</div></section>`;
   }
   return `
-    ${renderTablePanel("indicators", state.indicators, TABLE_DEFINITIONS.indicators)}
-    ${renderTablePanel("systems", state.systems, TABLE_DEFINITIONS.systems)}
-    ${renderTablePanel("accounts", state.accounts, TABLE_DEFINITIONS.accounts)}
+    <div class="entity-tab-bar">
+      ${ENTITY_TABS.map((tab) => `
+        <button class="entity-tab ${state.ui.entityTab === tab.key ? "is-active" : ""}" type="button" data-action="set-entity-tab" data-entity-tab="${escapeHtml(tab.key)}">
+          ${escapeHtml(tab.label)}
+        </button>
+      `).join("")}
+    </div>
+    ${renderActiveEntityTab()}
   `;
+}
+
+function renderActiveEntityTab() {
+  const activeTab = ENTITY_TABS.find((tab) => tab.key === state.ui.entityTab) || ENTITY_TABS[0];
+  return renderTablePanel(activeTab.tableKey, state[activeTab.collection], activeTab.def());
 }
 
 /* ── Audit ── */
