@@ -14,7 +14,38 @@ import {
 } from "./actions.js";
 import { moveTask } from "./render/tasks.js";
 import { setFlash, state } from "./state.js";
+import { fetchIncidentGraph, fetchMitreMatrix } from "./graphApi.js";
 import { initCodeEditors } from "./code-editor.js";
+
+let _graphLoadPromise = null;
+
+async function triggerGraphLoad() {
+  if (!state.selectedIncidentId) return;
+  const g = state.ui.graph;
+  _graphLoadPromise = Promise.all([
+    import("./graphApi.js").then((m) =>
+      m.fetchIncidentGraph(state.selectedIncidentId, {
+        mode: g.mode, entityTypes: g.entityTypes, linkTypes: g.linkTypes,
+        includeDerived: g.includeDerived, includeManual: g.includeManual,
+        depth: g.depth, q: g.q || undefined
+      })
+    ),
+    import("./graphApi.js").then((m) =>
+      m.fetchMitreMatrix(state.selectedIncidentId, {
+        includeSubtechniques: g.matrixIncludeSubtechniques,
+        minEvidence: g.matrixMinEvidence || undefined,
+        q: g.matrixQ || undefined, tactic: g.matrixTactic || undefined,
+        entityType: g.matrixEntityType || undefined
+      })
+    )
+  ]).then(([graphData, matrixData]) => {
+    g.data = graphData;
+    g.matrix = matrixData;
+  }).catch((err) => {
+    setFlash("error", err instanceof Error ? err.message : String(err));
+  });
+  return _graphLoadPromise;
+}
 
 export function initEvents(render) {
   const wrappedRender = () => {
@@ -31,6 +62,83 @@ export function initEvents(render) {
   root.addEventListener("dragover", handleDragOver);
   root.addEventListener("drop", (event) => handleDrop(event, wrappedRender));
   document.addEventListener("keydown", (event) => handleKeydown(event, wrappedRender));
+
+  // Graph pan/zoom/drag — delegation on #app
+  let _panStart = null;
+  let _dragNode = null;
+  let _dragOffset = null;
+
+  root.addEventListener("mousedown", (event) => {
+    // Zoom button clicks
+    const zoomBtn = event.target.closest("[data-action='graph-zoom-in'],[data-action='graph-zoom-out'],[data-action='graph-zoom-reset']");
+    if (zoomBtn) {
+      event.preventDefault();
+      const g = state.ui.graph;
+      const action = zoomBtn.dataset.action;
+      if (action === "graph-zoom-in") g.zoom = Math.min(2, g.zoom + 0.15);
+      else if (action === "graph-zoom-out") g.zoom = Math.max(0.3, g.zoom - 0.15);
+      else if (action === "graph-zoom-reset") { g.zoom = 1; g.panX = 0; g.panY = 0; }
+      wrappedRender();
+      return;
+    }
+
+    // Node drag start
+    const nodeEl = event.target.closest(".graph-node");
+    if (nodeEl) {
+      event.preventDefault();
+      const wrapEl = document.getElementById("graph-canvas-wrap");
+      const rect = wrapEl?.getBoundingClientRect();
+      if (!rect) return;
+      const g = state.ui.graph;
+      _dragNode = nodeEl;
+      _dragOffset = {
+        x: (event.clientX - rect.left) / g.zoom - parseFloat(nodeEl.style.left || 0),
+        y: (event.clientY - rect.top) / g.zoom - parseFloat(nodeEl.style.top || 0)
+      };
+      return;
+    }
+
+    // Canvas pan start
+    const wrapEl = event.target.closest("#graph-canvas-wrap");
+    if (!wrapEl || event.target.closest(".graph-zoom-controls")) return;
+    _panStart = { x: event.clientX, y: event.clientY, px: state.ui.graph.panX, py: state.ui.graph.panY };
+    wrapEl.classList.add("is-panning");
+  });
+
+  document.addEventListener("mousemove", (event) => {
+    if (_dragNode) {
+      const wrapEl = document.getElementById("graph-canvas-wrap");
+      const rect = wrapEl?.getBoundingClientRect();
+      if (!rect) return;
+      const g = state.ui.graph;
+      _dragNode.style.left = `${(event.clientX - rect.left) / g.zoom - _dragOffset.x}px`;
+      _dragNode.style.top = `${(event.clientY - rect.top) / g.zoom - _dragOffset.y}px`;
+      _dragNode.classList.add("is-dragging");
+      return;
+    }
+    if (_panStart) {
+      const g = state.ui.graph;
+      g.panX = _panStart.px + event.clientX - _panStart.x;
+      g.panY = _panStart.py + event.clientY - _panStart.y;
+      const inner = document.getElementById("graph-canvas-inner");
+      if (inner) inner.style.transform = `translate(${g.panX}px, ${g.panY}px) scale(${g.zoom})`;
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (_dragNode) {
+      _dragNode.classList.remove("is-dragging");
+      _dragNode = null;
+      _dragOffset = null;
+      wrappedRender();
+    }
+    if (_panStart) {
+      const wrapEl = document.getElementById("graph-canvas-wrap");
+      if (wrapEl) wrapEl.classList.remove("is-panning");
+      _panStart = null;
+      wrappedRender();
+    }
+  });
 }
 
 async function handleClick(event, render) {
@@ -47,12 +155,50 @@ async function handleClick(event, render) {
 
   if (action === "set-section") {
     state.ui.activeSection = target.dataset.section;
+    if (target.dataset.section === "graph") {
+      if (state.selectedIncidentId) {
+        import("./graphApi.js").then((m) => {
+          const g = state.ui.graph;
+          Promise.all([
+            m.fetchIncidentGraph(state.selectedIncidentId, {
+              mode: g.mode, includeDerived: g.includeDerived,
+              includeManual: g.includeManual, depth: g.depth,
+              q: g.q || undefined, entityTypes: g.entityTypes, linkTypes: g.linkTypes
+            }),
+            m.fetchMitreMatrix(state.selectedIncidentId, {
+              includeSubtechniques: g.matrixIncludeSubtechniques,
+              minEvidence: g.matrixMinEvidence || undefined,
+              q: g.matrixQ || undefined, tactic: g.matrixTactic || undefined,
+              entityType: g.matrixEntityType || undefined
+            })
+          ]).then(([graphData, matrixData]) => {
+            g.data = graphData;
+            g.matrix = matrixData;
+            render();
+          }).catch((err) => {
+            setFlash("error", err instanceof Error ? err.message : String(err));
+            render();
+          });
+        });
+      }
+    }
   } else if (action === "toggle-task-view") {
     state.ui.taskView = target.dataset.view;
   } else if (action === "set-entity-tab") {
     state.ui.entityTab = target.dataset.entityTab;
   } else if (action === "toggle-sidebar") {
     state.ui.sidebarExpanded = !state.ui.sidebarExpanded;
+  } else if (action === "set-graph-view") {
+    state.ui.graphView = target.dataset.view;
+    state.ui.graph.selectedNodeId = null;
+    state.ui.graph.selectedTechniqueId = null;
+    triggerGraphLoad();
+  } else if (action === "select-graph-node") {
+    state.ui.graph.selectedNodeId = target.dataset.nodeId;
+    state.ui.graph.selectedTechniqueId = null;
+  } else if (action === "select-technique") {
+    state.ui.graph.selectedTechniqueId = target.dataset.techniqueId;
+    state.ui.graph.selectedNodeId = null;
   } else if (action === "refresh") {
     await refreshAll();
   } else if (action === "select-case") {
@@ -136,6 +282,38 @@ async function handleChange(event, render) {
   if (target.matches("[data-inline-input]")) {
     state.ui.inlineEdit.draft = target.value;
   }
+
+  // Graph filter changes
+  if (action === "graph-filter-mode" && target instanceof HTMLSelectElement) {
+    state.ui.graph.mode = target.value;
+    triggerGraphLoad().then(render);
+    return;
+  }
+  if (action === "matrix-filter-tactic" && target instanceof HTMLSelectElement) {
+    state.ui.graph.matrixTactic = target.value;
+    triggerGraphLoad().then(render);
+    return;
+  }
+  if (action === "matrix-filter-entity" && target instanceof HTMLSelectElement) {
+    state.ui.graph.matrixEntityType = target.value;
+    triggerGraphLoad().then(render);
+    return;
+  }
+  if (action === "graph-filter-derived" && target instanceof HTMLInputElement) {
+    state.ui.graph.includeDerived = target.checked;
+    triggerGraphLoad().then(render);
+    return;
+  }
+  if (action === "graph-filter-manual" && target instanceof HTMLInputElement) {
+    state.ui.graph.includeManual = target.checked;
+    triggerGraphLoad().then(render);
+    return;
+  }
+  if (action === "matrix-filter-subtech" && target instanceof HTMLInputElement) {
+    state.ui.graph.matrixIncludeSubtechniques = target.checked;
+    triggerGraphLoad().then(render);
+    return;
+  }
 }
 
 function handleInput(event, render) {
@@ -152,12 +330,23 @@ function handleInput(event, render) {
     tableState.search = target.value;
     tableState.page = 1;
   }
+  if (target.matches("[data-action='graph-search']")) {
+    state.ui.graph.q = target.value;
+  }
+  if (target.matches("[data-action='matrix-search']")) {
+    state.ui.graph.matrixQ = target.value;
+  }
 }
 
 function handleFocusOut(event, render) {
   if (event.target.matches("[data-action='table-search']")) {
-    // re-render on blur so table reflects applied filter
     render();
+  }
+  if (event.target.matches("[data-action='graph-search']")) {
+    triggerGraphLoad().then(render);
+  }
+  if (event.target.matches("[data-action='matrix-search']")) {
+    triggerGraphLoad().then(render);
   }
 }
 
@@ -228,5 +417,9 @@ async function handleKeydown(event, render) {
   if (event.key === "Enter" && event.target.matches("[data-action='table-search']")) {
     event.preventDefault();
     render();
+  }
+  if (event.key === "Enter" && (event.target.matches("[data-action='graph-search']") || event.target.matches("[data-action='matrix-search']"))) {
+    event.preventDefault();
+    triggerGraphLoad().then(render);
   }
 }

@@ -7,6 +7,7 @@ import { TABLE_DEFINITIONS } from "../tableDefinitions.js";
 import { renderTasksView } from "./tasks.js";
 import { renderAdminView } from "./admin.js";
 import { renderDashboardView } from "./dashboard.js";
+import { renderGraphWorkspace } from "./graph.js";
 
 const root = document.querySelector("#app");
 
@@ -192,6 +193,8 @@ function renderActiveSection() {
       return renderEntitiesSection();
     case "queries":
       return renderTablePanel("queries", state.queries, TABLE_DEFINITIONS.queries);
+    case "graph":
+      return renderGraphWorkspace();
     case "tags":
       return `
         ${renderTablePanel("customTags", state.customTags, TABLE_DEFINITIONS.customTags)}
@@ -278,6 +281,7 @@ function iconSVG(name) {
     tasks: `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="9 11 11 13 15 9"/><rect x="4" y="4" width="16" height="16" rx="2.4"/></svg>`,
     entities: `<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="2" y="2" width="9" height="9" rx="1.4"/><rect x="13" y="2" width="9" height="9" rx="1.4"/><rect x="2" y="13" width="9" height="9" rx="1.4"/><rect x="13" y="13" width="9" height="9" rx="1.4"/></svg>`,
     queries: `<svg aria-hidden="true" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+    graph: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="6" x2="6" y2="17"/><line x1="16" y1="6" x2="18" y2="17"/><line x1="6" y1="18" x2="16" y2="6"/></svg>`,
     tags: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 9.5 9.5 3l9 1.5L20 13.5 13.5 20z"/><circle cx="15.5" cy="8.5" r="1.2"/></svg>`,
     notifications: `<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z"/><path d="M10 21h4"/></svg>`,
     settings: `<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10 2.1 2.1M4.9 19.1l2.1-2.1m10-10 2.1-2.1"/></svg>`,

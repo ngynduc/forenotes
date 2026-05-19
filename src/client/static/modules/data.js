@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { can } from "./permissions.js";
-import { activeCase, clearIncidentScope, state } from "./state.js";
+import { activeCase, clearIncidentScope, setFlash, state } from "./state.js";
 
 export async function refreshAll() {
   state.loading = true;
@@ -151,6 +151,39 @@ export async function selectCase(caseId) {
 export async function selectIncident(incidentId) {
   state.selectedIncidentId = incidentId;
   await refreshIncidentScope();
+}
+
+export async function refreshGraphData() {
+  if (!state.selectedIncidentId) return;
+  const g = state.ui.graph;
+  try {
+    const [graphData, matrixData] = await Promise.all([
+      import("./graphApi.js").then((m) =>
+        m.fetchIncidentGraph(state.selectedIncidentId, {
+          mode: g.mode,
+          entityTypes: g.entityTypes,
+          linkTypes: g.linkTypes,
+          includeDerived: g.includeDerived,
+          includeManual: g.includeManual,
+          depth: g.depth,
+          q: g.q || undefined
+        })
+      ),
+      import("./graphApi.js").then((m) =>
+        m.fetchMitreMatrix(state.selectedIncidentId, {
+          includeSubtechniques: g.matrixIncludeSubtechniques,
+          minEvidence: g.matrixMinEvidence || undefined,
+          q: g.matrixQ || undefined,
+          tactic: g.matrixTactic || undefined,
+          entityType: g.matrixEntityType || undefined
+        })
+      )
+    ]);
+    g.data = graphData;
+    g.matrix = matrixData;
+  } catch (error) {
+    setFlash("error", error instanceof Error ? error.message : String(error));
+  }
 }
 
 export async function refreshAfterEntityChange(entityType) {
