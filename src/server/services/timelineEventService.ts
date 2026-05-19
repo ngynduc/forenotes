@@ -13,7 +13,27 @@ interface CreateTimelineEventInput {
   description?: string;
   source?: string;
   rawEvidenceRef?: string;
+  systemId?: string;
+  accountId?: string;
   ownerUserId?: string;
+}
+
+async function ensureTimelineRelationshipEntity(
+  database: Database,
+  incidentId: string,
+  entityType: "system" | "account",
+  entityId: string
+) {
+  const tableName = entityType === "system" ? "systems" : "accounts";
+  const result = await database.query<{ incident_id: string }>(`select incident_id from ${tableName} where id = $1`, [entityId]);
+
+  if (result.rowCount === 0) {
+    throw new AppError(404, `${entityType === "system" ? "System" : "Account"} not found`);
+  }
+
+  if (result.rows[0].incident_id !== incidentId) {
+    throw new AppError(409, `Timeline event ${entityType} must belong to the same incident`);
+  }
 }
 
 export async function listTimelineEvents(database: Database, userId: string, incidentId: string) {
@@ -60,13 +80,21 @@ export async function createTimelineEvent(database: Database, user: Authenticate
   await requirePermission(database, user, "timeline:create");
   await requireIncidentMembership(database, user.id, input.incidentId);
 
+  if (input.systemId) {
+    await ensureTimelineRelationshipEntity(database, input.incidentId, "system", input.systemId);
+  }
+
+  if (input.accountId) {
+    await ensureTimelineRelationshipEntity(database, input.incidentId, "account", input.accountId);
+  }
+
   const ownerUserId = input.ownerUserId ?? user.id;
   const timelineEventId = randomUUID();
   await database.query(
     `
       insert into timeline_events (
-        id, incident_id, event_time, title, description, source, raw_evidence_ref, owner_user_id, created_by_user_id
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        id, incident_id, event_time, title, description, source, raw_evidence_ref, system_id, account_id, owner_user_id, created_by_user_id
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `,
     [
       timelineEventId,
@@ -76,6 +104,8 @@ export async function createTimelineEvent(database: Database, user: Authenticate
       input.description ?? null,
       input.source ?? null,
       input.rawEvidenceRef ?? null,
+      input.systemId ?? null,
+      input.accountId ?? null,
       ownerUserId,
       user.id
     ]
@@ -111,6 +141,14 @@ export async function updateTimelineEvent(
     throw new AppError(400, "Timeline event owner cannot be changed");
   }
 
+  if (input.systemId) {
+    await ensureTimelineRelationshipEntity(database, incidentId, "system", input.systemId);
+  }
+
+  if (input.accountId) {
+    await ensureTimelineRelationshipEntity(database, incidentId, "account", input.accountId);
+  }
+
   const existing = await database.query("select * from timeline_events where id = $1 and incident_id = $2", [
     timelineEventId,
     incidentId
@@ -126,13 +164,15 @@ export async function updateTimelineEvent(
     description: input.description ?? existing.rows[0].description,
     source: input.source ?? existing.rows[0].source,
     raw_evidence_ref: input.rawEvidenceRef ?? existing.rows[0].raw_evidence_ref,
+    system_id: input.systemId ?? existing.rows[0].system_id,
+    account_id: input.accountId ?? existing.rows[0].account_id,
     owner_user_id: existing.rows[0].owner_user_id
   };
 
   await database.query(
     `
       update timeline_events
-      set event_time = $3, title = $4, description = $5, source = $6, raw_evidence_ref = $7, owner_user_id = $8, updated_at = now()
+      set event_time = $3, title = $4, description = $5, source = $6, raw_evidence_ref = $7, system_id = $8, account_id = $9, owner_user_id = $10, updated_at = now()
       where id = $1 and incident_id = $2
     `,
     [
@@ -143,6 +183,8 @@ export async function updateTimelineEvent(
       next.description,
       next.source,
       next.raw_evidence_ref,
+      next.system_id,
+      next.account_id,
       next.owner_user_id
     ]
   );

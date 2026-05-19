@@ -40,6 +40,12 @@ interface AttachTimelineCustomTagInput {
   customTagId: string;
 }
 
+interface AttachQueryAttackTagInput {
+  incidentId: string;
+  queryId: string;
+  attackTagId: string;
+}
+
 export async function listFindingTags(database: Database, userId: string, incidentId: string, findingId: string) {
   await requireIncidentMembership(database, userId, incidentId);
 
@@ -106,6 +112,25 @@ export async function listTimelineEventTags(
   return {
     attackTags: attackTagsResult.rows,
     customTags: customTagsResult.rows
+  };
+}
+
+export async function listQueryTags(database: Database, userId: string, incidentId: string, queryId: string) {
+  await requireIncidentMembership(database, userId, incidentId);
+
+  const attackTagsResult = await database.query(
+    `
+      select at.id, at.attack_id, at.name, at.type, at.tactic, at.parent_attack_id
+      from query_attack_tags qat
+      inner join attack_tags at on at.id = qat.attack_tag_id
+      where qat.incident_id = $1 and qat.query_id = $2
+      order by at.attack_id asc
+    `,
+    [incidentId, queryId]
+  );
+
+  return {
+    attackTags: attackTagsResult.rows
   };
 }
 
@@ -429,6 +454,48 @@ export async function attachCustomTagToTimelineEvent(
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
       throw new AppError(409, "Custom tag already attached to timeline event");
+    }
+    throw error;
+  }
+}
+
+export async function attachAttackTagToQuery(database: Database, user: AuthenticatedUser, input: AttachQueryAttackTagInput) {
+  await requireIncidentMembership(database, user.id, input.incidentId);
+  await requirePermission(database, user, "query:update");
+
+  const queryResult = await database.query<{ incident_id: string }>(
+    "select incident_id from queries where id = $1 and incident_id = $2",
+    [input.queryId, input.incidentId]
+  );
+  if (queryResult.rowCount === 0) {
+    throw new AppError(404, "Query not found");
+  }
+
+  const attackTagResult = await database.query("select 1 from attack_tags where id = $1", [input.attackTagId]);
+  if (attackTagResult.rowCount === 0) {
+    throw new AppError(404, "ATT&CK tag not found");
+  }
+
+  try {
+    await database.query(
+      `
+        insert into query_attack_tags (query_id, attack_tag_id, incident_id)
+        values ($1, $2, $3)
+      `,
+      [input.queryId, input.attackTagId, input.incidentId]
+    );
+
+    await createAuditLog(database, {
+      actorUserId: user.id,
+      incidentId: input.incidentId,
+      action: "query.attack_tag_attach",
+      entityType: "query_attack_tag",
+      entityId: input.queryId,
+      afterJson: input
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new AppError(409, "ATT&CK tag already attached to query");
     }
     throw error;
   }

@@ -12,14 +12,20 @@ import { addIncidentMember, listIncidentMembers, removeIncidentMember } from "..
 import { createSystem, deleteSystem, listSystems, updateSystem } from "../services/systemService.js";
 import { createAccount, deleteAccount, listAccounts, updateAccount } from "../services/accountService.js";
 import { updateIncident } from "../services/incidentService.js";
+import { buildIncidentGraph } from "../graph/graphBuilder.js";
+import { buildMitreMatrix } from "../graph/mitreMatrixBuilder.js";
+import { createEntityLink, deleteEntityLink, listEntityLinks } from "../graph/entityLinksRepository.js";
 import {
   addIncidentMemberSchema,
   createAccountSchema,
+  createEntityLinkSchema,
   createEvidenceLinkSchema,
   createFindingSchema,
   createIndicatorSchema,
   createQuerySchema,
   createSystemSchema,
+  graphQuerySchema,
+  mitreMatrixQuerySchema,
   createTaskLinkSchema,
   createTaskSchema,
   createTimelineEventSchema,
@@ -440,6 +446,68 @@ export function createIncidentRoutes(database: Database) {
       const queryId = getRequiredParam(request.params.queryId, "queryId");
       await deleteQuery(database, user, incidentId, queryId);
       response.status(204).send();
+    })
+  );
+
+  router.get(
+    "/:incidentId/entity-links",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const entityLinks = await listEntityLinks(database, user, incidentId);
+      response.json({ entityLinks });
+    })
+  );
+
+  router.post(
+    "/:incidentId/entity-links",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const payload = createEntityLinkSchema.parse(request.body);
+      const entityLink = await createEntityLink(database, user, { incidentId, ...payload });
+      response.status(201).json({ entityLink });
+    })
+  );
+
+  router.delete(
+    "/:incidentId/entity-links/:linkId",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const linkId = getRequiredParam(request.params.linkId, "linkId");
+      await deleteEntityLink(database, user, incidentId, linkId);
+      response.status(204).send();
+    })
+  );
+
+  router.get(
+    "/:incidentId/graph",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const query = graphQuerySchema.parse(request.query);
+      const graph = await buildIncidentGraph(database, user, incidentId, {
+        mode: query.mode,
+        entityTypes: query.entityTypes,
+        linkTypes: query.linkTypes,
+        includeDerived: query.includeDerived,
+        includeManual: query.includeManual,
+        depth: query.depth,
+        q: query.q
+      });
+      response.json(graph);
+    })
+  );
+
+  router.get(
+    "/:incidentId/mitre-matrix",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const query = mitreMatrixQuerySchema.parse(request.query);
+      const matrix = await buildMitreMatrix(database, user, incidentId, query);
+      response.json(matrix);
     })
   );
 

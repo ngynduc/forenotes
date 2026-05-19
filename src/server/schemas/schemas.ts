@@ -5,6 +5,9 @@ import {
   EVIDENCE_TYPES,
   FINDING_SEVERITIES,
   FINDING_STATUSES,
+  GRAPH_EDGE_TYPES,
+  GRAPH_MODES,
+  GRAPH_NODE_TYPES,
   INCIDENT_SEVERITIES,
   INCIDENT_STATUSES,
   INDICATOR_TYPES,
@@ -55,6 +58,8 @@ export const createTimelineEventSchema = z.object({
   description: z.string().optional(),
   source: z.string().optional(),
   rawEvidenceRef: z.string().optional(),
+  systemId: uuidSchema.optional(),
+  accountId: uuidSchema.optional(),
   ownerUserId: uuidSchema.optional()
 });
 
@@ -137,6 +142,48 @@ export const attachAttackTagSchema = z.object({
 
 export const attachCustomTagSchema = z.object({
   customTagId: uuidSchema
+});
+export const createEntityLinkSchema = z.object({
+  sourceType: z.enum(GRAPH_NODE_TYPES),
+  sourceId: uuidSchema,
+  targetType: z.enum(GRAPH_NODE_TYPES),
+  targetId: uuidSchema,
+  linkType: z.enum(GRAPH_EDGE_TYPES)
+});
+
+export const graphQuerySchema = z.object({
+  mode: z.enum(GRAPH_MODES).optional(),
+  entityTypes: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value.split(",").map((item) => item.trim()).filter(Boolean) : undefined))
+    .pipe(z.array(z.enum(GRAPH_NODE_TYPES)).optional()),
+  linkTypes: z
+    .string()
+    .optional()
+    .transform((value) => (value ? value.split(",").map((item) => item.trim()).filter(Boolean) : undefined))
+    .pipe(z.array(z.enum(GRAPH_EDGE_TYPES)).optional()),
+  includeDerived: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  includeManual: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  depth: z.enum(["1", "2", "3", "all"]).optional(),
+  q: z.string().optional()
+});
+
+export const mitreMatrixQuerySchema = z.object({
+  includeSubtechniques: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  minEvidence: z.coerce.number().int().min(1).optional(),
+  q: z.string().optional(),
+  tactic: z.string().optional(),
+  entityType: z.enum(["finding", "timeline_event", "query", "task"]).optional()
 });
 
 export const addCaseMemberSchema = z.object({

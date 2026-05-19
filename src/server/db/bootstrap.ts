@@ -4,6 +4,12 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from "../permissions/catalog.js";
 
 const ATTACK_TAG_SEED = [
   {
+    attackId: "TA0002",
+    name: "Execution",
+    type: "tactic",
+    tactic: "Execution"
+  },
+  {
     attackId: "T1003",
     name: "OS Credential Dumping",
     type: "technique",
@@ -13,6 +19,13 @@ const ATTACK_TAG_SEED = [
     attackId: "T1059",
     name: "Command and Scripting Interpreter",
     type: "technique",
+    tactic: "Execution"
+  },
+  {
+    attackId: "T1059.001",
+    name: "PowerShell",
+    type: "technique",
+    parentAttackId: "T1059",
     tactic: "Execution"
   },
   {
@@ -52,12 +65,13 @@ export async function bootstrapSecurityModel(database: Database) {
     await database.query(
       `
         insert into attack_tags (
-          id, attack_id, name, type, tactic, attack_version, external_url
+          id, attack_id, name, type, parent_attack_id, tactic, attack_version, external_url
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         on conflict (attack_id) do update set
           name = excluded.name,
           type = excluded.type,
+          parent_attack_id = excluded.parent_attack_id,
           tactic = excluded.tactic,
           attack_version = excluded.attack_version,
           external_url = excluded.external_url,
@@ -68,6 +82,7 @@ export async function bootstrapSecurityModel(database: Database) {
         tag.attackId,
         tag.name,
         tag.type,
+        "parentAttackId" in tag ? tag.parentAttackId : null,
         tag.tactic,
         "phase1-seed",
         `https://attack.mitre.org/${tag.type === "tactic" ? "tactics" : "techniques"}/${tag.attackId}/`

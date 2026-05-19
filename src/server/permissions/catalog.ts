@@ -15,6 +15,10 @@ export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
   commander: [...PERMISSION_KEYS],
   response_lead: [...PERMISSION_KEYS],
   analyst: [
+    "entity_link:read",
+    "entity_link:create",
+    "graph:read",
+    "mitre_matrix:read",
     "finding:create",
     "finding:update",
     "finding:evidence_link",

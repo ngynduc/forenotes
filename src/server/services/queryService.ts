@@ -17,7 +17,25 @@ interface CreateQueryInput {
 export async function listQueries(database: Database, userId: string, incidentId: string) {
   await requireIncidentMembership(database, userId, incidentId);
   const result = await database.query("select * from queries where incident_id = $1 order by created_at desc", [incidentId]);
-  return result.rows;
+  return Promise.all(
+    result.rows.map(async (row) => {
+      const attackTagsResult = await database.query(
+        `
+          select at.id, at.attack_id, at.name, at.type, at.tactic, at.parent_attack_id
+          from query_attack_tags qat
+          inner join attack_tags at on at.id = qat.attack_tag_id
+          where qat.incident_id = $1 and qat.query_id = $2
+          order by at.attack_id asc
+        `,
+        [incidentId, row.id]
+      );
+
+      return {
+        ...row,
+        attack_tags: attackTagsResult.rows
+      };
+    })
+  );
 }
 
 export async function createQuery(database: Database, user: AuthenticatedUser, input: CreateQueryInput) {

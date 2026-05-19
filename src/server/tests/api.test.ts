@@ -448,6 +448,134 @@ describe("Forenotes API", () => {
     expect(timelineResponse.body.timelineEvent.owner_user_id).toBe(analystId);
   });
 
+  it("stores timeline system/account relationships and derives graph edges from them", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Link Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Link Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "WIN-042",
+        ipAddress: "10.0.0.42"
+      });
+    const systemId = systemResponse.body.system.id as string;
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", analystId)
+      .send({
+        username: "svc_powershell",
+        domain: "ACME"
+      });
+    const accountId = accountResponse.body.account.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "PowerShell launched",
+        eventTime: "2026-05-18T10:42:00.000Z",
+        systemId,
+        accountId
+      });
+
+    expect(timelineResponse.status).toBe(201);
+    expect(timelineResponse.body.timelineEvent.system_id).toBe(systemId);
+    expect(timelineResponse.body.timelineEvent.account_id).toBe(accountId);
+
+    const graphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?mode=timeline`)
+      .set("x-user-id", analystId);
+
+    expect(graphResponse.status).toBe(200);
+    expect(graphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "observed_on", derived: true, sourceDescription: "Derived from timeline.systemId" }),
+        expect.objectContaining({ type: "used_account", derived: true, sourceDescription: "Derived from timeline.accountId" })
+      ])
+    );
+  });
+
+  it("blocks cross-incident timeline system/account relationships", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Scope Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Scope Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Scope Incident B",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "WIN-B",
+        ipAddress: "10.0.0.99"
+      });
+    const systemId = systemResponse.body.system.id as string;
+
+    const crossIncidentCreateResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Cross incident timeline relationship",
+        eventTime: "2026-05-18T10:42:00.000Z",
+        systemId
+      });
+
+    expect(crossIncidentCreateResponse.status).toBe(409);
+    expect(crossIncidentCreateResponse.body.error).toBe("Timeline event system must belong to the same incident");
+  });
+
   it("blocks owner changes for findings and timeline events", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
@@ -1080,6 +1208,219 @@ describe("Forenotes API", () => {
 
     expect(leadAuditResponse.status).toBe(200);
     expect(leadAuditResponse.body.auditLogs.length).toBeGreaterThan(0);
+  });
+
+  it("creates graph entity links and exposes manual plus derived MITRE graph data", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Graph Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Graph Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Suspicious PowerShell Execution",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        eventTime: "2026-05-18T10:42:00.000Z",
+        title: "Word spawned PowerShell"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const attackTagResponse = (await pool.query("select id from attack_tags where attack_id = 'T1059.001'")) as {
+      rows: Array<{ id: string }>;
+    };
+    const attackTagId = attackTagResponse.rows[0].id;
+
+    const attachFindingTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({
+        attackTagId
+      });
+
+    expect(attachFindingTagResponse.status).toBe(204);
+
+    const createEntityLinkResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/entity-links`)
+      .set("x-user-id", analystId)
+      .send({
+        sourceType: "timeline_event",
+        sourceId: timelineEventId,
+        targetType: "finding",
+        targetId: findingId,
+        linkType: "evidence_for"
+      });
+
+    expect(createEntityLinkResponse.status).toBe(201);
+    const linkId = createEntityLinkResponse.body.entityLink.id as string;
+
+    const linksResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/entity-links`)
+      .set("x-user-id", analystId);
+
+    expect(linksResponse.status).toBe(200);
+    expect(linksResponse.body.entityLinks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: linkId, link_type: "evidence_for" })])
+    );
+
+    const graphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?includeDerived=true&includeManual=true&mode=mitre`)
+      .set("x-user-id", analystId);
+
+    expect(graphResponse.status).toBe(200);
+    expect(graphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "maps_to", derived: true }),
+        expect.objectContaining({ type: "evidence_for", derived: false })
+      ])
+    );
+    expect(graphResponse.body.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "finding", entityId: findingId }),
+        expect.objectContaining({ type: "mitre_technique", mitreId: "T1059.001" })
+      ])
+    );
+
+    const forbiddenDeleteResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/entity-links/${linkId}`)
+      .set("x-user-id", analystTwoId);
+
+    expect(forbiddenDeleteResponse.status).toBe(403);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/entity-links/${linkId}`)
+      .set("x-user-id", analystId);
+
+    expect(deleteResponse.status).toBe(204);
+  });
+
+  it("builds a MITRE matrix from finding and query mappings", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "MITRE Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "MITRE Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "PowerShell finding",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({
+        name: "PowerShell Process Tree",
+        language: "spl",
+        queryBody: "index=main powershell"
+      });
+    const queryId = queryResponse.body.query.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Investigate PowerShell",
+        status: "todo",
+        priority: "high"
+      });
+    const taskId = taskResponse.body.task.id as string;
+
+    const attackTagResponse = (await pool.query("select id from attack_tags where attack_id = 'T1059.001'")) as {
+      rows: Array<{ id: string }>;
+    };
+    const attackTagId = attackTagResponse.rows[0].id;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({ attackTagId });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/queries/${queryId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({ attackTagId });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks/${taskId}/links`)
+      .set("x-user-id", commanderId)
+      .send({
+        entityType: "query",
+        entityId: queryId
+      });
+
+    const matrixResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/mitre-matrix?q=powershell`)
+      .set("x-user-id", analystId);
+
+    expect(matrixResponse.status).toBe(200);
+    expect(matrixResponse.body.tactics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Execution" })])
+    );
+    expect(matrixResponse.body.techniques).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mitreId: "T1059.001",
+          counts: expect.objectContaining({
+            findings: 1,
+            queries: 1,
+            tasks: 1,
+            total: 3
+          })
+        })
+      ])
+    );
   });
 
   it("supports update and delete flows for incident records", async () => {

@@ -31,6 +31,37 @@ export const TASK_LINK_ENTITY_TYPES = [
   "indicator",
   "query"
 ] as const;
+export const GRAPH_NODE_TYPES = [
+  "finding",
+  "timeline_event",
+  "task",
+  "system",
+  "account",
+  "ioc",
+  "query",
+  "mitre_technique",
+  "mitre_tactic",
+  "user",
+  "tag"
+] as const;
+export const GRAPH_EDGE_TYPES = [
+  "related_to",
+  "evidence_for",
+  "caused_by",
+  "followed_by",
+  "investigates",
+  "references",
+  "observed_on",
+  "used_account",
+  "contains_ioc",
+  "maps_to",
+  "belongs_to_tactic",
+  "subtechnique_of",
+  "detects",
+  "assigned_to",
+  "has_tag"
+] as const;
+export const GRAPH_MODES = ["overview", "investigation", "timeline", "assets", "tasks", "mitre"] as const;
 
 export const PERMISSION_KEYS = [
   "case:create",
@@ -60,8 +91,16 @@ export const PERMISSION_KEYS = [
   "query:delete",
   "tag:custom_create",
   "tag:custom_update",
+  "entity_link:read",
+  "entity_link:create",
+  "entity_link:delete",
+  "graph:read",
+  "mitre_matrix:read",
   "notification:read",
   "audit:read"
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+export type GraphNodeType = (typeof GRAPH_NODE_TYPES)[number];
+export type GraphEdgeType = (typeof GRAPH_EDGE_TYPES)[number];
+export type GraphMode = (typeof GRAPH_MODES)[number];
