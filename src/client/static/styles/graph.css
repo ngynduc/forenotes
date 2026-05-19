@@ -85,6 +85,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   min-height: 0;
+  height: min(72vh, 820px);
   border-top: 1px solid var(--border);
 }
 
@@ -93,6 +94,7 @@
 .graph-canvas-wrap {
   position: relative;
   overflow: hidden;
+  min-height: 0;
   cursor: grab;
   user-select: none;
 }
@@ -106,13 +108,15 @@
 }
 
 .graph-canvas-inner {
+  width: max-content;
+  height: max-content;
   transform-origin: 0 0;
 }
 
 .graph-canvas {
   position: relative;
-  min-width: 1000px;
-  min-height: 600px;
+  min-width: 100%;
+  min-height: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background:
@@ -135,6 +139,7 @@
   stroke: rgba(15, 118, 110, 0.45);
   stroke-width: 2;
   fill: none;
+  transition: stroke var(--motion), stroke-width var(--motion), opacity var(--motion), filter var(--motion);
 }
 
 .graph-edge-line.is-derived {
@@ -148,6 +153,26 @@
   paint-order: stroke;
   stroke: var(--surface);
   stroke-width: 3px;
+  transition: fill var(--motion), opacity var(--motion);
+}
+
+.graph-edge.is-highlighted .graph-edge-line {
+  stroke: #f59e0b;
+  stroke-width: 3.25;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.45));
+}
+
+.graph-edge.is-highlighted .graph-edge-line.is-derived {
+  stroke: #f97316;
+}
+
+.graph-edge.is-highlighted .graph-edge-label {
+  fill: #b45309;
+}
+
+.graph-edge.is-muted .graph-edge-line,
+.graph-edge.is-muted .graph-edge-label {
+  opacity: 0.2;
 }
 
 /* ── Graph Nodes ── */
@@ -155,6 +180,7 @@
 .graph-node {
   position: absolute;
   width: 170px;
+  min-height: 78px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -162,6 +188,7 @@
   cursor: grab;
   transition: border-color var(--motion), box-shadow var(--motion);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  user-select: none;
 }
 
 .graph-node:active {
@@ -497,25 +524,36 @@
 
 .graph-inspector .inspector-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
+  align-items: stretch;
 }
 
 .graph-inspector .inspector-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-muted);
+  overflow: hidden;
 }
 
 .graph-inspector .inspector-stat .stat-value {
+  display: block;
+  width: 100%;
   color: var(--primary);
   font-size: 18px;
   font-weight: 750;
   line-height: 1.1;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .graph-inspector .inspector-stat .stat-label {
+  display: block;
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 500;
@@ -575,6 +613,10 @@
 .graph-inspector .inspector-evidence-dot.dot-system { background: #16a34a; }
 .graph-inspector .inspector-evidence-dot.dot-account { background: #7c3aed; }
 .graph-inspector .inspector-evidence-dot.dot-ioc { background: #16a34a; }
+.graph-inspector .inspector-evidence-dot.dot-user { background: #6b7280; }
+.graph-inspector .inspector-evidence-dot.dot-tag { background: #8b5cf6; }
+.graph-inspector .inspector-evidence-dot.dot-mitre_technique { background: #0f766e; }
+.graph-inspector .inspector-evidence-dot.dot-mitre_tactic { background: #115e59; }
 
 .graph-inspector .inspector-evidence-type {
   color: var(--primary);

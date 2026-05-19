@@ -156,7 +156,7 @@ function renderSupplementalSections(entityType, item, mode) {
     return "";
   }
   if (entityType === "finding" || entityType === "timeline_event") {
-    return renderTagManagementSection(entityType, item);
+    return [renderTagManagementSection(entityType, item), renderUserLinkSection(entityType, item)].join("");
   }
   return "";
 }
@@ -230,6 +230,104 @@ function renderAttachTagForm(entityType, itemId, tagType, options, updateAllowed
         data-entity="${escapeHtml(entityType)}"
         data-id="${escapeHtml(itemId)}"
         data-tag-type="${escapeHtml(tagType)}"
+        ${disabled ? "disabled" : ""}
+      >Attach</button>
+    </div>
+  `;
+}
+
+function renderUserLinkSection(entityType, item) {
+  const updateAllowed = canAccessEntity(entityType, "update", item) && can("entity_link:create");
+  const ownerUserId = item.owner_user_id || "";
+  const ownerUser = state.incidentMembers.find((member) => member.id === ownerUserId) || null;
+  const manualLinks = state.entityLinks.filter((link) => {
+    if (link.link_type !== "assigned_to") {
+      return false;
+    }
+
+    const matchesSource = link.source_type === entityType && link.source_id === item.id && link.target_type === "user";
+    const matchesTarget = link.target_type === entityType && link.target_id === item.id && link.source_type === "user";
+    return matchesSource || matchesTarget;
+  });
+
+  const linkedUserIds = new Set(
+    manualLinks.map((link) => link.source_type === "user" ? link.source_id : link.target_id)
+  );
+  if (ownerUserId) {
+    linkedUserIds.add(ownerUserId);
+  }
+
+  const availableUsers = state.incidentMembers.filter((member) => !linkedUserIds.has(member.id));
+
+  return `
+    <section class="modal-section">
+      <div class="modal-section-header">
+        <div>
+          <h3>Linked Users</h3>
+          <p>Show ownership and attach additional incident users directly to this ${escapeHtml(entityType === "finding" ? "finding" : "timeline event")}.</p>
+        </div>
+      </div>
+      <div class="tag-group">
+        <strong>Current</strong>
+        <div class="linked-entity-list">
+          ${ownerUser ? renderDerivedOwnerRow(ownerUser) : `<span class="muted">No owner user on this record.</span>`}
+          ${manualLinks.length ? manualLinks.map((link) => renderManualUserLinkRow(link, entityType)).join("") : `<span class="muted">No additional linked users.</span>`}
+        </div>
+        ${renderAttachUserLinkForm(entityType, item.id, availableUsers, updateAllowed)}
+      </div>
+    </section>
+  `;
+}
+
+function renderDerivedOwnerRow(user) {
+  return `
+    <div class="linked-entity-row">
+      <div>
+        <div class="linked-entity-title">${escapeHtml(user.display_name || user.email || user.id)}</div>
+        <div class="linked-entity-meta">owner · derived</div>
+      </div>
+      <span class="tag-pill tag-pill-attack">Owner</span>
+    </div>
+  `;
+}
+
+function renderManualUserLinkRow(link, entityType) {
+  const userId = link.source_type === "user" ? link.source_id : link.target_id;
+  const user = state.incidentMembers.find((member) => member.id === userId);
+  const userLabel = user?.display_name || user?.email || userId;
+  return `
+    <div class="linked-entity-row">
+      <div>
+        <div class="linked-entity-title">${escapeHtml(userLabel)}</div>
+        <div class="linked-entity-meta">${escapeHtml(link.link_type)} · manual</div>
+      </div>
+      <button
+        class="ghost-button"
+        type="button"
+        data-action="delete-entity-link"
+        data-entity="${escapeHtml(entityType)}"
+        data-link-id="${escapeHtml(link.id)}"
+      >Remove</button>
+    </div>
+  `;
+}
+
+function renderAttachUserLinkForm(entityType, itemId, users, updateAllowed) {
+  const disabled = !updateAllowed || !users.length;
+  return `
+    <div class="tag-attach-form" data-entity-link-attach="true">
+      <select name="targetId" ${disabled ? "disabled" : ""} aria-label="Attach linked user">
+        <option value="">${escapeHtml(users.length ? "Attach linked user" : "No more incident users available")}</option>
+        ${renderOptions(users.map((user) => ({ value: user.id, label: user.display_name || user.email || user.id })), "")}
+      </select>
+      <button
+        class="secondary-button"
+        type="button"
+        data-action="attach-entity-link"
+        data-entity="${escapeHtml(entityType)}"
+        data-id="${escapeHtml(itemId)}"
+        data-target-type="user"
+        data-link-type="assigned_to"
         ${disabled ? "disabled" : ""}
       >Attach</button>
     </div>

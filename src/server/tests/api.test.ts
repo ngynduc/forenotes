@@ -1310,6 +1310,32 @@ describe("Forenotes API", () => {
       ])
     );
 
+    const investigationGraphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?includeDerived=true&includeManual=true&mode=investigation`)
+      .set("x-user-id", analystId);
+
+    expect(investigationGraphResponse.status).toBe(200);
+    expect(investigationGraphResponse.body.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "finding",
+          entityId: findingId,
+          metadata: expect.objectContaining({ createdAt: expect.any(String) })
+        }),
+        expect.objectContaining({
+          type: "timeline_event",
+          entityId: timelineEventId,
+          metadata: expect.objectContaining({ eventTime: "2026-05-18T10:42:00.000Z" })
+        })
+      ])
+    );
+    expect(investigationGraphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: `finding:${findingId}`, target: `user:${analystId}`, type: "assigned_to", derived: true }),
+        expect.objectContaining({ source: `timeline_event:${timelineEventId}`, target: `user:${analystId}`, type: "assigned_to", derived: true })
+      ])
+    );
+
     const forbiddenDeleteResponse = await request(app)
       .delete(`/api/incidents/${incidentId}/entity-links/${linkId}`)
       .set("x-user-id", analystTwoId);

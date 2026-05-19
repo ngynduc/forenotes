@@ -81,7 +81,7 @@ export async function refreshIncidentScope() {
   }
 
   const incidentId = state.selectedIncidentId;
-  const [members, findings, timelineEvents, indicators, systems, accounts, tasks, queries] = await Promise.all([
+  const [members, findings, timelineEvents, indicators, systems, accounts, tasks, queries, entityLinks] = await Promise.all([
     api(`/api/incidents/${incidentId}/members`, "GET"),
     api(`/api/incidents/${incidentId}/findings`, "GET"),
     api(`/api/incidents/${incidentId}/timeline-events`, "GET"),
@@ -89,7 +89,8 @@ export async function refreshIncidentScope() {
     api(`/api/incidents/${incidentId}/systems`, "GET"),
     api(`/api/incidents/${incidentId}/accounts`, "GET"),
     api(`/api/incidents/${incidentId}/tasks`, "GET"),
-    api(`/api/incidents/${incidentId}/queries`, "GET")
+    api(`/api/incidents/${incidentId}/queries`, "GET"),
+    api(`/api/incidents/${incidentId}/entity-links`, "GET")
   ]);
 
   state.incidentMembers = members.members;
@@ -100,8 +101,9 @@ export async function refreshIncidentScope() {
   state.accounts = accounts.accounts;
   state.tasks = tasks.tasks;
   state.queries = queries.queries;
+  state.entityLinks = entityLinks.entityLinks;
 
-  await Promise.all([refreshNotifications(), refreshAuditLogs()]);
+  await Promise.all([refreshNotifications(), refreshAuditLogs(), refreshGraphData()]);
 }
 
 export async function refreshNotifications() {

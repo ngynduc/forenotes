@@ -24,11 +24,9 @@ export function renderDashboardView() {
   return `
     <main class="page-shell dashboard-shell">
       ${renderDashboardHeader()}
-      <section class="dashboard-metric-grid">
+      <section class="dashboard-content-grid">
         ${METRIC_CARDS.map((card) => renderMetricCard(card, summary.metrics)).join("")}
-      </section>
-      <section class="dashboard-grid">
-        <article class="panel dashboard-panel dashboard-span-two">
+        <article class="panel dashboard-panel dashboard-activity-panel">
           <div class="section-header">
             <div>
               <h2>7 Day Activity</h2>
@@ -37,7 +35,7 @@ export function renderDashboardView() {
           </div>
           ${renderActivityChart(summary.activity)}
         </article>
-        <article class="panel dashboard-panel">
+        <article class="panel dashboard-panel dashboard-sla-panel">
           <div class="section-header">
             <div>
               <h2>SLA Watch</h2>
@@ -52,7 +50,7 @@ export function renderDashboardView() {
             ${renderSlaItem("Unread notifications", summary.sla.unreadNotifications, "Pending review")}
           </div>
         </article>
-        <article class="panel dashboard-panel">
+        <article class="panel dashboard-panel dashboard-severity-panel">
           <div class="section-header">
             <div>
               <h2>Incident Severity</h2>
@@ -61,7 +59,7 @@ export function renderDashboardView() {
           </div>
           ${renderBreakdown(summary.breakdowns.incidentSeverity, "severity")}
         </article>
-        <article class="panel dashboard-panel">
+        <article class="panel dashboard-panel dashboard-task-panel">
           <div class="section-header">
             <div>
               <h2>Task Status</h2>
@@ -70,7 +68,7 @@ export function renderDashboardView() {
           </div>
           ${renderBreakdown(summary.breakdowns.taskStatus, "status")}
         </article>
-        <article class="panel dashboard-panel">
+        <article class="panel dashboard-panel dashboard-coverage-panel">
           <div class="section-header">
             <div>
               <h2>Case Coverage</h2>
@@ -97,7 +95,7 @@ export function renderDashboardView() {
           </div>
           ${renderBreakdown(summary.breakdowns.caseStatus, "status")}
         </article>
-        <article class="panel dashboard-panel dashboard-span-two">
+        <article class="panel dashboard-panel dashboard-recent-activity-panel">
           <div class="section-header">
             <div>
               <h2>Recent Activity</h2>
@@ -127,7 +125,7 @@ function renderDashboardHeader() {
 
 function renderMetricCard(card, metrics) {
   return `
-    <article class="panel dashboard-metric-card tone-${card.tone}">
+    <article class="panel dashboard-metric-card metric-${metricArea(card.key)} tone-${card.tone}">
       <span class="dashboard-metric-label">${escapeHtml(card.label)}</span>
       <strong>${Number(metrics[card.key] || 0)}</strong>
     </article>
@@ -230,6 +228,21 @@ function shortDay(value) {
 
 function toLabel(value) {
   return String(value || "unknown").replaceAll("_", " ");
+}
+
+function metricArea(key) {
+  switch (key) {
+    case "openCases":
+      return "open";
+    case "openIncidents":
+      return "incidents";
+    case "unresolvedFindings":
+      return "findings";
+    case "overdueTasks":
+      return "tasks";
+    default:
+      return "metric";
+  }
 }
 
 function formatRelativeTime(value) {

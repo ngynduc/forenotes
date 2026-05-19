@@ -283,8 +283,23 @@ export async function buildIncidentGraph(
       subtitle: row.description ?? undefined,
       status: row.status,
       severity: row.severity ?? undefined,
-      owner: row.owner_user_id ?? undefined
+      owner: row.owner_user_id ?? undefined,
+      metadata: {
+        createdAt: row.created_at ?? undefined,
+        updatedAt: row.updated_at ?? undefined
+      }
     });
+
+    if (row.owner_user_id && userById.has(row.owner_user_id)) {
+      pushEdge(edges, edgeDedupe, {
+        source: makeNodeId("finding", row.id),
+        target: makeNodeId("user", row.owner_user_id),
+        type: "assigned_to",
+        label: "assigned_to",
+        derived: true,
+        sourceDescription: "Derived from finding.ownerUserId"
+      });
+    }
   }
 
   for (const row of timelineResult.rows) {
@@ -296,9 +311,22 @@ export async function buildIncidentGraph(
       subtitle: row.source ?? undefined,
       owner: row.owner_user_id ?? undefined,
       metadata: {
-        eventTime: row.event_time
+        eventTime: row.event_time,
+        createdAt: row.created_at ?? undefined,
+        updatedAt: row.updated_at ?? undefined
       }
     });
+
+    if (row.owner_user_id && userById.has(row.owner_user_id)) {
+      pushEdge(edges, edgeDedupe, {
+        source: makeNodeId("timeline_event", row.id),
+        target: makeNodeId("user", row.owner_user_id),
+        type: "assigned_to",
+        label: "assigned_to",
+        derived: true,
+        sourceDescription: "Derived from timeline.ownerUserId"
+      });
+    }
 
     if (row.system_id && systemById.has(row.system_id)) {
       pushEdge(edges, edgeDedupe, {

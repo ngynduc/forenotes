@@ -4,6 +4,7 @@ import { ENTITY_DEFINITIONS } from "./entities.js";
 import { cleanObject } from "./helpers.js";
 import { MEMBERSHIP_ENTITY_DEFINITIONS } from "./membershipEntities.js";
 import { actionPermission, canAccessEntity, permissionMessage } from "./permissions.js";
+import { createEntityLink, deleteEntityLink } from "./graphApi.js";
 import { findEntityItem } from "./render/modal.js";
 import { inlineOptions } from "./render/table.js";
 import { clearFlash, setFlash, state } from "./state.js";
@@ -81,6 +82,47 @@ export async function attachTag(entityType, recordId, tagType, tagId) {
   try {
     await api(`${entityRoute}/${suffix}`, "POST", { [payloadKey]: selectedTagId });
     setFlash("success", "Tag attached.");
+    await refreshAfterEntityChange(entityType);
+  } catch (error) {
+    setFlash("error", error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function attachEntityLink(sourceType, sourceId, targetType, targetId, linkType = "assigned_to") {
+  if (!state.selectedIncidentId || !sourceType || !sourceId || !targetType || !targetId) {
+    setFlash("error", "Missing entity link context.");
+    return;
+  }
+
+  if (sourceType === targetType && sourceId === targetId) {
+    setFlash("error", "Select a different target.");
+    return;
+  }
+
+  try {
+    await createEntityLink(state.selectedIncidentId, {
+      sourceType,
+      sourceId,
+      targetType,
+      targetId,
+      linkType
+    });
+    setFlash("success", "Entity link attached.");
+    await refreshAfterEntityChange(sourceType);
+  } catch (error) {
+    setFlash("error", error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function removeEntityLink(linkId, entityType = "finding") {
+  if (!state.selectedIncidentId || !linkId) {
+    setFlash("error", "Missing entity link context.");
+    return;
+  }
+
+  try {
+    await deleteEntityLink(state.selectedIncidentId, linkId);
+    setFlash("success", "Entity link removed.");
     await refreshAfterEntityChange(entityType);
   } catch (error) {
     setFlash("error", error instanceof Error ? error.message : String(error));

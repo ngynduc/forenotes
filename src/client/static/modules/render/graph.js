@@ -1,5 +1,15 @@
 import { escapeHtml } from "../helpers.js";
 import { state } from "../state.js";
+import { formatMemberName } from "../tableDefinitions.js";
+
+const GRAPH_NODE_WIDTH = 170;
+const GRAPH_NODE_MIN_HEIGHT = 78;
+const GRAPH_CANVAS_MIN_WIDTH = 960;
+const GRAPH_CANVAS_MIN_HEIGHT = 560;
+const GRAPH_NODE_GAP_X = 28;
+const GRAPH_NODE_GAP_Y = 18;
+const GRAPH_LANE_GAP_Y = 88;
+const RELATIONSHIP_VISIBLE_NODE_TYPES = new Set(["finding", "timeline_event", "user"]);
 
 /* ── Main Graph Workspace ── */
 
@@ -25,12 +35,11 @@ export function renderGraphWorkspace() {
 function renderRelationshipView() {
   const graph = state.ui.graph;
   const graphData = graph.data;
-  const nodes = graphData?.nodes || [];
-  const edges = graphData?.edges || [];
-  const stats = graphData?.stats;
+  const { nodes, edges } = getRenderableGraphData(graphData);
+  const stats = graphData?.stats ? buildVisibleStats(nodes, edges, graphData.stats) : null;
   const zoomPct = Math.round(graph.zoom * 100);
 
-  const positionedNodes = layoutNodes(nodes);
+  const positionedNodes = layoutNodes(nodes, edges, graph.nodePositions);
 
   return `
     <div class="graph-toolbar">
@@ -68,8 +77,15 @@ function renderRelationshipView() {
 /* ── Graph Canvas ── */
 
 function renderGraphCanvas(positionedNodes, edges, graph) {
-  const canvasWidth = 1100;
-  const canvasHeight = Math.max(640, ...positionedNodes.map((n) => n.y + 120));
+  const selectedNodeId = state.ui.graph.selectedNodeId;
+  const canvasWidth = Math.max(
+    GRAPH_CANVAS_MIN_WIDTH,
+    ...positionedNodes.map((node) => node.x + GRAPH_NODE_WIDTH + 80)
+  );
+  const canvasHeight = Math.max(
+    GRAPH_CANVAS_MIN_HEIGHT,
+    ...positionedNodes.map((node) => node.y + GRAPH_NODE_MIN_HEIGHT + 80)
+  );
 
   const nodeEls = positionedNodes.map((node) => {
     const shortType = node.type.replace("mitre_", "");
@@ -80,6 +96,7 @@ function renderGraphCanvas(positionedNodes, edges, graph) {
         type="button"
         data-action="select-graph-node"
         data-node-id="${escapeHtml(node.id)}"
+        data-node-type="${escapeHtml(node.type)}"
         aria-label="${escapeHtml(node.label)}"
       >
         <div class="graph-node-header">${escapeHtml(shortType)}</div>
@@ -94,16 +111,19 @@ function renderGraphCanvas(positionedNodes, edges, graph) {
     const targetPos = positionedNodes.find((n) => n.id === edge.target);
     if (!sourcePos || !targetPos) return "";
 
-    const sx = sourcePos.x + 85;
-    const sy = sourcePos.y + 45;
-    const tx = targetPos.x + 85;
-    const ty = targetPos.y + 45;
-    const mx = (sx + tx) / 2;
-    const my = (sy + ty) / 2 - 6;
+    const geometry = getEdgeGeometry(sourcePos, targetPos);
+    const isConnectedToSelected = selectedNodeId && (edge.source === selectedNodeId || edge.target === selectedNodeId);
+    const edgeClass = [
+      "graph-edge",
+      isConnectedToSelected ? "is-highlighted" : "",
+      selectedNodeId && !isConnectedToSelected ? "is-muted" : ""
+    ].filter(Boolean).join(" ");
 
     return `
-      <path class="graph-edge-line ${edge.derived ? "is-derived" : ""}" d="M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}" />
-      <text class="graph-edge-label" x="${mx}" y="${my}" text-anchor="middle">${escapeHtml(edge.label)}</text>
+      <g class="${edgeClass}" data-edge-id="${escapeHtml(edge.id)}" data-source-node="${escapeHtml(edge.source)}" data-target-node="${escapeHtml(edge.target)}">
+        <path class="graph-edge-line ${edge.derived ? "is-derived" : ""}" d="${geometry.path}" />
+        <text class="graph-edge-label" x="${geometry.labelX}" y="${geometry.labelY}" text-anchor="middle">${escapeHtml(edge.label)}</text>
+      </g>
     `;
   }).join("");
 
@@ -121,12 +141,82 @@ function renderGraphCanvas(positionedNodes, edges, graph) {
 
 /* ── Simple Columnar Node Layout ── */
 
-function layoutNodes(nodes) {
-  const columnOrder = [
-    "finding", "timeline_event", "task", "system", "account",
-    "ioc", "query", "user", "tag", "mitre_technique", "mitre_tactic"
-  ];
+function layoutNodes(nodes, edges, savedPositions = {}) {
+  const fallbackLayout = layoutNodesByColumns(nodes, savedPositions);
+  const edgeAdjacency = buildEdgeAdjacency(edges);
+  const laneOrder = ["finding", "timeline_event", "user"];
+  const laneConfig = new Map(laneOrder.map((lane) => [lane, { rows: [] }]));
+  const timeNodes = nodes
+    .map((node) => ({
+      node,
+      lane: getLaneForNode(node),
+      timestamp: getNodeTimestamp(node)
+    }))
+    .filter((entry) => entry.lane !== "user" && entry.timestamp !== null)
+    .sort((left, right) => left.timestamp - right.timestamp || left.node.label.localeCompare(right.node.label));
 
+  if (!timeNodes.length) {
+    return resolveNodeCollisions(fallbackLayout);
+  }
+
+  const minTimestamp = timeNodes[0].timestamp;
+  const maxTimestamp = timeNodes[timeNodes.length - 1].timestamp;
+  const positioned = [];
+  const xPadding = 72;
+  const availableWidth = Math.max(
+    GRAPH_CANVAS_MIN_WIDTH - xPadding * 2 - GRAPH_NODE_WIDTH,
+    240,
+    (timeNodes.length - 1) * 184
+  );
+  const timestampSpan = Math.max(maxTimestamp - minTimestamp, 1);
+
+  for (const { node, lane, timestamp } of timeNodes) {
+    const saved = savedPositions[node.id];
+    if (saved) {
+      positioned.push({ ...node, x: saved.x, y: saved.y, lane });
+      continue;
+    }
+
+    const normalized = (timestamp - minTimestamp) / timestampSpan;
+    const baseX = xPadding + normalized * availableWidth;
+    const lanePlacement = placeNodeInLane(baseX, laneConfig.get(lane)?.rows || []);
+    positioned.push({ ...node, x: lanePlacement.x, rowIndex: lanePlacement.rowIndex, lane });
+  }
+
+  const positionedById = new Map(positioned.map((node) => [node.id, node]));
+
+  const remainingNodes = nodes
+    .filter((node) => !positionedById.has(node.id))
+    .sort((left, right) => {
+      const leftLane = getLaneForNode(left);
+      const rightLane = getLaneForNode(right);
+      if (leftLane !== rightLane) {
+        return leftLane.localeCompare(rightLane);
+      }
+      return left.label.localeCompare(right.label);
+    });
+
+  for (const node of remainingNodes) {
+    const saved = savedPositions[node.id];
+    if (saved) {
+      positioned.push({ ...node, x: saved.x, y: saved.y, lane: getLaneForNode(node) });
+      positionedById.set(node.id, { ...node, x: saved.x, y: saved.y, lane: getLaneForNode(node) });
+      continue;
+    }
+
+    const lane = getLaneForNode(node);
+    const anchorX = getAnchoredNodeX(node.id, edgeAdjacency, positionedById) ?? getFallbackNodeX(positionedById, lane);
+    const lanePlacement = placeNodeInLane(anchorX, laneConfig.get(lane)?.rows || []);
+    const placedNode = { ...node, x: lanePlacement.x, rowIndex: lanePlacement.rowIndex, lane };
+    positioned.push(placedNode);
+    positionedById.set(node.id, placedNode);
+  }
+
+  return resolveNodeCollisions(applyLaneVerticalSpacing(positioned, laneOrder));
+}
+
+function layoutNodesByColumns(nodes, savedPositions = {}) {
+  const columnOrder = ["finding", "timeline_event", "user"];
   const columns = new Map();
   for (const node of nodes) {
     const col = columns.get(node.type) || [];
@@ -135,10 +225,17 @@ function layoutNodes(nodes) {
   }
 
   const positioned = [];
-  const colWidth = 200;
-  const rowHeight = 100;
+  const colWidth = 240;
+  const rowHeight = 128;
   const startX = 60;
   const startY = 40;
+  const nonUserRowCount = Math.max(
+    1,
+    ...columnOrder
+      .filter((nodeType) => nodeType !== "user")
+      .map((nodeType) => (columns.get(nodeType) || []).length)
+  );
+  const userStartRowIndex = nonUserRowCount - 1;
 
   let colIndex = 0;
   for (const nodeType of columnOrder) {
@@ -149,16 +246,286 @@ function layoutNodes(nodes) {
     }
 
     colNodes.forEach((node, rowIndex) => {
+      const saved = savedPositions[node.id];
+      const defaultRowIndex = nodeType === "user" ? userStartRowIndex + rowIndex : rowIndex;
       positioned.push({
         ...node,
-        x: startX + colIndex * colWidth,
-        y: startY + rowIndex * rowHeight
+        x: saved?.x ?? (startX + colIndex * colWidth),
+        y: saved?.y ?? (startY + defaultRowIndex * rowHeight)
       });
     });
     colIndex += 1;
   }
 
   return positioned;
+}
+
+function buildEdgeAdjacency(edges) {
+  const adjacency = new Map();
+  for (const edge of edges) {
+    const source = adjacency.get(edge.source) || [];
+    source.push(edge.target);
+    adjacency.set(edge.source, source);
+    const target = adjacency.get(edge.target) || [];
+    target.push(edge.source);
+    adjacency.set(edge.target, target);
+  }
+  return adjacency;
+}
+
+function getLaneForNode(node) {
+  if (node.type === "timeline_event") return "timeline_event";
+  if (node.type === "user") return "user";
+  return "finding";
+}
+
+function getNodeTimestamp(node) {
+  const metadata = node.metadata || {};
+  const candidate =
+    (node.type === "timeline_event" ? metadata.eventTime : undefined) ||
+    metadata.observedAt ||
+    metadata.createdAt ||
+    metadata.updatedAt;
+  const timestamp = Date.parse(candidate || "");
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function placeNodeInLane(baseX, laneRows) {
+  const minGap = GRAPH_NODE_WIDTH + GRAPH_NODE_GAP_X;
+  let rowIndex = 0;
+
+  while (true) {
+    const row = laneRows[rowIndex] || [];
+    const previous = row[row.length - 1];
+    const nextX = previous ? Math.max(baseX, previous + minGap) : baseX;
+    if (nextX === baseX || nextX - baseX <= minGap * 0.75) {
+      row.push(nextX);
+      laneRows[rowIndex] = row;
+      return {
+        x: Math.round(nextX),
+        rowIndex
+      };
+    }
+    rowIndex += 1;
+  }
+}
+
+function applyLaneVerticalSpacing(nodes, laneOrder) {
+  const rowHeight = GRAPH_NODE_MIN_HEIGHT + GRAPH_NODE_GAP_Y;
+  let laneBaseY = 64;
+  const nodesByLane = new Map(laneOrder.map((lane) => [lane, nodes.filter((node) => getLaneForNode(node) === lane)]));
+  const positioned = [];
+
+  for (const lane of laneOrder) {
+    const laneNodes = nodesByLane.get(lane) || [];
+    const maxRowIndex = laneNodes.length ? Math.max(...laneNodes.map((node) => node.rowIndex || 0)) : 0;
+
+    for (const node of laneNodes) {
+      positioned.push({
+        ...node,
+        y: Number.isFinite(node.y) ? node.y : laneBaseY + (node.rowIndex || 0) * rowHeight
+      });
+    }
+
+    laneBaseY += GRAPH_NODE_MIN_HEIGHT + maxRowIndex * rowHeight + GRAPH_LANE_GAP_Y;
+  }
+
+  return positioned;
+}
+
+function resolveNodeCollisions(nodes) {
+  const placed = [];
+
+  for (const node of [...nodes].sort(compareNodePositions)) {
+    let candidate = { ...node };
+    let attempts = 0;
+
+    while (true) {
+      const overlapping = placed.find((existing) => nodesOverlap(candidate, existing));
+      if (!overlapping || attempts > nodes.length * 4) {
+        break;
+      }
+
+      candidate = {
+        ...candidate,
+        y: overlapping.y + GRAPH_NODE_MIN_HEIGHT + GRAPH_NODE_GAP_Y
+      };
+      attempts += 1;
+    }
+
+    placed.push(candidate);
+  }
+
+  return placed;
+}
+
+function compareNodePositions(left, right) {
+  if (left.y !== right.y) {
+    return left.y - right.y;
+  }
+  return left.x - right.x;
+}
+
+function nodesOverlap(left, right) {
+  return !(
+    left.x + GRAPH_NODE_WIDTH + GRAPH_NODE_GAP_X <= right.x ||
+    right.x + GRAPH_NODE_WIDTH + GRAPH_NODE_GAP_X <= left.x ||
+    left.y + GRAPH_NODE_MIN_HEIGHT + GRAPH_NODE_GAP_Y <= right.y ||
+    right.y + GRAPH_NODE_MIN_HEIGHT + GRAPH_NODE_GAP_Y <= left.y
+  );
+}
+
+function getAnchoredNodeX(nodeId, edgeAdjacency, positionedById) {
+  const neighbors = edgeAdjacency.get(nodeId) || [];
+  const anchoredXs = [];
+
+  for (const neighborId of neighbors) {
+    const placed = positionedById.get(neighborId);
+    if (placed) {
+      anchoredXs.push(placed.x);
+    }
+  }
+
+  if (!anchoredXs.length) {
+    return null;
+  }
+
+  const average = anchoredXs.reduce((sum, value) => sum + value, 0) / anchoredXs.length;
+  return Number.isFinite(average) ? average : null;
+}
+
+function getFallbackNodeX(positionedById, lane) {
+  const placedNodes = [...positionedById.values()].filter((node) => getLaneForNode(node) === lane);
+  if (!placedNodes.length) {
+    return 72;
+  }
+  return Math.max(...placedNodes.map((node) => node.x)) + GRAPH_NODE_WIDTH + 40;
+}
+
+function getRenderableGraphData(graphData) {
+  const nodes = graphData?.nodes || [];
+  const edges = graphData?.edges || [];
+  const visibleNodes = nodes.filter((node) => RELATIONSHIP_VISIBLE_NODE_TYPES.has(node.type));
+  const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
+
+  return {
+    nodes: visibleNodes,
+    edges: edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+  };
+}
+
+function buildVisibleStats(nodes, edges, stats) {
+  const countByType = (type) => nodes.filter((node) => node.type === type).length;
+  return {
+    ...stats,
+    totalNodes: nodes.length,
+    totalEdges: edges.length,
+    findings: countByType("finding"),
+    timelineEvents: countByType("timeline_event"),
+    tasks: countByType("task"),
+    mitreTechniques: countByType("mitre_technique"),
+    mitreTactics: countByType("mitre_tactic"),
+    systems: countByType("system"),
+    accounts: countByType("account"),
+    iocs: countByType("ioc"),
+    manualLinks: edges.filter((edge) => !edge.derived).length,
+    derivedLinks: edges.filter((edge) => edge.derived).length
+  };
+}
+
+function getEdgeGeometry(sourcePos, targetPos) {
+  const sourcePoint = getNodeAnchorPoint(sourcePos, targetPos);
+  const targetPoint = getNodeAnchorPoint(targetPos, sourcePos);
+  const dx = targetPoint.x - sourcePoint.x;
+  const dy = targetPoint.y - sourcePoint.y;
+  const curveOffset = Math.max(36, Math.min(120, Math.max(Math.abs(dx), Math.abs(dy)) * 0.35));
+  const control1X = sourcePoint.x + (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx || 1) * curveOffset : 0);
+  const control1Y = sourcePoint.y + (Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy || 1) * curveOffset);
+  const control2X = targetPoint.x - (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx || 1) * curveOffset : 0);
+  const control2Y = targetPoint.y - (Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy || 1) * curveOffset);
+
+  return {
+    path: `M ${sourcePoint.x} ${sourcePoint.y} C ${control1X} ${control1Y}, ${control2X} ${control2Y}, ${targetPoint.x} ${targetPoint.y}`,
+    labelX: (sourcePoint.x + targetPoint.x) / 2,
+    labelY: (sourcePoint.y + targetPoint.y) / 2 - 8
+  };
+}
+
+function getNodeAnchorPoint(node, otherNode) {
+  const nodeCenterX = node.x + GRAPH_NODE_WIDTH / 2;
+  const nodeCenterY = node.y + GRAPH_NODE_MIN_HEIGHT / 2;
+  const otherCenterX = otherNode.x + GRAPH_NODE_WIDTH / 2;
+  const otherCenterY = otherNode.y + GRAPH_NODE_MIN_HEIGHT / 2;
+  const dx = otherCenterX - nodeCenterX;
+  const dy = otherCenterY - nodeCenterY;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return {
+      x: node.x + (dx >= 0 ? GRAPH_NODE_WIDTH : 0),
+      y: nodeCenterY
+    };
+  }
+
+  return {
+    x: nodeCenterX,
+    y: node.y + (dy >= 0 ? GRAPH_NODE_MIN_HEIGHT : 0)
+  };
+}
+
+function getLinkedEntities(nodeId) {
+  const graphData = state.ui.graph.data;
+  const nodesById = new Map((graphData?.nodes || []).map((entry) => [entry.id, entry]));
+  const linked = [];
+
+  for (const edge of graphData?.edges || []) {
+    const isSource = edge.source === nodeId;
+    const isTarget = edge.target === nodeId;
+    if (!isSource && !isTarget) {
+      continue;
+    }
+
+    const relatedNodeId = isSource ? edge.target : edge.source;
+    const relatedNode = nodesById.get(relatedNodeId);
+    if (!relatedNode) {
+      continue;
+    }
+
+    linked.push({
+      edgeId: edge.id,
+      edgeLabel: edge.label,
+      derived: edge.derived,
+      node: relatedNode
+    });
+  }
+
+  return linked.sort((a, b) => {
+    if (a.node.type !== b.node.type) {
+      return a.node.type.localeCompare(b.node.type);
+    }
+    return a.node.label.localeCompare(b.node.label);
+  });
+}
+
+function renderLinkedEntities(linkedEntities) {
+  if (!linkedEntities.length) {
+    return `<div class="inspector-empty">No linked entities.</div>`;
+  }
+
+  return `
+    <div class="inspector-section-title">Linked Entities (${linkedEntities.length})</div>
+    <div class="inspector-evidence-list">
+      ${linkedEntities.map((entry) => `
+        <div class="inspector-evidence-item">
+          <span class="inspector-evidence-dot dot-${escapeHtml(entry.node.type)}"></span>
+          <div>
+            <div class="inspector-evidence-type">${escapeHtml(entry.node.type.replace(/_/g, " "))} · ${escapeHtml(entry.edgeLabel)}${entry.derived ? " · derived" : ""}</div>
+            <div class="inspector-evidence-title">${escapeHtml(entry.node.label)}</div>
+            ${entry.node.subtitle ? `<div class="graph-node-sub">${escapeHtml(entry.node.subtitle)}</div>` : ""}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 /* ── Graph Stats ── */
@@ -208,6 +575,8 @@ function renderNodeInspector() {
 
   const typeLabel = node.type.replace(/_/g, " ");
   const iconLetter = typeLabel.charAt(0).toUpperCase();
+  const linkedEntities = getLinkedEntities(nodeId);
+  const ownerLabel = node.owner ? formatMemberName(node.owner) : "";
 
   return `
     <div class="inspector-card">
@@ -222,9 +591,11 @@ function renderNodeInspector() {
       <div class="inspector-stats">
         ${node.status ? `<div class="inspector-stat"><span class="stat-value">${escapeHtml(node.status)}</span><span class="stat-label">Status</span></div>` : ""}
         ${node.severity ? `<div class="inspector-stat"><span class="stat-value">${escapeHtml(node.severity)}</span><span class="stat-label">Severity</span></div>` : ""}
-        ${node.owner ? `<div class="inspector-stat"><span class="stat-value">${escapeHtml(node.owner)}</span><span class="stat-label">Owner</span></div>` : ""}
+        ${ownerLabel ? `<div class="inspector-stat"><span class="stat-value">${escapeHtml(ownerLabel)}</span><span class="stat-label">Owner</span></div>` : ""}
         ${node.subtitle ? `<div class="inspector-stat"><span class="stat-value">${escapeHtml(node.subtitle)}</span><span class="stat-label">Detail</span></div>` : ""}
+        <div class="inspector-stat"><span class="stat-value">${linkedEntities.length}</span><span class="stat-label">Linked</span></div>
       </div>
+      ${renderLinkedEntities(linkedEntities)}
     </div>
   `;
 }

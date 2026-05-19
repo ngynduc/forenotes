@@ -2,11 +2,19 @@
 
 .dashboard-shell {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  min-height: 100dvh;
+  grid-template-rows: auto 1fr;
+}
+
+.page-shell.dashboard-shell {
+  padding: var(--space-4);
 }
 
 .dashboard-header {
   align-items: start;
+  margin-bottom: 0;
 }
 
 .dashboard-header-meta {
@@ -17,38 +25,83 @@
   gap: var(--space-3);
 }
 
-/* ── Metric Grid ── */
+/* ── Dashboard Grid ── */
 
-.dashboard-metric-grid,
-.dashboard-grid {
+.dashboard-content-grid {
   display: grid;
   gap: var(--space-3);
-}
-
-.dashboard-metric-grid {
+  min-height: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows:
+    minmax(78px, auto)
+    minmax(0, 1.25fr)
+    minmax(0, 1fr)
+    minmax(0, auto);
+  grid-template-areas:
+    "metric-open metric-incidents metric-findings metric-tasks"
+    "activity activity sla sla"
+    "severity task-status task-status coverage"
+    "recent recent recent recent";
 }
 
-.dashboard-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.metric-open {
+  grid-area: metric-open;
 }
 
-.dashboard-span-two {
-  grid-column: span 2;
+.metric-incidents {
+  grid-area: metric-incidents;
 }
 
-/* ── Panel ── */
+.metric-findings {
+  grid-area: metric-findings;
+}
+
+.metric-tasks {
+  grid-area: metric-tasks;
+}
+
+.dashboard-activity-panel {
+  grid-area: activity;
+}
+
+.dashboard-sla-panel {
+  grid-area: sla;
+}
+
+.dashboard-severity-panel {
+  grid-area: severity;
+}
+
+.dashboard-task-panel {
+  grid-area: task-status;
+}
+
+.dashboard-coverage-panel {
+  grid-area: coverage;
+}
+
+.dashboard-recent-activity-panel {
+  grid-area: recent;
+}
+
+.dashboard-panel,
+.dashboard-metric-card {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
 
 .dashboard-panel {
-  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: var(--space-3);
+  overflow: hidden;
 }
-
-/* ── Metric Card ── */
 
 .dashboard-metric-card {
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
+  gap: var(--space-2);
+  padding: clamp(10px, 1vw, var(--space-3));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -58,7 +111,7 @@
 }
 
 .dashboard-metric-card strong {
-  font-size: 28px;
+  font-size: clamp(20px, 1.6vw, 24px);
   line-height: 1.2;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -72,6 +125,14 @@
   text-transform: uppercase;
 }
 
+.dashboard-panel h2 {
+  line-height: 1.15;
+}
+
+.dashboard-panel p {
+  margin-bottom: var(--space-2);
+}
+
 /* tone accents */
 .tone-teal  { border-top-color: var(--primary); }
 .tone-blue  { border-top-color: #2563eb; }
@@ -83,11 +144,12 @@
 .dashboard-chart {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-2);
   align-items: end;
-  min-height: 180px;
-  padding-top: var(--space-1);
-  padding-bottom: var(--space-1);
+  min-height: 0;
+  height: 100%;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -101,10 +163,10 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 10px));
   align-items: end;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   max-width: 44px;
-  height: 120px;
+  height: clamp(72px, 12vh, 120px);
   padding: 0;
 }
 
@@ -133,7 +195,7 @@
 
 .sla-list {
   display: grid;
-  gap: 0;
+  min-height: 0;
 }
 
 .sla-item {
@@ -141,7 +203,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) 0;
+  min-height: 0;
+  padding: clamp(8px, 1.2vh, var(--space-3)) 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -160,7 +223,7 @@
 }
 
 .sla-item strong {
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
   font-weight: 650;
 }
@@ -175,7 +238,7 @@
 
 .dashboard-breakdown {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .dashboard-breakdown-row {
@@ -210,21 +273,21 @@
 .dashboard-mini-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .dashboard-mini-metrics div {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-4);
+  padding: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
 
 .dashboard-mini-metrics strong {
-  font-size: 22px;
+  font-size: 18px;
   line-height: 1;
   font-weight: 650;
 }
@@ -290,21 +353,46 @@
 /* ── Responsive ── */
 
 @media (max-width: 1120px) {
-  .dashboard-metric-grid,
-  .dashboard-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dashboard-shell {
+    min-height: auto;
   }
 
-  .dashboard-span-two {
-    grid-column: span 2;
+  .dashboard-content-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    grid-template-areas:
+      "metric-open metric-incidents"
+      "metric-findings metric-tasks"
+      "activity activity"
+      "sla sla"
+      "severity task-status"
+      "coverage coverage"
+      "recent recent";
+  }
+
+  .dashboard-panel {
+    overflow: visible;
   }
 }
 
 @media (max-width: 720px) {
-  .dashboard-metric-grid,
-  .dashboard-grid,
+  .dashboard-content-grid,
   .dashboard-mini-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-content-grid {
+    grid-template-areas:
+      "metric-open"
+      "metric-incidents"
+      "metric-findings"
+      "metric-tasks"
+      "activity"
+      "sla"
+      "severity"
+      "task-status"
+      "coverage"
+      "recent";
   }
 
   .dashboard-header-meta {
@@ -313,17 +401,12 @@
   }
 
   .dashboard-chart {
-    gap: var(--space-2);
+    min-height: 180px;
   }
 
   .dashboard-chart-bars {
-    grid-template-columns: repeat(3, minmax(0, 8px));
-    max-width: 32px;
-    height: 96px;
-  }
-
-  .dashboard-span-two {
-    grid-column: span 1;
+    grid-template-columns: repeat(3, minmax(0, 10px));
+    height: 84px;
   }
 
   .dashboard-activity-item {

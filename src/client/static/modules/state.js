@@ -66,6 +66,7 @@ export const state = {
   accounts: [],
   tasks: [],
   queries: [],
+  entityLinks: [],
   notifications: [],
   auditLogs: [],
   searchResults: [],
@@ -81,6 +82,7 @@ export const state = {
       matrix: null,
       selectedNodeId: null,
       selectedTechniqueId: null,
+      nodePositions: {},
       mode: "overview",
       entityTypes: [],
       linkTypes: [],
@@ -155,6 +157,7 @@ export function clearIncidentScope() {
   state.accounts = [];
   state.tasks = [];
   state.queries = [];
+  state.entityLinks = [];
   state.auditLogs = [];
   state.searchResults = [];
 }

@@ -1,11 +1,13 @@
 import { refreshAll, selectCase, selectIncident } from "./data.js";
 import {
+  attachEntityLink,
   deleteEntity,
   attachTag,
   markAllVisibleNotificationsRead,
   markNotificationRead,
   openModal,
   openNotification,
+  removeEntityLink,
   removeMember,
   runSearch,
   saveInlineEdit,
@@ -18,6 +20,14 @@ import { fetchIncidentGraph, fetchMitreMatrix } from "./graphApi.js";
 import { initCodeEditors } from "./code-editor.js";
 
 let _graphLoadPromise = null;
+const GRAPH_NODE_WIDTH = 170;
+const GRAPH_NODE_MIN_HEIGHT = 78;
+const GRAPH_CANVAS_MIN_WIDTH = 960;
+const GRAPH_CANVAS_MIN_HEIGHT = 560;
+const GRAPH_NODE_GAP_X = 28;
+const GRAPH_NODE_GAP_Y = 18;
+const GRAPH_DRAG_THRESHOLD = 6;
+let _suppressNodeClickUntil = 0;
 
 async function triggerGraphLoad() {
   if (!state.selectedIncidentId) return;
@@ -67,6 +77,9 @@ export function initEvents(render) {
   let _panStart = null;
   let _dragNode = null;
   let _dragOffset = null;
+  let _dragNodeId = null;
+  let _didMoveNode = false;
+  let _pendingNodeDrag = null;
 
   root.addEventListener("mousedown", (event) => {
     // Zoom button clicks
@@ -85,15 +98,18 @@ export function initEvents(render) {
     // Node drag start
     const nodeEl = event.target.closest(".graph-node");
     if (nodeEl) {
-      event.preventDefault();
       const wrapEl = document.getElementById("graph-canvas-wrap");
       const rect = wrapEl?.getBoundingClientRect();
       if (!rect) return;
       const g = state.ui.graph;
-      _dragNode = nodeEl;
-      _dragOffset = {
-        x: (event.clientX - rect.left) / g.zoom - parseFloat(nodeEl.style.left || 0),
-        y: (event.clientY - rect.top) / g.zoom - parseFloat(nodeEl.style.top || 0)
+      const point = toCanvasPoint(event, rect, g);
+      _pendingNodeDrag = {
+        nodeEl,
+        nodeId: nodeEl.dataset.nodeId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        offsetX: point.x - parseFloat(nodeEl.style.left || 0),
+        offsetY: point.y - parseFloat(nodeEl.style.top || 0)
       };
       return;
     }
@@ -106,14 +122,42 @@ export function initEvents(render) {
   });
 
   document.addEventListener("mousemove", (event) => {
+    if (_pendingNodeDrag && !_dragNode) {
+      const deltaX = event.clientX - _pendingNodeDrag.startClientX;
+      const deltaY = event.clientY - _pendingNodeDrag.startClientY;
+      if (Math.hypot(deltaX, deltaY) >= GRAPH_DRAG_THRESHOLD) {
+        _dragNode = _pendingNodeDrag.nodeEl;
+        _dragNodeId = _pendingNodeDrag.nodeId;
+        _dragOffset = {
+          x: _pendingNodeDrag.offsetX,
+          y: _pendingNodeDrag.offsetY
+        };
+        _didMoveNode = true;
+        const wrapEl = document.getElementById("graph-canvas-wrap");
+        if (wrapEl) {
+          wrapEl.classList.add("is-dragging-node");
+        }
+      }
+    }
     if (_dragNode) {
       const wrapEl = document.getElementById("graph-canvas-wrap");
       const rect = wrapEl?.getBoundingClientRect();
       if (!rect) return;
       const g = state.ui.graph;
-      _dragNode.style.left = `${(event.clientX - rect.left) / g.zoom - _dragOffset.x}px`;
-      _dragNode.style.top = `${(event.clientY - rect.top) / g.zoom - _dragOffset.y}px`;
+      const point = toCanvasPoint(event, rect, g);
+      const resolvedPosition = resolveDraggedNodePosition(
+        point.x - _dragOffset.x,
+        point.y - _dragOffset.y,
+        _dragNode
+      );
+      _dragNode.style.left = `${resolvedPosition.x}px`;
+      _dragNode.style.top = `${resolvedPosition.y}px`;
+      if (_dragNodeId) {
+        state.ui.graph.nodePositions[_dragNodeId] = resolvedPosition;
+      }
       _dragNode.classList.add("is-dragging");
+      updateGraphCanvasBounds();
+      updateGraphEdges();
       return;
     }
     if (_panStart) {
@@ -126,9 +170,19 @@ export function initEvents(render) {
   });
 
   document.addEventListener("mouseup", () => {
+    _pendingNodeDrag = null;
     if (_dragNode) {
       _dragNode.classList.remove("is-dragging");
+      const wrapEl = document.getElementById("graph-canvas-wrap");
+      if (wrapEl) {
+        wrapEl.classList.remove("is-dragging-node");
+      }
+      if (_didMoveNode) {
+        _suppressNodeClickUntil = Date.now() + 200;
+      }
       _dragNode = null;
+      _dragNodeId = null;
+      _didMoveNode = false;
       _dragOffset = null;
       wrappedRender();
     }
@@ -194,6 +248,9 @@ async function handleClick(event, render) {
     state.ui.graph.selectedTechniqueId = null;
     triggerGraphLoad();
   } else if (action === "select-graph-node") {
+    if (Date.now() < _suppressNodeClickUntil) {
+      return;
+    }
     state.ui.graph.selectedNodeId = target.dataset.nodeId;
     state.ui.graph.selectedTechniqueId = null;
   } else if (action === "select-technique") {
@@ -218,10 +275,150 @@ async function handleClick(event, render) {
     if (form instanceof HTMLFormElement) {
       await submitModal(form);
     }
+  } else if (action === "attach-entity-link") {
+    const container = target.closest("[data-entity-link-attach]");
+    const select = container?.querySelector("select[name='targetId']");
+    await attachEntityLink(entityType, id, target.dataset.targetType || "", select?.value || "", target.dataset.linkType || "assigned_to");
+  } else if (action === "delete-entity-link") {
+    await removeEntityLink(target.dataset.linkId || "", entityType);
   } else {
     await handleTableActions(action, target, id, entityType);
   }
   render();
+}
+
+function toCanvasPoint(event, rect, graph) {
+  return {
+    x: (event.clientX - rect.left - graph.panX) / graph.zoom,
+    y: (event.clientY - rect.top - graph.panY) / graph.zoom
+  };
+}
+
+function updateGraphEdges() {
+  const edgeGroups = document.querySelectorAll(".graph-edge");
+  for (const edgeGroup of edgeGroups) {
+    const sourceId = edgeGroup.getAttribute("data-source-node");
+    const targetId = edgeGroup.getAttribute("data-target-node");
+    if (!sourceId || !targetId) {
+      continue;
+    }
+
+    const sourceNode = document.querySelector(`.graph-node[data-node-id="${CSS.escape(sourceId)}"]`);
+    const targetNode = document.querySelector(`.graph-node[data-node-id="${CSS.escape(targetId)}"]`);
+    const path = edgeGroup.querySelector(".graph-edge-line");
+    const label = edgeGroup.querySelector(".graph-edge-label");
+    if (!(sourceNode instanceof HTMLElement) || !(targetNode instanceof HTMLElement) || !(path instanceof SVGPathElement) || !(label instanceof SVGTextElement)) {
+      continue;
+    }
+
+    const geometry = getEdgeGeometryFromElements(sourceNode, targetNode);
+    path.setAttribute("d", geometry.path);
+    label.setAttribute("x", String(geometry.labelX));
+    label.setAttribute("y", String(geometry.labelY));
+  }
+}
+
+function updateGraphCanvasBounds() {
+  const canvas = document.querySelector(".graph-canvas");
+  const svg = document.querySelector(".graph-svg-layer");
+  const nodes = [...document.querySelectorAll(".graph-node")];
+  if (!(canvas instanceof HTMLElement) || !(svg instanceof SVGSVGElement) || nodes.length === 0) {
+    return;
+  }
+
+  const maxX = Math.max(...nodes.map((node) => parseFloat(node.style.left || "0") + (node.offsetWidth || GRAPH_NODE_WIDTH) + 80));
+  const maxY = Math.max(...nodes.map((node) => parseFloat(node.style.top || "0") + (node.offsetHeight || GRAPH_NODE_MIN_HEIGHT) + 80));
+  const width = Math.max(GRAPH_CANVAS_MIN_WIDTH, Math.ceil(maxX));
+  const height = Math.max(GRAPH_CANVAS_MIN_HEIGHT, Math.ceil(maxY));
+
+  canvas.style.minWidth = `${width}px`;
+  canvas.style.minHeight = `${height}px`;
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+}
+
+function getEdgeGeometryFromElements(sourceNode, targetNode) {
+  const source = getAnchorPoint(sourceNode, targetNode);
+  const target = getAnchorPoint(targetNode, sourceNode);
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  const curveOffset = Math.max(36, Math.min(120, Math.max(Math.abs(dx), Math.abs(dy)) * 0.35));
+  const control1X = source.x + (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx || 1) * curveOffset : 0);
+  const control1Y = source.y + (Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy || 1) * curveOffset);
+  const control2X = target.x - (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx || 1) * curveOffset : 0);
+  const control2Y = target.y - (Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy || 1) * curveOffset);
+
+  return {
+    path: `M ${source.x} ${source.y} C ${control1X} ${control1Y}, ${control2X} ${control2Y}, ${target.x} ${target.y}`,
+    labelX: (source.x + target.x) / 2,
+    labelY: (source.y + target.y) / 2 - 8
+  };
+}
+
+function getAnchorPoint(nodeEl, otherNodeEl) {
+  const nodeX = parseFloat(nodeEl.style.left || "0");
+  const nodeY = parseFloat(nodeEl.style.top || "0");
+  const nodeWidth = nodeEl.offsetWidth || GRAPH_NODE_WIDTH;
+  const nodeHeight = nodeEl.offsetHeight || GRAPH_NODE_MIN_HEIGHT;
+  const otherX = parseFloat(otherNodeEl.style.left || "0");
+  const otherY = parseFloat(otherNodeEl.style.top || "0");
+  const otherWidth = otherNodeEl.offsetWidth || GRAPH_NODE_WIDTH;
+  const otherHeight = otherNodeEl.offsetHeight || GRAPH_NODE_MIN_HEIGHT;
+  const nodeCenterX = nodeX + nodeWidth / 2;
+  const nodeCenterY = nodeY + nodeHeight / 2;
+  const otherCenterX = otherX + otherWidth / 2;
+  const otherCenterY = otherY + otherHeight / 2;
+  const dx = otherCenterX - nodeCenterX;
+  const dy = otherCenterY - nodeCenterY;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return {
+      x: nodeX + (dx >= 0 ? nodeWidth : 0),
+      y: nodeCenterY
+    };
+  }
+
+  return {
+    x: nodeCenterX,
+    y: nodeY + (dy >= 0 ? nodeHeight : 0)
+  };
+}
+
+function resolveDraggedNodePosition(nextX, nextY, activeNode) {
+  const candidate = {
+    x: Math.max(24, Math.round(nextX)),
+    y: Math.max(24, Math.round(nextY))
+  };
+  const otherNodes = [...document.querySelectorAll(".graph-node")]
+    .filter((node) => node !== activeNode)
+    .map((node) => ({
+      x: parseFloat(node.style.left || "0"),
+      y: parseFloat(node.style.top || "0"),
+      width: node.offsetWidth || GRAPH_NODE_WIDTH,
+      height: node.offsetHeight || GRAPH_NODE_MIN_HEIGHT
+    }))
+    .sort((left, right) => left.y - right.y || left.x - right.x);
+
+  let attempts = 0;
+  while (attempts <= otherNodes.length * 4) {
+    const overlap = otherNodes.find((node) => draggedNodeOverlaps(candidate, node));
+    if (!overlap) {
+      return candidate;
+    }
+
+    candidate.y = Math.round(overlap.y + overlap.height + GRAPH_NODE_GAP_Y);
+    attempts += 1;
+  }
+
+  return candidate;
+}
+
+function draggedNodeOverlaps(candidate, otherNode) {
+  return !(
+    candidate.x + GRAPH_NODE_WIDTH + GRAPH_NODE_GAP_X <= otherNode.x ||
+    otherNode.x + otherNode.width + GRAPH_NODE_GAP_X <= candidate.x ||
+    candidate.y + GRAPH_NODE_MIN_HEIGHT + GRAPH_NODE_GAP_Y <= otherNode.y ||
+    otherNode.y + otherNode.height + GRAPH_NODE_GAP_Y <= candidate.y
+  );
 }
 
 async function handleTableActions(action, target, id, entityType) {
