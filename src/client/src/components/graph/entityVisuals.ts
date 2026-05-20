@@ -6,6 +6,7 @@ import {
   Code2,
   Monitor,
   User,
+  UserRoundCheck,
   Shield,
   Network,
   Search,
@@ -21,6 +22,7 @@ export const ENTITY_ICON_MAP: Record<string, React.ComponentType<{ className?: s
   indicator: Network,
   system: Monitor,
   account: User,
+  user: UserRoundCheck,
   mitre_technique: Shield,
   mitre_tactic: Shield,
 };

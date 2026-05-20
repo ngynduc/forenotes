@@ -2,9 +2,13 @@ import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
 import { RelationshipGraph } from "@/components/graph/RelationshipGraph";
 import { GraphToolbar } from "@/components/graph/GraphToolbar";
+import { MitreMatrix } from "@/components/mitre/MitreMatrix";
+import { cn } from "@/lib/utils";
 
 export default function GraphPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
+  const graphView = useUIStore((s) => s.graphView);
+  const setGraphView = useUIStore((s) => s.setGraphView);
 
   if (!incidentId) {
     return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view graph.</p>;
@@ -15,10 +19,42 @@ export default function GraphPage() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Relationship Graph</h2>
       </div>
-      <div className="mb-3">
-        <GraphToolbar />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setGraphView("relationship")}
+          className={cn(
+            "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium transition-colors",
+            graphView === "relationship"
+              ? "bg-[var(--color-primary)] text-white"
+              : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+          )}
+        >
+          Relationship Graph
+        </button>
+        <button
+          type="button"
+          onClick={() => setGraphView("mitre")}
+          className={cn(
+            "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium transition-colors",
+            graphView === "mitre"
+              ? "bg-[var(--color-primary)] text-white"
+              : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+          )}
+        >
+          MITRE Matrix
+        </button>
       </div>
-      <RelationshipGraph />
+      {graphView === "relationship" ? (
+        <>
+          <div className="mb-3">
+            <GraphToolbar />
+          </div>
+          <RelationshipGraph />
+        </>
+      ) : (
+        <MitreMatrix />
+      )}
     </div>
   );
 }

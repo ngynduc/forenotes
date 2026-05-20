@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
@@ -20,8 +20,9 @@ const CASE_TABS = [
 type CaseTabKey = (typeof CASE_TABS)[number]["key"];
 
 export default function CasesPage() {
-  const { selectedCaseId, selectedIncidentId, selectCase } = useScopeStore();
+  const { selectedCaseId, selectedIncidentId, selectCase, selectIncident } = useScopeStore();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading } = useCases();
   const incidentsQuery = useIncidents();
   const membersQuery = useCaseMembers(selectedCaseId || undefined);
@@ -35,6 +36,61 @@ export default function CasesPage() {
   const incidents = (incidentsQuery.data?.incidents ?? []) as unknown as Record<string, unknown>[];
   const members = (membersQuery.data?.members ?? []) as unknown as Record<string, unknown>[];
   const selectedCase = cases.find((entry) => String(entry.id ?? "") === selectedCaseId) ?? null;
+  const caseTargetId = searchParams.get("caseId");
+  const incidentTargetId = searchParams.get("incidentId");
+  const openedCaseIdRef = useRef<string | null>(null);
+  const openedIncidentIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!caseTargetId) {
+      openedCaseIdRef.current = null;
+      return;
+    }
+    if (isLoading || openedCaseIdRef.current === caseTargetId) {
+      return;
+    }
+
+    const targetCase = cases.find((entry) => String(entry.id ?? "") === caseTargetId);
+    if (!targetCase) {
+      return;
+    }
+
+    openedCaseIdRef.current = caseTargetId;
+    selectCase(caseTargetId);
+    setEditCaseItem(targetCase);
+    setCaseModalOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("caseId");
+    setSearchParams(nextParams, { replace: true });
+  }, [caseTargetId, cases, isLoading, searchParams, selectCase, setSearchParams]);
+
+  useEffect(() => {
+    if (!incidentTargetId) {
+      openedIncidentIdRef.current = null;
+      return;
+    }
+    if (incidentsQuery.isLoading || openedIncidentIdRef.current === incidentTargetId) {
+      return;
+    }
+
+    const targetIncident = incidents.find((entry) => String(entry.id ?? "") === incidentTargetId);
+    if (!targetIncident) {
+      return;
+    }
+
+    openedIncidentIdRef.current = incidentTargetId;
+    const targetCaseId = String(targetIncident.caseId ?? "");
+    if (targetCaseId) {
+      selectCase(targetCaseId);
+    }
+    selectIncident(incidentTargetId);
+    setActiveTab("incidents");
+    setEditIncidentItem(targetIncident);
+    setIncidentModalOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("incidentId");
+    setSearchParams(nextParams, { replace: true });
+  }, [incidentTargetId, incidents, incidentsQuery.isLoading, searchParams, selectCase, selectIncident, setSearchParams]);
 
   function openIncidentCreate(caseId: string) {
     selectCase(caseId);
@@ -174,7 +230,7 @@ export default function CasesPage() {
                     data={incidents}
                     emptyLabel={incidentTableDef.emptyLabel}
                     onRowClick={(row) => {
-                      useScopeStore.getState().selectIncident(String(row.id ?? ""));
+                      selectIncident(String(row.id ?? ""));
                       navigate("/findings");
                     }}
                     selectedRowId={selectedIncidentId || null}
@@ -187,7 +243,7 @@ export default function CasesPage() {
                             size="sm"
                             variant={isSelected ? "secondary" : "default"}
                             onClick={() => {
-                              useScopeStore.getState().selectIncident(incidentId);
+                              selectIncident(incidentId);
                               navigate("/findings");
                             }}
                             disabled={isSelected}
@@ -290,7 +346,7 @@ export default function CasesPage() {
           if (!incidentId) {
             return;
           }
-          useScopeStore.getState().selectIncident(incidentId);
+          selectIncident(incidentId);
           setActiveTab("incidents");
           navigate("/findings");
         }}

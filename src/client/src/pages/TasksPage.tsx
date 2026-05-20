@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
@@ -9,6 +10,7 @@ import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
+import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
 
 const tableDef = TABLE_DEFINITIONS.tasks;
 
@@ -19,11 +21,36 @@ export default function TasksPage() {
   const { data, isLoading } = useTasks();
   const { data: membersData } = useIncidentMembers(incidentId);
   const updateTask = useUpdateTask();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
-  const tasks = data?.tasks ?? [];
-  const memberNames = Object.fromEntries((membersData?.members ?? []).map((member) => [member.userId, member.displayName]));
+  const memberNames = buildMemberNameMap(membersData?.members);
+  const tasks = withMemberDisplayNames(data?.tasks ?? [], memberNames);
+  const itemId = searchParams.get("itemId");
+  const openedItemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!itemId) {
+      openedItemIdRef.current = null;
+      return;
+    }
+    if (isLoading || openedItemIdRef.current === itemId) {
+      return;
+    }
+
+    const item = tasks.find((row) => String(row.id ?? "") === itemId);
+    if (!item) {
+      return;
+    }
+
+    openedItemIdRef.current = itemId;
+    setEditItem(item as unknown as Record<string, unknown>);
+    setModalOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("itemId");
+    setSearchParams(nextParams, { replace: true });
+  }, [isLoading, itemId, searchParams, setSearchParams, tasks]);
 
   if (!incidentId) {
     return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view tasks.</p>;

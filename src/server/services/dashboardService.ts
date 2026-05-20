@@ -29,6 +29,7 @@ type IncidentRow = TimestampedRow & {
 
 type FindingRow = TimestampedRow & {
   id: string;
+  case_id: string;
   incident_id: string;
   title: string;
   status: string;
@@ -37,6 +38,7 @@ type FindingRow = TimestampedRow & {
 
 type TaskRow = TimestampedRow & {
   id: string;
+  case_id: string;
   incident_id: string;
   title: string;
   status: string;
@@ -46,6 +48,7 @@ type TaskRow = TimestampedRow & {
 
 type TimelineRow = TimestampedRow & {
   id: string;
+  case_id: string;
   incident_id: string;
   title: string;
   event_time: string;
@@ -147,8 +150,9 @@ async function listVisibleIncidents(database: Database, userId: string) {
 async function listVisibleFindings(database: Database, userId: string) {
   const result = await database.query<FindingRow>(
     `
-      select f.id, f.incident_id, f.title, f.status, f.severity, f.created_at, f.updated_at
+      select f.id, i.case_id, f.incident_id, f.title, f.status, f.severity, f.created_at, f.updated_at
       from findings f
+      inner join incidents i on i.id = f.incident_id
       inner join incident_members im on im.incident_id = f.incident_id
       where im.user_id = $1
       order by f.updated_at desc
@@ -161,8 +165,9 @@ async function listVisibleFindings(database: Database, userId: string) {
 async function listVisibleTasks(database: Database, userId: string) {
   const result = await database.query<TaskRow>(
     `
-      select t.id, t.incident_id, t.title, t.status, t.priority, t.due_at, t.created_at, t.updated_at
+      select t.id, i.case_id, t.incident_id, t.title, t.status, t.priority, t.due_at, t.created_at, t.updated_at
       from tasks t
+      inner join incidents i on i.id = t.incident_id
       inner join incident_members im on im.incident_id = t.incident_id
       where im.user_id = $1
       order by t.updated_at desc
@@ -175,8 +180,9 @@ async function listVisibleTasks(database: Database, userId: string) {
 async function listVisibleTimelineEvents(database: Database, userId: string) {
   const result = await database.query<TimelineRow>(
     `
-      select te.id, te.incident_id, te.title, te.event_time, te.source, te.created_at, te.updated_at
+      select te.id, i.case_id, te.incident_id, te.title, te.event_time, te.source, te.created_at, te.updated_at
       from timeline_events te
+      inner join incidents i on i.id = te.incident_id
       inner join incident_members im on im.incident_id = te.incident_id
       where im.user_id = $1
       order by te.event_time desc
@@ -274,6 +280,7 @@ function buildRecentActivity(input: {
     ...input.cases.map((entry) => ({
       id: entry.id,
       kind: "case",
+      caseId: entry.id,
       title: entry.case_name,
       detail: entry.client_name || entry.status,
       timestamp: entry.updated_at || entry.created_at || null
@@ -281,6 +288,8 @@ function buildRecentActivity(input: {
     ...input.incidents.map((entry) => ({
       id: entry.id,
       kind: "incident",
+      caseId: entry.case_id,
+      incidentId: entry.id,
       title: entry.name,
       detail: [entry.severity, entry.status].filter(Boolean).join(" / "),
       timestamp: entry.updated_at || entry.created_at || null
@@ -288,6 +297,8 @@ function buildRecentActivity(input: {
     ...input.findings.map((entry) => ({
       id: entry.id,
       kind: "finding",
+      caseId: entry.case_id,
+      incidentId: entry.incident_id,
       title: entry.title,
       detail: [entry.severity, entry.status].filter(Boolean).join(" / "),
       timestamp: entry.updated_at || entry.created_at || null
@@ -295,6 +306,8 @@ function buildRecentActivity(input: {
     ...input.tasks.map((entry) => ({
       id: entry.id,
       kind: "task",
+      caseId: entry.case_id,
+      incidentId: entry.incident_id,
       title: entry.title,
       detail: [entry.priority, entry.status].filter(Boolean).join(" / "),
       timestamp: entry.updated_at || entry.created_at || null
@@ -302,6 +315,8 @@ function buildRecentActivity(input: {
     ...input.timelineEvents.map((entry) => ({
       id: entry.id,
       kind: "timeline",
+      caseId: entry.case_id,
+      incidentId: entry.incident_id,
       title: entry.title,
       detail: entry.source || "timeline event",
       timestamp: entry.event_time || entry.created_at || null

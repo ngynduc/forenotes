@@ -25,6 +25,11 @@ export function MitreMatrix() {
   return (
     <div>
       <MatrixToolbar />
+      {tactics.length === 0 || techniques.length === 0 ? (
+        <div className="mt-3 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text-muted)]">
+          No MITRE ATT&CK mappings yet. Attach ATT&CK tags to findings, timeline events, or queries to populate the matrix.
+        </div>
+      ) : null}
       <div className="mt-3 flex gap-2 overflow-x-auto pb-4">
         {tactics
           .sort((a, b) => a.order - b.order)

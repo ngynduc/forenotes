@@ -30,6 +30,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const itemId = item?.id;
   const setFlash = useUIStore((s) => s.setFlash);
   const selectedIncidentId = useScopeStore((s) => s.selectedIncidentId);
   const qc = useQueryClient();
@@ -50,7 +51,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
       setForm(definition.values(item));
       setError(null);
     }
-  }, [open, definition, item]);
+  }, [open, definition.collection, itemId]);
 
   useEffect(() => {
     if (!open || mode !== "create" || definition.collection !== "tasks") {
@@ -68,7 +69,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
       }
       return { ...prev, ownerUserId: activeUserId };
     });
-  }, [open, mode, definition]);
+  }, [open, mode, definition.collection]);
 
   function updateField(name: string, value: unknown) {
     setForm((prev) => ({ ...prev, [name]: value }));

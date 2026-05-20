@@ -74,6 +74,10 @@ function textMatches(node: IncidentGraphNode, q: string) {
   return haystacks.some((value) => value?.toLowerCase().includes(q));
 }
 
+function getUserDisplayName(user: { id?: string; display_name?: string | null; email?: string | null } | undefined) {
+  return user?.display_name ?? user?.email ?? user?.id ?? undefined;
+}
+
 function applyDepthFilter(nodes: IncidentGraphNode[], edges: IncidentGraphEdge[], q: string | undefined, depth: GraphQueryInput["depth"]) {
   if (!q || !depth || depth === "all") {
     return { nodes, edges };
@@ -283,7 +287,7 @@ export async function buildIncidentGraph(
       subtitle: row.description ?? undefined,
       status: row.status,
       severity: row.severity ?? undefined,
-      owner: row.owner_user_id ?? undefined,
+      owner: getUserDisplayName(userById.get(row.owner_user_id)),
       metadata: {
         createdAt: row.created_at ?? undefined,
         updatedAt: row.updated_at ?? undefined
@@ -309,7 +313,7 @@ export async function buildIncidentGraph(
       entityId: row.id,
       label: row.title,
       subtitle: row.source ?? undefined,
-      owner: row.owner_user_id ?? undefined,
+      owner: getUserDisplayName(userById.get(row.owner_user_id)),
       metadata: {
         eventTime: row.event_time,
         createdAt: row.created_at ?? undefined,
@@ -399,7 +403,7 @@ export async function buildIncidentGraph(
       subtitle: row.description ?? undefined,
       status: row.status,
       severity: row.priority ?? undefined,
-      owner: row.assignee_user_id ?? row.owner_user_id ?? undefined
+      owner: getUserDisplayName(userById.get(row.assignee_user_id ?? row.owner_user_id)),
     });
 
     if (row.assignee_user_id && userById.has(row.assignee_user_id)) {
@@ -421,7 +425,7 @@ export async function buildIncidentGraph(
       entityId: row.id,
       label: row.name,
       subtitle: row.language,
-      owner: row.owner_user_id ?? undefined
+      owner: getUserDisplayName(userById.get(row.owner_user_id))
     });
   }
 

@@ -213,9 +213,25 @@ export function useAttackTags() {
 
 // Notifications
 export function useNotifications() {
+  const activeUserId = useScopeStore((s) => s.activeUserId);
   return useQuery({
-    queryKey: ["notifications"],
+    queryKey: ["notifications", activeUserId],
     queryFn: () => api.listNotifications(),
+    enabled: !!activeUserId,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+  });
+}
+
+export function useMarkNotificationRead() {
+  const activeUserId = useScopeStore((s) => s.activeUserId);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: string) => api.markNotificationRead(notificationId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications", activeUserId] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 

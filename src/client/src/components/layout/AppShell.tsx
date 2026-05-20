@@ -1,6 +1,7 @@
-import { Outlet, NavLink, useLocation } from "react-router";
+import { Outlet, NavLink } from "react-router";
 import { useUIStore } from "@/stores/ui-store";
 import { useScopeStore } from "@/stores/scope-store";
+import { useNotifications } from "@/hooks/use-entities";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -39,7 +40,9 @@ export function AppShell() {
   const expanded = useUIStore((s) => s.sidebarExpanded);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const flash = useUIStore((s) => s.flash);
-  const location = useLocation();
+  const { data: notificationsData } = useNotifications();
+  const unreadNotifications = notificationsData?.notifications.filter((notification) => notification.unseen).length ?? 0;
+  const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
@@ -74,8 +77,20 @@ export function AppShell() {
                 )
               }
             >
-              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="relative inline-flex shrink-0">
+                <item.icon className="h-4 w-4" />
+                {!expanded && item.to === "/notifications" && unreadNotifications > 0 && (
+                  <span className="absolute -right-2 -top-2 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-white">
+                    {unreadLabel}
+                  </span>
+                )}
+              </span>
               {expanded && <span>{item.label}</span>}
+              {expanded && item.to === "/notifications" && unreadNotifications > 0 && (
+                <span className="ml-auto rounded bg-[var(--color-danger)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {unreadLabel}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

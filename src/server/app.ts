@@ -10,8 +10,8 @@ import { createRoutes } from "./routes/index.js";
 export function createApp(database: Database = pool) {
   const app = express();
   app.use(express.json());
-  app.use(express.static(path.resolve("src/client/static")));
   app.use(express.static(path.resolve("dist/client")));
+  app.use(express.static(path.resolve("src/client/static")));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });

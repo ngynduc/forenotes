@@ -1,4 +1,4 @@
-export type GraphMode = "overview" | "timeline" | "mitre";
+export type GraphMode = "overview" | "investigation" | "timeline" | "assets" | "tasks" | "mitre";
 
 export type GraphNodeType =
   | "case"
@@ -7,16 +7,31 @@ export type GraphNodeType =
   | "timeline_event"
   | "task"
   | "query"
+  | "ioc"
   | "indicator"
   | "system"
   | "account"
   | "mitre_technique"
-  | "mitre_tactic";
+  | "mitre_tactic"
+  | "user"
+  | "tag";
 
 export type GraphEdgeType =
-  | "derived"
-  | "manual"
-  | "mitre";
+  | "related_to"
+  | "evidence_for"
+  | "caused_by"
+  | "followed_by"
+  | "investigates"
+  | "references"
+  | "observed_on"
+  | "used_account"
+  | "contains_ioc"
+  | "maps_to"
+  | "belongs_to_tactic"
+  | "subtechnique_of"
+  | "detects"
+  | "assigned_to"
+  | "has_tag";
 
 export interface GraphNode {
   id: string;
@@ -142,6 +157,8 @@ export interface DashboardActivity {
 export interface DashboardRecentActivity {
   id: string;
   kind: "case" | "incident" | "finding" | "task" | "timeline";
+  caseId?: string;
+  incidentId?: string;
   title: string;
   detail: string;
   timestamp: string | null;

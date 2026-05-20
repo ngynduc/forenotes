@@ -3,19 +3,23 @@ import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
 import { useQueries } from "@/hooks/use-entities";
+import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
+import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
 
 const tableDef = TABLE_DEFINITIONS.queries;
 
 export default function QueriesPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
   const { data, isLoading } = useQueries();
+  const { data: membersData } = useIncidentMembers(incidentId);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
-  const queries = (data?.queries ?? []) as unknown as Record<string, unknown>[];
+  const memberNames = buildMemberNameMap(membersData?.members);
+  const queries = withMemberDisplayNames((data?.queries ?? []) as unknown as Record<string, unknown>[], memberNames);
 
   if (!incidentId) {
     return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view queries.</p>;
