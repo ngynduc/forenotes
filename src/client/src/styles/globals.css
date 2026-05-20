@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f7f8f7;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f3f2;
+  --color-surface-subtle: #e8ecea;
+  --color-text: #17201d;
+  --color-text-muted: #66716d;
+  --color-text-soft: #87918d;
+  --color-border: #d9dfdc;
+  --color-border-strong: #b9c4bf;
+  --color-primary: #0f766e;
+  --color-primary-strong: #115e59;
+  --color-primary-soft: #e3f3f1;
+  --color-warning: #a16207;
+  --color-warning-soft: #fefce8;
+  --color-danger: #b42318;
+  --color-danger-soft: #fff1f0;
+  --color-success-soft: #edf8f1;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}

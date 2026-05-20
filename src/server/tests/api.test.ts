@@ -135,6 +135,117 @@ describe("Forenotes API", () => {
     expect(incidentResponse.body.incident.case_id).toBe(caseId);
   });
 
+  it("accepts normalized create payloads used by the React entity forms", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "React Case",
+        clientName: "Acme",
+        startDate: "2026-05-20T00:00:00.000Z",
+        endDate: "2026-05-21T00:00:00.000Z",
+        status: "open"
+      });
+
+    expect(caseResponse.status).toBe(201);
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "React Incident",
+        status: "open",
+        severity: "high"
+      });
+
+    expect(incidentResponse.status).toBe(201);
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "triage"
+      });
+
+    expect(customTagResponse.status).toBe(201);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Suspicious child process",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "PowerShell execution",
+        eventTime: "2026-05-20T10:15:00.000Z"
+      });
+
+    expect(timelineResponse.status).toBe(201);
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/indicators`)
+      .set("x-user-id", commanderId)
+      .send({
+        indicatorType: "ip",
+        value: "10.0.0.5",
+        firstSeenAt: "2026-05-20T10:15:00.000Z",
+        lastSeenAt: "2026-05-20T11:15:00.000Z"
+      });
+
+    expect(indicatorResponse.status).toBe(201);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Collect triage artifacts",
+        status: "todo",
+        priority: "medium",
+        ownerUserId: commanderId,
+        dueAt: "2026-05-21T09:00:00.000Z"
+      });
+
+    expect(taskResponse.status).toBe(201);
+
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Process hunt",
+        language: "spl",
+        queryBody: "index=main powershell.exe"
+      });
+
+    expect(queryResponse.status).toBe(201);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", commanderId)
+      .send({
+        hostname: "host-01"
+      });
+
+    expect(systemResponse.status).toBe(201);
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", commanderId)
+      .send({
+        username: "svc-admin"
+      });
+
+    expect(accountResponse.status).toBe(201);
+  });
+
   it("rejects unauthorized case creation with an explicit permission error", async () => {
     const response = await request(app)
       .post("/api/cases")
