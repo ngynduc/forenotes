@@ -24,9 +24,10 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Local Codex/OpenSpec workspace files
+# Local Codex/OpenSpec/Claude workspace files
 .codex/
 openspec/
+.claude/
 
 # Test and coverage output
 coverage/
