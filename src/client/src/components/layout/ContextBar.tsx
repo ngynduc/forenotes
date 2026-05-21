@@ -3,6 +3,7 @@ import { useCases } from "@/hooks/use-cases";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useUsers } from "@/hooks/use-entities";
 import { useTimezone } from "@/providers/TimezoneProvider";
+import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 
 export function ContextBar() {
   const { selectedCaseId, selectedIncidentId, selectCase, selectIncident, activeUserId, setActiveUser } =
@@ -71,17 +72,12 @@ export function ContextBar() {
       <span className="text-[var(--color-border)]">|</span>
 
       <ContextField label="Timezone">
-        <select
+        <TimezonePicker
           value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
-          className="min-w-44 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
-        >
-          {timezoneOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+          onChange={setTimezone}
+          options={timezoneOptions}
+          className="min-w-64"
+        />
       </ContextField>
     </div>
   );

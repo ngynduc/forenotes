@@ -9,10 +9,11 @@ interface KanbanColumnProps {
   tasks: TaskItem[];
   memberNames: Record<string, string>;
   onTaskClick: (task: TaskItem) => void;
+  onOpenNotes: (task: TaskItem) => void;
   onStatusChange: (taskId: string, newStatus: string) => void;
 }
 
-export function KanbanColumn({ label, status, tasks, memberNames, onTaskClick, onStatusChange }: KanbanColumnProps) {
+export function KanbanColumn({ label, status, tasks, memberNames, onTaskClick, onOpenNotes, onStatusChange }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent) {
@@ -49,7 +50,13 @@ export function KanbanColumn({ label, status, tasks, memberNames, onTaskClick, o
       </div>
       <div className="flex flex-col gap-2 p-2">
         {tasks.map((task) => (
-          <KanbanCard key={task.id} task={task} memberNames={memberNames} onClick={() => onTaskClick(task)} />
+          <KanbanCard
+            key={task.id}
+            task={task}
+            memberNames={memberNames}
+            onClick={() => onTaskClick(task)}
+            onOpenNotes={() => onOpenNotes(task)}
+          />
         ))}
         {tasks.length === 0 && (
           <p className="py-4 text-center text-xs text-[var(--color-text-soft)]">No tasks</p>

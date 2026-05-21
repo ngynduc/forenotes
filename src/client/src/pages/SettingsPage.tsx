@@ -2,6 +2,7 @@ import { useScopeStore } from "@/stores/scope-store";
 import { useUsers } from "@/hooks/use-entities";
 import { Select } from "@/components/ui/Select";
 import { useTimezone } from "@/providers/TimezoneProvider";
+import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 
 export default function SettingsPage() {
   const { activeUserId, setActiveUser } = useScopeStore();
@@ -29,13 +30,7 @@ export default function SettingsPage() {
 
         <div>
           <label className="mb-1 block text-sm font-medium">Timezone</label>
-          <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-            {timezoneOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </Select>
+          <TimezonePicker value={timezone} onChange={setTimezone} options={timezoneOptions} />
         </div>
       </div>
     </div>

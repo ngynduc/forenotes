@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, raw } from "express";
 import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
 import { getAuthenticatedUser } from "../services/authService.js";
@@ -7,6 +7,7 @@ import { createTimelineEvent, deleteTimelineEvent, listTimelineEvents, updateTim
 import { createIndicator, deleteIndicator, listIndicators, updateIndicator } from "../services/indicatorService.js";
 import { createEvidenceLink, deleteEvidenceLink, listEvidenceLinks } from "../services/evidenceLinkService.js";
 import { createTask, createTaskLink, deleteTask, listTasks, updateTask } from "../services/taskService.js";
+import { NOTE_IMAGE_CONTENT_TYPES, readTaskNote, uploadTaskNoteImage, writeTaskNote } from "../services/noteService.js";
 import { createQuery, deleteQuery, listQueries, updateQuery } from "../services/queryService.js";
 import { addIncidentMember, listIncidentMembers, removeIncidentMember } from "../services/membershipService.js";
 import { createSystem, deleteSystem, listSystems, updateSystem } from "../services/systemService.js";
@@ -29,6 +30,7 @@ import {
   createTaskLinkSchema,
   createTaskSchema,
   createTimelineEventSchema,
+  taskNoteSchema,
   timeRangeQuerySchema,
   updateAccountSchema,
   updateFindingSchema,
@@ -389,6 +391,47 @@ export function createIncidentRoutes(database: Database) {
       const payload = createTaskLinkSchema.parse(request.body);
       const taskLink = await createTaskLink(database, user, { incidentId, taskId, ...payload });
       response.status(201).json({ taskLink });
+    })
+  );
+
+  router.get(
+    "/:incidentId/tasks/:taskId/notes",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const taskId = getRequiredParam(request.params.taskId, "taskId");
+      response.json(await readTaskNote(database, user, incidentId, taskId));
+    })
+  );
+
+  router.put(
+    "/:incidentId/tasks/:taskId/notes",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const taskId = getRequiredParam(request.params.taskId, "taskId");
+      const payload = taskNoteSchema.parse(request.body);
+      response.json(await writeTaskNote(database, user, incidentId, taskId, payload.content));
+    })
+  );
+
+  router.post(
+    "/:incidentId/tasks/:taskId/notes/images",
+    raw({ type: NOTE_IMAGE_CONTENT_TYPES, limit: "10mb" }),
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const taskId = getRequiredParam(request.params.taskId, "taskId");
+      const body = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+      const contentType = typeof request.headers["content-type"] === "string"
+        ? request.headers["content-type"].split(";")[0]
+        : "";
+      const uploaded = await uploadTaskNoteImage(database, user, incidentId, taskId, {
+        data: body,
+        contentType,
+        filename: typeof request.headers["x-filename"] === "string" ? request.headers["x-filename"] : undefined,
+      });
+      response.status(201).json(uploaded);
     })
   );
 
