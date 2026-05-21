@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/Badge";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatUtcTimestampForTitle } from "@/lib/timezone";
 import type { TaskItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +80,8 @@ export function KanbanCard({ task, memberNames, onClick }: KanbanCardProps) {
         )}
         {updatedAt && (
           <div>
-            <span className="font-medium text-[var(--color-text)]">Updated:</span> {formatDateTime(updatedAt)}
+            <span className="font-medium text-[var(--color-text)]">Updated:</span>{" "}
+            <span title={formatUtcTimestampForTitle(updatedAt)}>{formatDateTime(updatedAt)}</span>
           </div>
         )}
       </div>

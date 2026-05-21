@@ -2,6 +2,7 @@ import { useScopeStore } from "@/stores/scope-store";
 import { useCases } from "@/hooks/use-cases";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useUsers } from "@/hooks/use-entities";
+import { useTimezone } from "@/providers/TimezoneProvider";
 
 export function ContextBar() {
   const { selectedCaseId, selectedIncidentId, selectCase, selectIncident, activeUserId, setActiveUser } =
@@ -9,6 +10,7 @@ export function ContextBar() {
   const { data: casesData } = useCases();
   const { data: usersData } = useUsers();
   const { data: incidentsData } = useIncidents();
+  const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
 
   const users = usersData?.users ?? [];
   const cases = casesData?.cases ?? [];
@@ -51,19 +53,35 @@ export function ContextBar() {
       <span className="text-[var(--color-border)]">|</span>
 
       <ContextField label="Incident">
-          <select
-            value={selectedIncidentId}
-            onChange={(e) => selectIncident(e.target.value)}
-            disabled={!selectedCaseId}
-            className="min-w-36 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <option value="">Select Incident</option>
-            {incidents.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
+        <select
+          value={selectedIncidentId}
+          onChange={(e) => selectIncident(e.target.value)}
+          disabled={!selectedCaseId}
+          className="min-w-36 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <option value="">Select Incident</option>
+          {incidents.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      </ContextField>
+
+      <span className="text-[var(--color-border)]">|</span>
+
+      <ContextField label="Timezone">
+        <select
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+          className="min-w-44 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+        >
+          {timezoneOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </ContextField>
     </div>
   );

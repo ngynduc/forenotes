@@ -6,11 +6,12 @@ import { TimeFilterBar } from "@/components/filters/TimeFilterBar";
 import { Button } from "@/components/ui/Button";
 import { useFindings } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
+import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
-import { applyTimeFilter, createTimeFilterState } from "@/lib/timeFilters";
+import { createTimeFilterState, normalizeTimeFilterState, toTimeFilterRequest } from "@/lib/timeFilters";
 
 const tableDef = TABLE_DEFINITIONS.findings;
 const timeFieldOptions = [
@@ -20,18 +21,24 @@ const timeFieldOptions = [
 
 export default function FindingsPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
-  const { data, isLoading } = useFindings();
+  const { timezone } = useTimezone();
+  const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("updatedAt", timezone));
+  const appliedFilter = normalizeTimeFilterState(timeFilter, timezone);
+  const filterRequest = toTimeFilterRequest(appliedFilter);
+  const { data, isLoading } = useFindings(filterRequest);
   const { data: membersData } = useIncidentMembers(incidentId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
-  const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("updatedAt"));
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
   const memberNames = buildMemberNameMap(membersData?.members);
   const findings = withMemberDisplayNames((data?.findings ?? []) as unknown as Record<string, unknown>[], memberNames);
-  const filteredFindings = applyTimeFilter(findings, timeFilter);
   const itemId = searchParams.get("itemId");
   const openedItemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setTimeFilter((current) => normalizeTimeFilterState(current, timezone));
+  }, [timezone]);
 
   useEffect(() => {
     if (!itemId) {
@@ -79,14 +86,14 @@ export default function FindingsPage() {
           <TimeFilterBar
             fieldOptions={timeFieldOptions}
             totalCount={findings.length}
-            filteredCount={filteredFindings.length}
+            filteredCount={findings.length}
             layout="compact"
-            value={timeFilter}
+            value={appliedFilter}
             onChange={setTimeFilter}
           />
           <DataTable
             columns={tableDef.columns}
-            data={filteredFindings}
+            data={findings}
             emptyLabel={tableDef.emptyLabel}
             onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
           />

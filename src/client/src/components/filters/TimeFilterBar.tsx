@@ -110,7 +110,7 @@ export function TimeFilterBar({
   }
 
   function clearFilter() {
-    const cleared = createTimeFilterState(draft.field);
+    const cleared = createTimeFilterState(draft.field, draft.timezone || value.timezone || "UTC");
     setDraft(cleared);
   }
 

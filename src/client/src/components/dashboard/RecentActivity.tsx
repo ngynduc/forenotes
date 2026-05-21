@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router";
 import { formatDateTime } from "@/lib/utils";
+import { formatUtcTimestampForTitle } from "@/lib/timezone";
 import { useScopeStore } from "@/stores/scope-store";
 import type { DashboardRecentActivity } from "@shared/graph-types";
 
@@ -61,7 +62,10 @@ export function RecentActivity({ items }: RecentActivityProps) {
                 <p className="truncate text-sm">{item.title}</p>
                 <p className="truncate text-xs text-[var(--color-text-muted)]">{item.detail}</p>
               </div>
-              <span className="shrink-0 text-xs text-[var(--color-text-soft)]">
+              <span
+                className="shrink-0 text-xs text-[var(--color-text-soft)]"
+                title={formatUtcTimestampForTitle(item.timestamp)}
+              >
                 {item.timestamp ? formatDateTime(item.timestamp) : ""}
               </span>
             </button>

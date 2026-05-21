@@ -1,3 +1,12 @@
+import { DateTime } from "luxon";
+import {
+  DEFAULT_TIMEZONE,
+  getCurrentTimezone,
+  localDateRangeToUtcRange,
+  normalizeTimezone,
+  utcMillis,
+} from "@/lib/timezone";
+
 export type TimeFilterMode = "preset" | "relative" | "date" | "datetime" | "advanced";
 export type TimeFilterSection = "presets" | "relative" | "date" | "datetime" | "advanced";
 export type TimeFilterOperator = "between" | "before" | "after";
@@ -12,6 +21,12 @@ export interface SearchTimeRange {
   earliest: string;
   latest: string;
   timezone?: string;
+}
+
+export interface TimeFilterRequest {
+  field: string;
+  start?: string;
+  end?: string;
 }
 
 export interface TimeFilterPreset {
@@ -55,8 +70,7 @@ const DEFAULT_RELATIVE_VALUE = "24";
 const DEFAULT_START_TIME = "00:00:00.000";
 const DEFAULT_END_TIME = "23:59:59.999";
 
-export function createTimeFilterState(defaultField: string): TimeFilterState {
-  const timezone = getLocalTimezone();
+export function createTimeFilterState(defaultField: string, timezone: string = getCurrentTimezone()): TimeFilterState {
   return {
     field: defaultField,
     mode: "preset",
@@ -73,15 +87,12 @@ export function createTimeFilterState(defaultField: string): TimeFilterState {
     advancedLatest: "now",
     earliest: "",
     latest: "",
-    timezone,
+    timezone: normalizeTimezone(timezone),
     displayValue: "All time",
   };
 }
 
-export function applyTimeFilter<T extends Record<string, unknown>>(
-  rows: T[],
-  filter: TimeFilterState
-): T[] {
+export function applyTimeFilter<T extends Record<string, unknown>>(rows: T[], filter: TimeFilterState): T[] {
   const bounds = resolveTimeFilterBounds(filter);
   if (bounds == null) {
     return rows;
@@ -127,11 +138,14 @@ export function validateTimeFilterState(filter: TimeFilterState): string | null 
   }
 }
 
-export function normalizeTimeFilterState(filter: TimeFilterState): TimeFilterState {
-  const timezone = filter.timezone || getLocalTimezone();
+export function normalizeTimeFilterState(
+  filter: TimeFilterState,
+  timezone: string = filter.timezone || getCurrentTimezone()
+): TimeFilterState {
+  const normalizedTimezone = normalizeTimezone(timezone);
   const baseState: TimeFilterState = {
     ...filter,
-    timezone,
+    timezone: normalizedTimezone,
   };
 
   switch (filter.mode) {
@@ -157,29 +171,44 @@ export function normalizeTimeFilterState(filter: TimeFilterState): TimeFilterSta
       };
     }
     case "date": {
-      const startDate = filter.startDate;
-      const endDate = filter.endDate;
-      const earliest = filter.operator !== "before" && startDate ? dateOnlyToIso(startDate, "start") : "";
-      const latest = filter.operator !== "after" && endDate ? dateOnlyToIso(endDate, "end") : filter.operator === "after" ? "now" : "";
+      const isBetween = filter.operator === "between";
+      const isBefore = filter.operator === "before";
+      const range = isBetween ? localDateRangeToUtcRange(filter.startDate, filter.endDate, normalizedTimezone) : null;
+      const earliest = !isBefore && filter.startDate ? dateOnlyToIso(filter.startDate, "start", normalizedTimezone) : "";
+      const latest = filter.operator === "after"
+        ? "now"
+        : filter.endDate
+          ? dateOnlyToIso(filter.endDate, "end", normalizedTimezone)
+          : "";
       return {
         ...baseState,
-        earliest,
-        latest,
-        displayValue: buildDateSummary(filter.operator, startDate, endDate),
+        earliest: isBetween ? range?.start ?? earliest : earliest,
+        latest: isBetween ? range?.end ?? latest : latest,
+        displayValue: buildDateSummary(filter.operator, filter.startDate, filter.endDate, normalizedTimezone),
       };
     }
     case "datetime": {
-      const start = filter.operator !== "before"
-        ? dateTimePartsToIso(filter.startDate, filter.startTime || DEFAULT_START_TIME)
+      const isBefore = filter.operator === "before";
+      const start = !isBefore
+        ? dateTimePartsToIso(filter.startDate, filter.startTime || DEFAULT_START_TIME, normalizedTimezone)
         : "";
-      const end = filter.operator !== "after"
-        ? dateTimePartsToIso(filter.endDate, filter.endTime || DEFAULT_END_TIME)
-        : filter.operator === "after" ? "now" : "";
+      const end = filter.operator === "after"
+        ? "now"
+        : filter.endDate
+          ? dateTimePartsToIso(filter.endDate, filter.endTime || DEFAULT_END_TIME, normalizedTimezone)
+          : "";
       return {
         ...baseState,
         earliest: start,
         latest: end,
-        displayValue: buildDateTimeSummary(filter.operator, filter.startDate, filter.startTime, filter.endDate, filter.endTime),
+        displayValue: buildDateTimeSummary(
+          filter.operator,
+          filter.startDate,
+          filter.startTime,
+          filter.endDate,
+          filter.endTime,
+          normalizedTimezone
+        ),
       };
     }
     case "advanced":
@@ -198,6 +227,19 @@ export function formatAppliedTimeFilter(filter: TimeFilterState): string {
   return filter.displayValue || normalizeTimeFilterState(filter).displayValue;
 }
 
+export function toTimeFilterRequest(filter: TimeFilterState): TimeFilterRequest | null {
+  const normalized = normalizeTimeFilterState(filter);
+  if (!normalized.earliest && !normalized.latest) {
+    return null;
+  }
+
+  return {
+    field: normalized.field,
+    start: normalized.earliest || undefined,
+    end: normalized.latest || undefined,
+  };
+}
+
 interface NumericBounds {
   earliest: number | null;
   latest: number | null;
@@ -205,8 +247,9 @@ interface NumericBounds {
 
 function resolveTimeFilterBounds(filter: TimeFilterState): NumericBounds | null {
   const normalized = normalizeTimeFilterState(filter);
-  const earliest = parseTimeExpression(normalized.earliest);
-  const latest = parseTimeExpression(normalized.latest);
+  const timezone = normalized.timezone || DEFAULT_TIMEZONE;
+  const earliest = parseTimeExpression(normalized.earliest, timezone);
+  const latest = parseTimeExpression(normalized.latest, timezone);
 
   if (earliest == null && latest == null) {
     return null;
@@ -216,32 +259,33 @@ function resolveTimeFilterBounds(filter: TimeFilterState): NumericBounds | null 
 }
 
 function validateResolvedDates(filter: TimeFilterState, withTime: boolean): string | null {
+  const timezone = filter.timezone || getCurrentTimezone();
   if (filter.operator === "before") {
     const endValue = withTime
-      ? dateTimePartsToDate(filter.endDate, filter.endTime || DEFAULT_END_TIME)
-      : dateOnlyToDate(filter.endDate, "end");
+      ? dateTimePartsToDate(filter.endDate, filter.endTime || DEFAULT_END_TIME, timezone)
+      : dateOnlyToDate(filter.endDate, "end", timezone);
     return endValue ? null : `An end ${withTime ? "date and time" : "date"} is required.`;
   }
 
   if (filter.operator === "after") {
     const startValue = withTime
-      ? dateTimePartsToDate(filter.startDate, filter.startTime || DEFAULT_START_TIME)
-      : dateOnlyToDate(filter.startDate, "start");
+      ? dateTimePartsToDate(filter.startDate, filter.startTime || DEFAULT_START_TIME, timezone)
+      : dateOnlyToDate(filter.startDate, "start", timezone);
     return startValue ? null : `A start ${withTime ? "date and time" : "date"} is required.`;
   }
 
   const startValue = withTime
-    ? dateTimePartsToDate(filter.startDate, filter.startTime || DEFAULT_START_TIME)
-    : dateOnlyToDate(filter.startDate, "start");
+    ? dateTimePartsToDate(filter.startDate, filter.startTime || DEFAULT_START_TIME, timezone)
+    : dateOnlyToDate(filter.startDate, "start", timezone);
   const endValue = withTime
-    ? dateTimePartsToDate(filter.endDate, filter.endTime || DEFAULT_END_TIME)
-    : dateOnlyToDate(filter.endDate, "end");
+    ? dateTimePartsToDate(filter.endDate, filter.endTime || DEFAULT_END_TIME, timezone)
+    : dateOnlyToDate(filter.endDate, "end", timezone);
 
   if (!startValue || !endValue) {
     return `Both start and end ${withTime ? "date-times" : "dates"} are required.`;
   }
 
-  if (startValue.getTime() >= endValue.getTime()) {
+  if (startValue.toMillis() >= endValue.toMillis()) {
     return "Start time must be before end time.";
   }
 
@@ -249,10 +293,11 @@ function validateResolvedDates(filter: TimeFilterState, withTime: boolean): stri
 }
 
 function validateAdvancedRange(filter: TimeFilterState): string | null {
+  const timezone = filter.timezone || getCurrentTimezone();
   const earliest = filter.advancedEarliest.trim();
   const latest = filter.advancedLatest.trim();
-  const earliestValue = earliest ? parseTimeExpression(earliest) : null;
-  const latestValue = latest ? parseTimeExpression(latest) : null;
+  const earliestValue = earliest ? parseTimeExpression(earliest, timezone) : null;
+  const latestValue = latest ? parseTimeExpression(latest, timezone) : null;
 
   if (earliest && earliestValue == null) {
     return "Earliest must be a relative expression or a valid ISO/local date-time.";
@@ -269,15 +314,20 @@ function validateAdvancedRange(filter: TimeFilterState): string | null {
   return null;
 }
 
-function buildDateSummary(operator: TimeFilterOperator, startDate: string, endDate: string): string {
+function buildDateSummary(
+  operator: TimeFilterOperator,
+  startDate: string,
+  endDate: string,
+  timezone: string
+): string {
   switch (operator) {
     case "before":
-      return endDate ? `Before ${formatDateLabel(endDate)}` : "Date range";
+      return endDate ? `Before ${formatDateLabel(endDate, timezone)}` : "Date range";
     case "after":
-      return startDate ? `After ${formatDateLabel(startDate)}` : "Date range";
+      return startDate ? `After ${formatDateLabel(startDate, timezone)}` : "Date range";
     default:
       if (!startDate || !endDate) return "Date range";
-      return `${formatDateLabel(startDate)} -> ${formatDateLabel(endDate)}`;
+      return `${formatDateLabel(startDate, timezone)} -> ${formatDateLabel(endDate, timezone)}`;
   }
 }
 
@@ -286,16 +336,17 @@ function buildDateTimeSummary(
   startDate: string,
   startTime: string,
   endDate: string,
-  endTime: string
+  endTime: string,
+  timezone: string
 ): string {
   switch (operator) {
     case "before":
-      return endDate ? `Before ${formatDateTimeLabel(endDate, endTime || DEFAULT_END_TIME)}` : "Date & time range";
+      return endDate ? `Before ${formatDateTimeLabel(endDate, endTime || DEFAULT_END_TIME, timezone)}` : "Date & time range";
     case "after":
-      return startDate ? `After ${formatDateTimeLabel(startDate, startTime || DEFAULT_START_TIME)}` : "Date & time range";
+      return startDate ? `After ${formatDateTimeLabel(startDate, startTime || DEFAULT_START_TIME, timezone)}` : "Date & time range";
     default:
       if (!startDate || !endDate) return "Date & time range";
-      return `${formatDateTimeLabel(startDate, startTime || DEFAULT_START_TIME)} -> ${formatDateTimeLabel(endDate, endTime || DEFAULT_END_TIME)}`;
+      return `${formatDateTimeLabel(startDate, startTime || DEFAULT_START_TIME, timezone)} -> ${formatDateTimeLabel(endDate, endTime || DEFAULT_END_TIME, timezone)}`;
   }
 }
 
@@ -344,18 +395,19 @@ function formatRelativeUnitLabel(amount: number, unit: RelativeTimeUnit): string
   return amount === 1 ? unit.slice(0, -1) : unit;
 }
 
-function parseTimeExpression(value: string): number | null {
+function parseTimeExpression(value: string, timezone: string): number | null {
   const raw = value.trim();
   if (!raw) {
     return null;
   }
 
+  const zone = normalizeTimezone(timezone);
   if (raw === "now") {
-    return Date.now();
+    return DateTime.now().setZone(zone).toUTC().toMillis();
   }
 
   if (raw.startsWith("@")) {
-    return snapDate(Date.now(), raw.slice(1)).getTime();
+    return snapDate(DateTime.now().setZone(zone), raw.slice(1)).toUTC().toMillis();
   }
 
   const relativeMatch = raw.match(/^([+-]?\d+)(s|m|h|d|w|mon|y)(?:@([a-z]+))?$/i);
@@ -363,44 +415,44 @@ function parseTimeExpression(value: string): number | null {
     const amount = Number.parseInt(relativeMatch[1], 10);
     const unit = relativeMatch[2].toLowerCase();
     const snapUnit = relativeMatch[3]?.toLowerCase();
-    let date = new Date();
-    date = addDateOffset(date, amount, unit);
+    let date = addDateOffset(DateTime.now().setZone(zone), amount, unit);
     if (snapUnit) {
-      date = snapDate(date.getTime(), snapUnit);
+      date = snapDate(date, snapUnit);
     }
-    return date.getTime();
+    return date.toUTC().toMillis();
   }
 
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+  const utcParsed = DateTime.fromISO(raw, { zone: "utc" });
+  if (utcParsed.isValid) {
+    return utcParsed.toMillis();
+  }
+
+  const localParsed = DateTime.fromISO(raw, { zone });
+  return localParsed.isValid ? localParsed.toUTC().toMillis() : null;
 }
 
-function dateOnlyToIso(date: string, boundary: "start" | "end"): string {
-  return dateOnlyToDate(date, boundary)?.toISOString() ?? "";
+function dateOnlyToIso(date: string, boundary: "start" | "end", timezone: string): string {
+  return dateOnlyToDate(date, boundary, timezone)?.toUTC().toISO({ suppressMilliseconds: false }) ?? "";
 }
 
-function dateOnlyToDate(date: string, boundary: "start" | "end"): Date | null {
+function dateOnlyToDate(date: string, boundary: "start" | "end", timezone: string): DateTime | null {
   if (!date) {
     return null;
   }
 
-  const [year, month, day] = date.split("-").map((part) => Number.parseInt(part, 10));
-  if (!year || !month || !day) {
+  const parsed = DateTime.fromISO(date, { zone: normalizeTimezone(timezone) });
+  if (!parsed.isValid) {
     return null;
   }
 
-  if (boundary === "start") {
-    return new Date(year, month - 1, day, 0, 0, 0, 0);
-  }
-
-  return new Date(year, month - 1, day, 23, 59, 59, 999);
+  return boundary === "start" ? parsed.startOf("day") : parsed.endOf("day");
 }
 
-function dateTimePartsToIso(date: string, time: string): string {
-  return dateTimePartsToDate(date, time)?.toISOString() ?? "";
+function dateTimePartsToIso(date: string, time: string, timezone: string): string {
+  return dateTimePartsToDate(date, time, timezone)?.toUTC().toISO({ suppressMilliseconds: false }) ?? "";
 }
 
-function dateTimePartsToDate(date: string, time: string): Date | null {
+function dateTimePartsToDate(date: string, time: string, timezone: string): DateTime | null {
   if (!date) {
     return null;
   }
@@ -410,8 +462,8 @@ function dateTimePartsToDate(date: string, time: string): Date | null {
     return null;
   }
 
-  const parsed = new Date(`${date}T${normalizedTime}`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const parsed = DateTime.fromISO(`${date}T${normalizedTime}`, { zone: normalizeTimezone(timezone) });
+  return parsed.isValid ? parsed : null;
 }
 
 function normalizeTimeInput(value: string): string | null {
@@ -430,106 +482,52 @@ function normalizeTimeInput(value: string): string | null {
   return `${hour}:${minute}:${second}.${paddedMilliseconds}`;
 }
 
-function addDateOffset(base: Date, amount: number, unit: string): Date {
-  const next = new Date(base.getTime());
+function addDateOffset(base: DateTime, amount: number, unit: string): DateTime {
   switch (unit) {
     case "s":
-      next.setSeconds(next.getSeconds() + amount);
-      return next;
+      return base.plus({ seconds: amount });
     case "m":
-      next.setMinutes(next.getMinutes() + amount);
-      return next;
+      return base.plus({ minutes: amount });
     case "h":
-      next.setHours(next.getHours() + amount);
-      return next;
+      return base.plus({ hours: amount });
     case "d":
-      next.setDate(next.getDate() + amount);
-      return next;
+      return base.plus({ days: amount });
     case "w":
-      next.setDate(next.getDate() + amount * 7);
-      return next;
+      return base.plus({ weeks: amount });
     case "mon":
-      next.setMonth(next.getMonth() + amount);
-      return next;
+      return base.plus({ months: amount });
     case "y":
-      next.setFullYear(next.getFullYear() + amount);
-      return next;
+      return base.plus({ years: amount });
     default:
-      return next;
+      return base;
   }
 }
 
-function snapDate(timestamp: number, unit: string): Date {
-  const date = new Date(timestamp);
+function snapDate(date: DateTime, unit: string): DateTime {
   switch (unit) {
     case "d":
-      date.setHours(0, 0, 0, 0);
-      return date;
-    case "w": {
-      const day = date.getDay();
-      const diff = (day + 6) % 7;
-      date.setDate(date.getDate() - diff);
-      date.setHours(0, 0, 0, 0);
-      return date;
-    }
+      return date.startOf("day");
+    case "w":
+      return date.startOf("week");
     case "mon":
-      date.setDate(1);
-      date.setHours(0, 0, 0, 0);
-      return date;
+      return date.startOf("month");
     case "y":
-      date.setMonth(0, 1);
-      date.setHours(0, 0, 0, 0);
-      return date;
+      return date.startOf("year");
     default:
       return date;
   }
 }
 
 function getTimestamp(value: unknown): number | null {
-  if (typeof value !== "string" || !value) {
-    return null;
-  }
-
-  const timestamp = new Date(value).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
+  return typeof value === "string" ? utcMillis(value) : null;
 }
 
-function formatDateLabel(value: string): string {
-  const parsed = dateOnlyToDate(value, "start");
-  if (!parsed) {
-    return value;
-  }
-
-  return parsed.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function formatDateLabel(value: string, timezone: string): string {
+  const parsed = dateOnlyToDate(value, "start", timezone);
+  return parsed?.toFormat("LLL d, yyyy") ?? value;
 }
 
-function formatDateTimeLabel(date: string, time: string): string {
-  const parsed = dateTimePartsToDate(date, time);
-  if (!parsed) {
-    return `${date} ${time}`.trim();
-  }
-
-  const milliseconds = parsed.getMilliseconds().toString().padStart(3, "0");
-  return `${parsed.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })} ${parsed.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  })}.${milliseconds}`;
-}
-
-function getLocalTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
+function formatDateTimeLabel(date: string, time: string, timezone: string): string {
+  const parsed = dateTimePartsToDate(date, time, timezone);
+  return parsed?.toFormat("LLL d, yyyy HH:mm:ss.SSS") ?? `${date} ${time}`.trim();
 }

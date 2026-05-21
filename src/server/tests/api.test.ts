@@ -246,6 +246,107 @@ describe("Forenotes API", () => {
     expect(accountResponse.status).toBe(201);
   });
 
+  it("filters timeline events by UTC ISO ranges without changing stored timestamps", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Filter Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Filter Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Before local day",
+        eventTime: "2026-05-20T16:59:59.999Z"
+      });
+
+    const matchingEventResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Inside local day",
+        eventTime: "2026-05-20T17:00:00.000Z"
+      });
+    const matchingEventId = matchingEventResponse.body.timelineEvent.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "After local day",
+        eventTime: "2026-05-21T17:00:00.000Z"
+      });
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .query({
+        field: "eventTime",
+        start: "2026-05-20T17:00:00.000Z",
+        end: "2026-05-21T16:59:59.999Z"
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.timelineEvents).toHaveLength(1);
+    expect(response.body.timelineEvents[0].id).toBe(matchingEventId);
+    expect(response.body.timelineEvents[0].event_time).toBe("2026-05-20T17:00:00.000Z");
+  });
+
+  it("rejects invalid UTC time ranges for filtered finding reads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Finding Filter Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Finding Filter Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Filtered finding",
+        status: "draft"
+      });
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .query({
+        field: "createdAt",
+        start: "2026-05-21T00:00:00.000Z",
+        end: "2026-05-20T00:00:00.000Z"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("Validation failed");
+  });
+
   it("rejects unauthorized case creation with an explicit permission error", async () => {
     const response = await request(app)
       .post("/api/cases")

@@ -18,6 +18,12 @@ interface CreateTimelineEventInput {
   ownerUserId?: string;
 }
 
+interface TimelineTimeFilter {
+  field?: "eventTime" | "createdAt" | "updatedAt";
+  start?: string;
+  end?: string;
+}
+
 async function ensureTimelineRelationshipEntity(
   database: Database,
   incidentId: string,
@@ -36,12 +42,14 @@ async function ensureTimelineRelationshipEntity(
   }
 }
 
-export async function listTimelineEvents(database: Database, userId: string, incidentId: string) {
+export async function listTimelineEvents(
+  database: Database,
+  userId: string,
+  incidentId: string,
+  filter?: TimelineTimeFilter
+) {
   await requireIncidentMembership(database, userId, incidentId);
-  const result = await database.query(
-    "select * from timeline_events where incident_id = $1 order by event_time desc, created_at desc",
-    [incidentId]
-  );
+  const result = await database.query(buildTimelineListQuery(filter), buildTimelineListParams(incidentId, filter));
   return Promise.all(
     result.rows.map(async (row) => {
       const [attackTagsResult, customTagsResult] = await Promise.all([
@@ -74,6 +82,43 @@ export async function listTimelineEvents(database: Database, userId: string, inc
       };
     })
   );
+}
+
+function buildTimelineListQuery(filter?: TimelineTimeFilter) {
+  const clauses = ["incident_id = $1"];
+  const column = mapTimelineTimeField(filter?.field);
+
+  if (filter?.start) {
+    clauses.push(`${column} >= $${clauses.length + 1}`);
+  }
+
+  if (filter?.end) {
+    clauses.push(`${column} <= $${clauses.length + 1}`);
+  }
+
+  return `select * from timeline_events where ${clauses.join(" and ")} order by event_time desc, created_at desc`;
+}
+
+function buildTimelineListParams(incidentId: string, filter?: TimelineTimeFilter) {
+  const params: string[] = [incidentId];
+  if (filter?.start) {
+    params.push(filter.start);
+  }
+  if (filter?.end) {
+    params.push(filter.end);
+  }
+  return params;
+}
+
+function mapTimelineTimeField(field: TimelineTimeFilter["field"]) {
+  switch (field) {
+    case "createdAt":
+      return "created_at";
+    case "updatedAt":
+      return "updated_at";
+    default:
+      return "event_time";
+  }
 }
 
 export async function createTimelineEvent(database: Database, user: AuthenticatedUser, input: CreateTimelineEventInput) {

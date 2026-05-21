@@ -17,12 +17,31 @@ import {
 } from "../../shared/domain.js";
 
 export const uuidSchema = z.string().uuid();
+export const utcIsoDatetimeSchema = z
+  .iso
+  .datetime()
+  .refine((value) => value.endsWith("Z"), "Timestamp must be UTC ISO with a Z suffix");
+
+export const timeRangeQuerySchema = z
+  .object({
+    start: utcIsoDatetimeSchema.optional(),
+    end: utcIsoDatetimeSchema.optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.start && value.end && Date.parse(value.start) > Date.parse(value.end)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Start time must be before or equal to end time.",
+        path: ["end"]
+      });
+    }
+  });
 
 export const createCaseSchema = z.object({
   caseName: z.string().min(1),
   clientName: z.string().optional(),
-  startDate: z.iso.datetime().optional(),
-  endDate: z.iso.datetime().optional(),
+  startDate: utcIsoDatetimeSchema.optional(),
+  endDate: utcIsoDatetimeSchema.optional(),
   status: z.enum(CASE_STATUSES),
   summary: z.string().optional()
 });
@@ -53,7 +72,7 @@ export const createFindingSchema = z.object({
 export const updateFindingSchema = createFindingSchema.partial().refine((value) => Object.keys(value).length > 0);
 
 export const createTimelineEventSchema = z.object({
-  eventTime: z.iso.datetime(),
+  eventTime: utcIsoDatetimeSchema,
   title: z.string().min(1),
   description: z.string().optional(),
   source: z.string().optional(),
@@ -71,8 +90,8 @@ export const createIndicatorSchema = z.object({
   description: z.string().optional(),
   confidence: z.enum(CONFIDENCE_LEVELS).optional(),
   source: z.string().optional(),
-  firstSeenAt: z.iso.datetime().optional(),
-  lastSeenAt: z.iso.datetime().optional()
+  firstSeenAt: utcIsoDatetimeSchema.optional(),
+  lastSeenAt: utcIsoDatetimeSchema.optional()
 });
 
 export const updateIndicatorSchema = createIndicatorSchema.partial().refine((value) => Object.keys(value).length > 0);
@@ -89,7 +108,7 @@ export const createTaskSchema = z.object({
   priority: z.enum(TASK_PRIORITIES),
   ownerUserId: uuidSchema.optional(),
   assigneeUserId: uuidSchema.optional(),
-  dueAt: z.iso.datetime().optional()
+  dueAt: utcIsoDatetimeSchema.optional()
 });
 
 export const updateTaskSchema = createTaskSchema.partial().refine((value) => Object.keys(value).length > 0);

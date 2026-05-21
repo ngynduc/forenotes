@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { TimeFilterRequest } from "@/lib/timeFilters";
 import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
 
@@ -12,11 +13,11 @@ function useCaseId() {
 }
 
 // Findings
-export function useFindings() {
+export function useFindings(filter?: TimeFilterRequest | null) {
   const id = useIncidentId();
   return useQuery({
-    queryKey: ["incidents", id, "findings"],
-    queryFn: () => api.listFindings(id!),
+    queryKey: ["incidents", id, "findings", filter?.field ?? "", filter?.start ?? "", filter?.end ?? ""],
+    queryFn: () => api.listFindings(id!, filter),
     enabled: !!id,
   });
 }
@@ -50,11 +51,11 @@ export function useDeleteFinding() {
 }
 
 // Timeline Events
-export function useTimelineEvents() {
+export function useTimelineEvents(filter?: TimeFilterRequest | null) {
   const id = useIncidentId();
   return useQuery({
-    queryKey: ["incidents", id, "timeline-events"],
-    queryFn: () => api.listTimelineEvents(id!),
+    queryKey: ["incidents", id, "timeline-events", filter?.field ?? "", filter?.start ?? "", filter?.end ?? ""],
+    queryFn: () => api.listTimelineEvents(id!, filter),
     enabled: !!id,
   });
 }

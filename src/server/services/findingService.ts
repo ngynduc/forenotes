@@ -18,9 +18,20 @@ interface CreateFindingInput {
   ownerUserId?: string;
 }
 
-export async function listFindings(database: Database, userId: string, incidentId: string) {
+interface FindingTimeFilter {
+  field?: "createdAt" | "updatedAt";
+  start?: string;
+  end?: string;
+}
+
+export async function listFindings(
+  database: Database,
+  userId: string,
+  incidentId: string,
+  filter?: FindingTimeFilter
+) {
   await requireIncidentMembership(database, userId, incidentId);
-  const result = await database.query("select * from findings where incident_id = $1 order by created_at desc", [incidentId]);
+  const result = await database.query(buildFindingListQuery(filter), buildFindingListParams(incidentId, filter));
   return Promise.all(
     result.rows.map(async (row) => {
       const [attackTagsResult, customTagsResult] = await Promise.all([
@@ -53,6 +64,36 @@ export async function listFindings(database: Database, userId: string, incidentI
       };
     })
   );
+}
+
+function buildFindingListQuery(filter?: FindingTimeFilter) {
+  const clauses = ["incident_id = $1"];
+  const column = mapFindingTimeField(filter?.field);
+
+  if (filter?.start) {
+    clauses.push(`${column} >= $${clauses.length + 1}`);
+  }
+
+  if (filter?.end) {
+    clauses.push(`${column} <= $${clauses.length + 1}`);
+  }
+
+  return `select * from findings where ${clauses.join(" and ")} order by created_at desc`;
+}
+
+function buildFindingListParams(incidentId: string, filter?: FindingTimeFilter) {
+  const params: string[] = [incidentId];
+  if (filter?.start) {
+    params.push(filter.start);
+  }
+  if (filter?.end) {
+    params.push(filter.end);
+  }
+  return params;
+}
+
+function mapFindingTimeField(field: FindingTimeFilter["field"]) {
+  return field === "createdAt" ? "created_at" : "updated_at";
 }
 
 export async function createFinding(database: Database, user: AuthenticatedUser, input: CreateFindingInput) {

@@ -6,11 +6,12 @@ import { TimeFilterBar } from "@/components/filters/TimeFilterBar";
 import { Button } from "@/components/ui/Button";
 import { useTimelineEvents } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
+import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
-import { applyTimeFilter, createTimeFilterState } from "@/lib/timeFilters";
+import { createTimeFilterState, normalizeTimeFilterState, toTimeFilterRequest } from "@/lib/timeFilters";
 
 const tableDef = TABLE_DEFINITIONS.timeline;
 const timeFieldOptions = [
@@ -21,18 +22,24 @@ const timeFieldOptions = [
 
 export default function TimelinePage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
-  const { data, isLoading } = useTimelineEvents();
+  const { timezone } = useTimezone();
+  const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("eventTime", timezone));
+  const appliedFilter = normalizeTimeFilterState(timeFilter, timezone);
+  const filterRequest = toTimeFilterRequest(appliedFilter);
+  const { data, isLoading } = useTimelineEvents(filterRequest);
   const { data: membersData } = useIncidentMembers(incidentId);
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
-  const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("eventTime"));
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
   const memberNames = buildMemberNameMap(membersData?.members);
   const events = withMemberDisplayNames((data?.timelineEvents ?? []) as unknown as Record<string, unknown>[], memberNames);
-  const filteredEvents = applyTimeFilter(events, timeFilter);
   const itemId = searchParams.get("itemId");
   const openedItemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setTimeFilter((current) => normalizeTimeFilterState(current, timezone));
+  }, [timezone]);
 
   useEffect(() => {
     if (!itemId) {
@@ -80,14 +87,14 @@ export default function TimelinePage() {
           <TimeFilterBar
             fieldOptions={timeFieldOptions}
             totalCount={events.length}
-            filteredCount={filteredEvents.length}
+            filteredCount={events.length}
             layout="compact"
-            value={timeFilter}
+            value={appliedFilter}
             onChange={setTimeFilter}
           />
           <DataTable
             columns={tableDef.columns}
-            data={filteredEvents}
+            data={events}
             emptyLabel={tableDef.emptyLabel}
             onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
           />

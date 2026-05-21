@@ -1,10 +1,12 @@
 import { useScopeStore } from "@/stores/scope-store";
 import { useUsers } from "@/hooks/use-entities";
 import { Select } from "@/components/ui/Select";
+import { useTimezone } from "@/providers/TimezoneProvider";
 
 export default function SettingsPage() {
   const { activeUserId, setActiveUser } = useScopeStore();
   const { data } = useUsers();
+  const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
   const users = data?.users ?? [];
 
   return (
@@ -20,6 +22,17 @@ export default function SettingsPage() {
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {String(u.displayName ?? u.email)} ({String(u.globalRole ?? "user")})
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Timezone</label>
+          <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+            {timezoneOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
               </option>
             ))}
           </Select>

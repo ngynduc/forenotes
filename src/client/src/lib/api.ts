@@ -1,4 +1,5 @@
 import { useScopeStore } from "@/stores/scope-store";
+import type { TimeFilterRequest } from "@/lib/timeFilters";
 
 const BASE = "/api";
 
@@ -741,6 +742,22 @@ class ApiClient {
     return h;
   }
 
+  private withQueryParams(path: string, params?: Record<string, string | undefined>) {
+    if (!params) {
+      return path;
+    }
+
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value) {
+        query.set(key, value);
+      }
+    }
+
+    const serialized = query.toString();
+    return serialized ? `${path}?${serialized}` : path;
+  }
+
   private async request<T>(url: string, method: string = "GET", body?: unknown): Promise<T> {
     const headers: Record<string, string> = { ...this.headers() };
     if (body) {
@@ -827,8 +844,14 @@ class ApiClient {
   removeIncidentMember = (incidentId: string, userId: string) =>
     this.request(`/incidents/${incidentId}/members/${userId}`, "DELETE");
 
-  listFindings = async (incidentId: string) => {
-    const payload = await this.request<{ findings: RawFindingItem[] }>(`/incidents/${incidentId}/findings`);
+  listFindings = async (incidentId: string, filter?: TimeFilterRequest | null) => {
+    const payload = await this.request<{ findings: RawFindingItem[] }>(
+      this.withQueryParams(`/incidents/${incidentId}/findings`, {
+        field: filter?.field,
+        start: filter?.start,
+        end: filter?.end,
+      })
+    );
     return { findings: payload.findings.map(normalizeFinding) };
   };
 
@@ -845,8 +868,14 @@ class ApiClient {
   deleteFinding = (incidentId: string, id: string) =>
     this.request(`/incidents/${incidentId}/findings/${id}`, "DELETE");
 
-  listTimelineEvents = async (incidentId: string) => {
-    const payload = await this.request<{ timelineEvents: RawTimelineEventItem[] }>(`/incidents/${incidentId}/timeline-events`);
+  listTimelineEvents = async (incidentId: string, filter?: TimeFilterRequest | null) => {
+    const payload = await this.request<{ timelineEvents: RawTimelineEventItem[] }>(
+      this.withQueryParams(`/incidents/${incidentId}/timeline-events`, {
+        field: filter?.field,
+        start: filter?.start,
+        end: filter?.end,
+      })
+    );
     return { timelineEvents: payload.timelineEvents.map(normalizeTimelineEvent) };
   };
 

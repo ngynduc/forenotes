@@ -29,6 +29,7 @@ import {
   createTaskLinkSchema,
   createTaskSchema,
   createTimelineEventSchema,
+  timeRangeQuerySchema,
   updateAccountSchema,
   updateFindingSchema,
   updateIncidentSchema,
@@ -48,7 +49,12 @@ export function createIncidentRoutes(database: Database) {
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
-      response.json({ findings: await listFindings(database, user.id, incidentId) });
+      response.json({
+        findings: await listFindings(database, user.id, incidentId, {
+          field: readFindingTimeField(request.query.field),
+          ...parseTimeRangeQuery(request.query),
+        })
+      });
     })
   );
 
@@ -114,7 +120,10 @@ export function createIncidentRoutes(database: Database) {
       const user = await getAuthenticatedUser(request, database);
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       response.json({
-        timelineEvents: await listTimelineEvents(database, user.id, incidentId)
+        timelineEvents: await listTimelineEvents(database, user.id, incidentId, {
+          field: readTimelineTimeField(request.query.field),
+          ...parseTimeRangeQuery(request.query),
+        })
       });
     })
   );
@@ -512,4 +521,19 @@ export function createIncidentRoutes(database: Database) {
   );
 
   return router;
+}
+
+function parseTimeRangeQuery(query: Record<string, unknown>) {
+  return timeRangeQuerySchema.parse({
+    start: typeof query.start === "string" ? query.start : undefined,
+    end: typeof query.end === "string" ? query.end : undefined,
+  });
+}
+
+function readFindingTimeField(raw: unknown) {
+  return raw === "createdAt" || raw === "updatedAt" ? raw : undefined;
+}
+
+function readTimelineTimeField(raw: unknown) {
+  return raw === "eventTime" || raw === "createdAt" || raw === "updatedAt" ? raw : undefined;
 }
