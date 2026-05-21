@@ -62,6 +62,7 @@ export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
       { key: "severity", label: "Severity", sortKey: "severity", editable: true, badge: "priority" },
       { key: "confidence", label: "Confidence", sortKey: "confidence", editable: true },
       { key: "ownerDisplayName", label: "Owner", sortKey: "ownerDisplayName" },
+      { key: "createdAt", label: "Created", sortKey: "createdAt", format: (v) => formatDateTime(v as string) },
       { key: "updatedAt", label: "Updated", sortKey: "updatedAt", format: (v) => formatDateTime(v as string) },
     ],
   },
