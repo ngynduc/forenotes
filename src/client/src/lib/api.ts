@@ -99,6 +99,7 @@ export interface FindingItem {
   ownerUserId?: string;
   customTags?: TagItem[];
   attackTags?: AttackTagItem[];
+  createdAt?: string;
   updatedAt?: string;
 }
 
@@ -125,6 +126,7 @@ export interface TimelineEventItem {
   ownerUserId?: string;
   customTags?: TagItem[];
   attackTags?: AttackTagItem[];
+  createdAt?: string;
   updatedAt?: string;
 }
 
@@ -374,6 +376,7 @@ interface RawFindingItem {
   owner_user_id?: string;
   custom_tags?: RawTagItem[];
   attack_tags?: RawAttackTagItem[];
+  created_at?: string;
   updated_at?: string;
 }
 
@@ -389,6 +392,7 @@ interface RawTimelineEventItem {
   owner_user_id?: string;
   custom_tags?: RawTagItem[];
   attack_tags?: RawAttackTagItem[];
+  created_at?: string;
   updated_at?: string;
 }
 
@@ -583,6 +587,7 @@ function normalizeFinding(item: RawFindingItem): FindingItem {
     ownerUserId: item.owner_user_id,
     customTags: item.custom_tags?.map(normalizeTag),
     attackTags: item.attack_tags?.map(normalizeAttackTag),
+    createdAt: item.created_at,
     updatedAt: item.updated_at,
   };
 }
@@ -600,6 +605,7 @@ function normalizeTimelineEvent(item: RawTimelineEventItem): TimelineEventItem {
     ownerUserId: item.owner_user_id,
     customTags: item.custom_tags?.map(normalizeTag),
     attackTags: item.attack_tags?.map(normalizeAttackTag),
+    createdAt: item.created_at,
     updatedAt: item.updated_at,
   };
 }

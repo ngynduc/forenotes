@@ -28,6 +28,8 @@ Thumbs.db
 .codex/
 openspec/
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # Test and coverage output
 coverage/

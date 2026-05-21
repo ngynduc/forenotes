@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
+import { TimeFilterBar } from "@/components/filters/TimeFilterBar";
 import { Button } from "@/components/ui/Button";
 import { useFindings } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
@@ -9,8 +10,13 @@ import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
+import { applyTimeFilter, createTimeFilterState } from "@/lib/timeFilters";
 
 const tableDef = TABLE_DEFINITIONS.findings;
+const timeFieldOptions = [
+  { value: "updatedAt", label: "Updated time" },
+  { value: "createdAt", label: "Created time" },
+];
 
 export default function FindingsPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
@@ -19,9 +25,11 @@ export default function FindingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
+  const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("updatedAt"));
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
   const memberNames = buildMemberNameMap(membersData?.members);
   const findings = withMemberDisplayNames((data?.findings ?? []) as unknown as Record<string, unknown>[], memberNames);
+  const filteredFindings = applyTimeFilter(findings, timeFilter);
   const itemId = searchParams.get("itemId");
   const openedItemIdRef = useRef<string | null>(null);
 
@@ -67,12 +75,22 @@ export default function FindingsPage() {
       {isLoading ? (
         <p className="text-sm text-[var(--color-text-muted)]">Loading...</p>
       ) : (
-        <DataTable
-          columns={tableDef.columns}
-          data={findings}
-          emptyLabel={tableDef.emptyLabel}
-          onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
-        />
+        <>
+          <TimeFilterBar
+            fieldOptions={timeFieldOptions}
+            totalCount={findings.length}
+            filteredCount={filteredFindings.length}
+            layout="compact"
+            value={timeFilter}
+            onChange={setTimeFilter}
+          />
+          <DataTable
+            columns={tableDef.columns}
+            data={filteredFindings}
+            emptyLabel={tableDef.emptyLabel}
+            onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
+          />
+        </>
       )}
       <EntityModal
         open={modalOpen}
