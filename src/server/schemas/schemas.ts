@@ -118,6 +118,10 @@ export const createTaskLinkSchema = z.object({
   entityId: uuidSchema
 });
 
+export const taskNoteSchema = z.object({
+  content: z.string().max(1024 * 1024)
+});
+
 export const createQuerySchema = z.object({
   name: z.string().min(1),
   language: z.string().min(1),

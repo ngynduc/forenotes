@@ -154,6 +154,17 @@ export interface TaskItem {
   updatedAt?: string;
 }
 
+export interface TaskNote {
+  content: string;
+  updatedAt?: string;
+}
+
+export interface UploadedTaskNoteImage {
+  id: string;
+  url: string;
+  filename: string;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -909,6 +920,30 @@ class ApiClient {
 
   deleteTask = (incidentId: string, id: string) =>
     this.request(`/incidents/${incidentId}/tasks/${id}`, "DELETE");
+
+  getTaskNote = (incidentId: string, taskId: string) =>
+    this.request<TaskNote>(`/incidents/${incidentId}/tasks/${taskId}/notes`);
+
+  updateTaskNote = (incidentId: string, taskId: string, content: string) =>
+    this.request<TaskNote>(`/incidents/${incidentId}/tasks/${taskId}/notes`, "PUT", { content });
+
+  uploadTaskNoteImage = async (incidentId: string, taskId: string, file: File) => {
+    const res = await fetch(`${BASE}/incidents/${incidentId}/tasks/${taskId}/notes/images`, {
+      method: "POST",
+      headers: {
+        ...this.headers(),
+        "Content-Type": file.type,
+        "x-filename": file.name || "image",
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      const msg = payload?.error ?? `POST /incidents/${incidentId}/tasks/${taskId}/notes/images failed`;
+      throw new Error(msg);
+    }
+    return res.json() as Promise<UploadedTaskNoteImage>;
+  };
 
   listQueries = async (incidentId: string) => {
     const payload = await this.request<{ queries: RawQueryItem[] }>(`/incidents/${incidentId}/queries`);

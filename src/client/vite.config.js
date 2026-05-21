@@ -18,6 +18,10 @@ export default defineConfig({
                 target: "http://localhost:8787",
                 changeOrigin: true,
             },
+            "/uploads/": {
+                target: "http://localhost:8787",
+                changeOrigin: true,
+            },
         },
         allowedHosts: ["localhost", "homeserver.tail752749.ts.net"]
     },

@@ -6,10 +6,11 @@ interface KanbanBoardProps {
   tasks: TaskItem[];
   memberNames: Record<string, string>;
   onTaskClick: (task: TaskItem) => void;
+  onOpenNotes: (task: TaskItem) => void;
   onStatusChange: (taskId: string, newStatus: string) => void;
 }
 
-export function KanbanBoard({ tasks, memberNames, onTaskClick, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, memberNames, onTaskClick, onOpenNotes, onStatusChange }: KanbanBoardProps) {
   const columns = TASK_BOARD_COLUMNS;
 
   return (
@@ -24,6 +25,7 @@ export function KanbanBoard({ tasks, memberNames, onTaskClick, onStatusChange }:
             tasks={colTasks}
             memberNames={memberNames}
             onTaskClick={onTaskClick}
+            onOpenNotes={onOpenNotes}
             onStatusChange={onStatusChange}
           />
         );

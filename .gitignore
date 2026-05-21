@@ -5,6 +5,8 @@ node_modules/
 dist/
 vite.svg
 *.tsbuildinfo
+data/notes/
+data/uploads/
 
 # Local environment files
 .env

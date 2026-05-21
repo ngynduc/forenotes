@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { newDb } from "pg-mem";
 import { createApp } from "../app.js";
 import { runMigrations } from "../db/setup.js";
@@ -62,8 +65,11 @@ describe("Forenotes API", () => {
   let commanderId: string;
   let analystId: string;
   let analystTwoId: string;
+  let dataDir: string;
 
   beforeEach(async () => {
+    dataDir = mkdtempSync(path.join(tmpdir(), "forenotes-test-"));
+    process.env.FORENOTES_DATA_DIR = dataDir;
     const setup = await createTestApp();
     app = setup.app;
     pool = setup.pool;
@@ -91,6 +97,11 @@ describe("Forenotes API", () => {
       displayName: "Analyst Two",
       globalRole: "analyst"
     });
+  });
+
+  afterEach(() => {
+    delete process.env.FORENOTES_DATA_DIR;
+    rmSync(dataDir, { recursive: true, force: true });
   });
 
   it("requires authentication", async () => {
@@ -1728,5 +1739,61 @@ describe("Forenotes API", () => {
       });
     expect(patchAccountResponse.status).toBe(200);
     expect(patchAccountResponse.body.account.status).toBe("disabled");
+  });
+
+  it("stores task markdown notes and uploads note images outside Postgres", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Notes Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Notes Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Document image paste",
+        status: "todo",
+        priority: "medium"
+      });
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const updateNoteResponse = await request(app)
+      .put(`/api/incidents/${incidentId}/tasks/${taskId}/notes`)
+      .set("x-user-id", commanderId)
+      .send({ content: "Before\n\n![image](/api/uploads/task-notes/example.png)\n" });
+    expect(updateNoteResponse.status).toBe(200);
+    expect(updateNoteResponse.body.content).toContain("![image]");
+
+    const getNoteResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/tasks/${taskId}/notes`)
+      .set("x-user-id", commanderId);
+    expect(getNoteResponse.status).toBe(200);
+    expect(getNoteResponse.body.content).toContain("Before");
+
+    const uploadResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks/${taskId}/notes/images`)
+      .set("x-user-id", commanderId)
+      .set("content-type", "image/png")
+      .set("x-filename", "paste.png")
+      .send(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    expect(uploadResponse.status).toBe(201);
+    expect(uploadResponse.body.filename).toBe("paste.png");
+    expect(uploadResponse.body.url).toMatch(new RegExp(`^/api/uploads/task-notes/${taskId}/.+\\.png$`));
   });
 });

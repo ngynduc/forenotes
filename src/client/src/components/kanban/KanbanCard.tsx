@@ -22,6 +22,7 @@ interface KanbanCardProps {
   task: TaskItem;
   memberNames: Record<string, string>;
   onClick: () => void;
+  onOpenNotes: () => void;
 }
 
 function getMemberName(memberNames: Record<string, string>, userId?: string) {
@@ -34,7 +35,7 @@ function compactDescription(description?: string) {
   return description.length > 140 ? `${description.slice(0, 140)}...` : description;
 }
 
-export function KanbanCard({ task, memberNames, onClick }: KanbanCardProps) {
+export function KanbanCard({ task, memberNames, onClick, onOpenNotes }: KanbanCardProps) {
   const assigneeName = getMemberName(memberNames, task.assigneeUserId);
   const ownerName = getMemberName(memberNames, task.ownerUserId);
   const dueAt = task.dueAt;
@@ -85,6 +86,17 @@ export function KanbanCard({ task, memberNames, onClick }: KanbanCardProps) {
           </div>
         )}
       </div>
+
+      <button
+        type="button"
+        className="mt-3 rounded border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenNotes();
+        }}
+      >
+        Open Notes
+      </button>
     </div>
   );
 }

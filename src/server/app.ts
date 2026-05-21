@@ -6,10 +6,13 @@ import type { Database } from "./db/types.js";
 import { pool } from "./db/pool.js";
 import { isAppError } from "./errors.js";
 import { createRoutes } from "./routes/index.js";
+import { getUploadsDir } from "./storage.js";
 
 export function createApp(database: Database = pool) {
   const app = express();
   app.use(express.json());
+  app.use("/api/uploads", express.static(getUploadsDir()));
+  app.use("/uploads", express.static(getUploadsDir()));
   app.use(express.static(path.resolve("dist/client")));
   app.use(express.static(path.resolve("src/client/static")));
 

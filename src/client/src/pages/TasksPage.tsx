@@ -3,7 +3,9 @@ import { useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
+import { TaskNotesDialog } from "@/components/notes/TaskNotesDialog";
 import { Button } from "@/components/ui/Button";
+import type { TaskItem } from "@/lib/api";
 import { useTasks, useUpdateTask } from "@/hooks/use-tasks";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
@@ -29,6 +31,8 @@ export default function TasksPage() {
   const tasks = withMemberDisplayNames(data?.tasks ?? [], memberNames);
   const itemId = searchParams.get("itemId");
   const openedItemIdRef = useRef<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesTask, setNotesTask] = useState<TaskItem | null>(null);
 
   useEffect(() => {
     if (!itemId) {
@@ -58,6 +62,11 @@ export default function TasksPage() {
 
   function handleStatusChange(taskId: string, newStatus: string) {
     updateTask.mutate({ taskId, data: { status: newStatus } });
+  }
+
+  function handleOpenNotes(task: TaskItem) {
+    setNotesTask(task);
+    setNotesOpen(true);
   }
 
   return (
@@ -95,6 +104,7 @@ export default function TasksPage() {
           tasks={tasks}
           memberNames={memberNames}
           onTaskClick={(task) => { setEditItem(task as unknown as Record<string, unknown>); setModalOpen(true); }}
+          onOpenNotes={handleOpenNotes}
           onStatusChange={handleStatusChange}
         />
       ) : (
@@ -103,6 +113,11 @@ export default function TasksPage() {
           data={tasks as unknown as Record<string, unknown>[]}
           emptyLabel={tableDef.emptyLabel}
           onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
+          renderRowActions={(row) => (
+            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenNotes(row as unknown as TaskItem)}>
+              Notes
+            </Button>
+          )}
         />
       )}
 
@@ -112,6 +127,12 @@ export default function TasksPage() {
         definition={definitions.task}
         item={editItem}
         mode={editItem ? "edit" : "create"}
+      />
+      <TaskNotesDialog
+        open={notesOpen}
+        onOpenChange={setNotesOpen}
+        incidentId={incidentId}
+        task={notesTask}
       />
     </div>
   );
