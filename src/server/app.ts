@@ -14,7 +14,6 @@ export function createApp(database: Database = pool) {
   app.use("/api/uploads", express.static(getUploadsDir()));
   app.use("/uploads", express.static(getUploadsDir()));
   app.use(express.static(path.resolve("dist/client")));
-  app.use(express.static(path.resolve("src/client/static")));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
