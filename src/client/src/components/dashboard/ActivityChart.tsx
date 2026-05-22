@@ -10,19 +10,19 @@ export function ActivityChart({ data }: ActivityChartProps) {
   const maxVal = Math.max(...data.map((d) => d.findings + d.tasks + d.timeline), 1);
 
   return (
-    <div className="rounded-[20px] border border-[#dfe5e1] bg-white p-5 shadow-[0_14px_34px_rgba(25,38,34,0.07)]">
+    <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#132927]">Activity (Last 30 Days)</h3>
-        <span className="rounded-full border border-[#cfe3dc] bg-[#eef7f4] px-2.5 py-1 text-xs font-medium text-[#0f766e]">events</span>
+        <h3 className="text-sm font-semibold text-[var(--color-text)]">Activity (Last 30 Days)</h3>
+        <span className="rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-muted)]">events</span>
       </div>
-      <div className="flex items-end gap-[3px] rounded-[14px] bg-[linear-gradient(180deg,#f1f6f3_0%,#fafbf8_100%)] p-3 shadow-[inset_0_0_0_1px_rgba(25,38,34,0.04)]" style={{ height: 148 }}>
+      <div className="flex items-end gap-[3px] rounded-[8px] bg-[var(--color-surface-muted)] p-3 shadow-[inset_0_0_0_1px_var(--color-border)]" style={{ height: 148 }}>
         {data.map((d, i) => {
           const total = d.findings + d.tasks + d.timeline;
           const h = (total / maxVal) * 100;
           return (
             <div
               key={i}
-              className="flex-1 rounded-t-[6px] bg-[linear-gradient(180deg,#14b8a6_0%,#0f766e_60%,#134e4a_100%)] opacity-80 shadow-[0_6px_16px_rgba(15,118,110,0.22)] transition-[opacity,transform] duration-150 hover:scale-y-105 hover:opacity-100"
+              className="flex-1 rounded-t-[6px] bg-[var(--color-primary)] opacity-80 transition-[opacity,transform] duration-150 hover:scale-y-105 hover:opacity-100"
               style={{ height: `${Math.max(h, 2)}%` }}
               title={`${d.day}: ${total} events`}
             />

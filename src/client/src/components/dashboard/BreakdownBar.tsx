@@ -6,35 +6,35 @@ interface BreakdownBarProps {
 }
 
 const COLORS: Record<string, string> = {
-  open: "#0f766e",
-  closed: "#64748b",
-  critical: "#dc2626",
-  high: "#f97316",
-  medium: "#d97706",
-  low: "#14b8a6",
-  draft: "#94a3b8",
-  confirmed: "#dc2626",
-  false_positive: "#78716c",
-  resolved: "#16a34a",
-  todo: "#64748b",
-  in_progress: "#f59e0b",
-  blocked: "#dc2626",
-  done: "#16a34a",
+  open: "var(--color-status-open)",
+  closed: "var(--color-text-soft)",
+  critical: "var(--color-danger)",
+  high: "var(--color-warning)",
+  medium: "var(--color-warning)",
+  low: "var(--color-primary)",
+  draft: "var(--color-text-soft)",
+  confirmed: "var(--color-status-confirmed)",
+  false_positive: "var(--color-status-false-positive)",
+  resolved: "var(--color-status-done)",
+  todo: "var(--color-status-todo)",
+  in_progress: "var(--color-status-progress)",
+  blocked: "var(--color-status-blocked)",
+  done: "var(--color-status-done)",
 };
 
-const FALLBACK_COLOR = "#0f766e";
+const FALLBACK_COLOR = "var(--color-primary)";
 
 export function BreakdownBar({ label, items }: BreakdownBarProps) {
   const total = items.reduce((s, i) => s + i.count, 0);
   if (total === 0) return null;
 
   return (
-    <div className="rounded-[20px] border border-[#dfe5e1] bg-white p-5 shadow-[0_14px_34px_rgba(25,38,34,0.07)]">
+    <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[#132927]">{label}</h3>
-        <span className="font-mono text-xs font-semibold text-[#52615d]">{total} total</span>
+        <h3 className="text-sm font-semibold text-[var(--color-text)]">{label}</h3>
+        <span className="font-mono text-xs font-semibold text-[var(--color-text-muted)]">{total} total</span>
       </div>
-      <div className="flex h-5 overflow-hidden rounded-full bg-[#e8ecea] shadow-[inset_0_1px_2px_rgba(20,32,30,0.1)]">
+      <div className="flex h-5 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]">
         {items.map((item) => (
           <div
             key={item.value}
@@ -46,9 +46,9 @@ export function BreakdownBar({ label, items }: BreakdownBarProps) {
       </div>
       <div className="mt-2 flex flex-wrap gap-3">
         {items.map((item) => (
-          <span key={item.value} className="flex items-center gap-1.5 text-xs font-medium text-[#52615d]">
+          <span key={item.value} className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-muted)]">
             <span
-              className="inline-block h-2.5 w-2.5 rounded-full shadow-[0_0_0_2px_rgba(255,255,255,0.9)]"
+              className="inline-block h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: COLORS[item.value] ?? FALLBACK_COLOR }}
             />
             {item.value}: {item.count}

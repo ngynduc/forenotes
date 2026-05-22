@@ -19,6 +19,34 @@
   --color-danger-soft: #fff1f0;
   --color-success-soft: #edf8f1;
 
+  --color-status-todo: #475569;
+  --color-status-todo-soft: #f1f5f9;
+  --color-status-todo-border: #cbd5e1;
+
+  --color-status-open: #2563eb;
+  --color-status-open-soft: #eff6ff;
+  --color-status-open-border: #bfdbfe;
+
+  --color-status-progress: #0f766e;
+  --color-status-progress-soft: #e3f3f1;
+  --color-status-progress-border: #99d8d0;
+
+  --color-status-blocked: #b42318;
+  --color-status-blocked-soft: #fff1f0;
+  --color-status-blocked-border: #f5b5ae;
+
+  --color-status-confirmed: #b42318;
+  --color-status-confirmed-soft: #fff1f0;
+  --color-status-confirmed-border: #f5b5ae;
+
+  --color-status-done: #166534;
+  --color-status-done-soft: #edf8f1;
+  --color-status-done-border: #b7e4c7;
+
+  --color-status-false-positive: #7c3aed;
+  --color-status-false-positive-soft: #f5f3ff;
+  --color-status-false-positive-border: #ddd6fe;
+
   --radius-sm: 6px;
   --radius-md: 10px;
 
@@ -63,6 +91,70 @@
     cursor: not-allowed;
     opacity: 0.55;
   }
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  padding: 3px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.status-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.status-todo {
+  color: var(--color-status-todo);
+  background: var(--color-status-todo-soft);
+  border-color: var(--color-status-todo-border);
+}
+
+.status-open {
+  color: var(--color-status-open);
+  background: var(--color-status-open-soft);
+  border-color: var(--color-status-open-border);
+}
+
+.status-progress {
+  color: var(--color-status-progress);
+  background: var(--color-status-progress-soft);
+  border-color: var(--color-status-progress-border);
+}
+
+.status-blocked {
+  color: var(--color-status-blocked);
+  background: var(--color-status-blocked-soft);
+  border-color: var(--color-status-blocked-border);
+}
+
+.status-confirmed {
+  color: var(--color-status-confirmed);
+  background: var(--color-status-confirmed-soft);
+  border-color: var(--color-status-confirmed-border);
+}
+
+.status-done {
+  color: var(--color-status-done);
+  background: var(--color-status-done-soft);
+  border-color: var(--color-status-done-border);
+}
+
+.status-false-positive {
+  color: var(--color-status-false-positive);
+  background: var(--color-status-false-positive-soft);
+  border-color: var(--color-status-false-positive-border);
 }
 
 /* CodeMirror Markdown Editor */

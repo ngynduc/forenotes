@@ -25,6 +25,16 @@ interface KanbanCardProps {
   onOpenNotes: () => void;
 }
 
+const STATUS_BORDER: Record<string, string> = {
+  todo: "border-l-[var(--color-status-todo)]",
+  open: "border-l-[var(--color-status-open)]",
+  in_progress: "border-l-[var(--color-status-progress)]",
+  blocked: "border-l-[var(--color-status-blocked)]",
+  confirmed: "border-l-[var(--color-status-confirmed)]",
+  done: "border-l-[var(--color-status-done)]",
+  false_positive: "border-l-[var(--color-status-false-positive)]",
+};
+
 function getMemberName(memberNames: Record<string, string>, userId?: string) {
   if (!userId) return null;
   return memberNames[userId] ?? "Unknown member";
@@ -52,7 +62,10 @@ export function KanbanCard({ task, memberNames, onClick, onOpenNotes }: KanbanCa
       draggable
       onDragStart={handleDragStart}
       onClick={onClick}
-      className="cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm transition-shadow hover:shadow-md"
+      className={cn(
+        "cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border)] border-l-[3px] bg-[var(--color-surface)] p-3 shadow-sm transition-shadow hover:shadow-md",
+        STATUS_BORDER[task.status] ?? "border-l-[var(--color-text-soft)]"
+      )}
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <span className="text-sm font-medium leading-tight">{task.title}</span>
