@@ -13,23 +13,11 @@ export function createApp(database: Database = pool) {
   app.use(express.json());
   app.use("/api/uploads", express.static(getUploadsDir()));
   app.use("/uploads", express.static(getUploadsDir()));
-  app.use(express.static(path.resolve("dist/client")));
-
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
   });
 
   app.use(createRoutes(database));
-
-  app.get("/", (_request, response) => {
-    response.sendFile(path.resolve("dist/client/index.html"));
-  });
-
-  // SPA fallback: serve index.html for all non-API routes
-  app.get("*spa", (request, response, next) => {
-    if (request.path.startsWith("/api")) return next();
-    response.sendFile(path.resolve("dist/client/index.html"));
-  });
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof ZodError) {
