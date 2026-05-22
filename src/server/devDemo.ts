@@ -1,4 +1,4 @@
-import { newDb } from "pg-mem";
+import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { env } from "./env.js";
 import { runMigrations } from "./db/setup.js";
@@ -42,6 +42,8 @@ type SeedUser = {
   caseRole: string;
   incidentRole: string;
 };
+
+type DemoUserKey = "commander" | "lead" | "analyst";
 
 type SeedCasePlan = {
   caseName: string;
@@ -250,6 +252,39 @@ const taskTemplates: TaskTemplate[] = [
   }
 ];
 
+const demoUsers: Record<
+  DemoUserKey,
+  {
+    email: string;
+    displayName: string;
+    globalRole: "commander" | "response_lead" | "analyst";
+    caseRole: string;
+    incidentRole: string;
+  }
+> = {
+  commander: {
+    email: "commander@example.com",
+    displayName: "Demo Commander",
+    globalRole: "commander",
+    caseRole: "incident_commander",
+    incidentRole: "incident_commander"
+  },
+  lead: {
+    email: "lead@example.com",
+    displayName: "Demo Response Lead",
+    globalRole: "response_lead",
+    caseRole: "response_lead",
+    incidentRole: "investigation_lead"
+  },
+  analyst: {
+    email: "analyst@example.com",
+    displayName: "Demo Analyst",
+    globalRole: "analyst",
+    caseRole: "analyst",
+    incidentRole: "triage_analyst"
+  }
+};
+
 function iso(date: Date) {
   return date.toISOString();
 }
@@ -260,6 +295,10 @@ function addHours(base: Date, hours: number) {
 
 function addDays(base: Date, days: number) {
   return addHours(base, days * 24);
+}
+
+export function getDemoAnchorTime(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 9, 0, 0, 0));
 }
 
 function buildTaskPlans(baseTime: Date) {
@@ -875,7 +914,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
         { name: "mailbox-triage", color: "#1d4ed8" }
       ],
       incidents: [
-        buildIncidentPlan(addDays(now, -5), {
+        buildIncidentPlan(addDays(now, -4), {
           name: "Finance inbox takeover and wire redirection",
           summary: "Compromised finance accounts were used to redirect vendor payment instructions.",
           severity: "high",
@@ -911,7 +950,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
         { name: "identity", color: "#7c3aed" }
       ],
       incidents: [
-        buildIncidentPlan(addDays(now, -4), {
+        buildIncidentPlan(addDays(now, -3), {
           name: "Suspicious admin app registration activity",
           summary: "Unapproved application registrations and token misuse appeared in tenant logs.",
           severity: "critical",
@@ -923,7 +962,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
           mailbox: "tenant-admin",
           hashPrefix: "55de901c"
         }),
-        buildIncidentPlan(addDays(now, -6), {
+        buildIncidentPlan(addDays(now, -4), {
           name: "Developer SaaS OAuth scope drift",
           summary: "Excessive delegated permissions were granted during a shadow IT integration.",
           severity: "medium",
@@ -947,7 +986,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
         { name: "legal-hold", color: "#475569" }
       ],
       incidents: [
-        buildIncidentPlan(addDays(now, -7), {
+        buildIncidentPlan(addDays(now, -4), {
           name: "Unexpected engineering data export",
           summary: "Large exports from engineering systems occurred ahead of employee departure.",
           severity: "high",
@@ -959,7 +998,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
           mailbox: "repo-alerts",
           hashPrefix: "b712ef4c"
         }),
-        buildIncidentPlan(addDays(now, -8), {
+        buildIncidentPlan(addDays(now, -3), {
           name: "Privileged repository cloning spike",
           summary: "Repository cloning rates exceeded baseline for a small admin cohort.",
           severity: "medium",
@@ -983,7 +1022,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
         { name: "postmortem", color: "#92400e" }
       ],
       incidents: [
-        buildIncidentPlan(addDays(now, -12), {
+        buildIncidentPlan(addDays(now, -4), {
           name: "Software update trust review",
           summary: "Assessment of vendor update process after suspicious package telemetry.",
           severity: "medium",
@@ -995,7 +1034,7 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
           mailbox: "vendor-updates",
           hashPrefix: "e11db3a0"
         }),
-        buildIncidentPlan(addDays(now, -10), {
+        buildIncidentPlan(addDays(now, -2), {
           name: "Residual monitoring exception cleanup",
           summary: "Close-out work for exceptions created during the validation effort.",
           severity: "low",
@@ -1026,9 +1065,9 @@ function buildSeedCases(now: Date): SeedCasePlan[] {
   ];
 }
 
-async function seedCase(
+export async function seedCase(
   pool: Database,
-  users: Record<"commander" | "lead" | "analyst", SeedUser>,
+  users: Record<DemoUserKey, SeedUser>,
   plan: SeedCasePlan
 ) {
   const caseRecord = await createCase(pool, users.commander.auth, {
@@ -1399,54 +1438,108 @@ async function seedCase(
       });
     }
   }
+
+  return { incidentCount: plan.incidents.length };
+}
+
+async function findUserByEmail(pool: Database, email: string) {
+  const result = await pool.query<{ id: string; email: string; display_name: string; global_role: string; status: string }>(
+    `
+      select id, email, display_name, global_role, status
+      from users
+      where email = $1
+    `,
+    [email]
+  );
+
+  return result.rows[0];
+}
+
+async function ensureDemoUsers(pool: Database) {
+  const users = {} as Record<DemoUserKey, SeedUser>;
+  let createdUsers = 0;
+  let reusedUsers = 0;
+
+  for (const key of Object.keys(demoUsers) as DemoUserKey[]) {
+    const config = demoUsers[key];
+    const existing = await findUserByEmail(pool, config.email);
+    const row =
+      existing ??
+      (await createUser(pool, {
+        email: config.email,
+        displayName: config.displayName,
+        globalRole: config.globalRole
+      }));
+
+    if (existing) {
+      reusedUsers += 1;
+    } else {
+      createdUsers += 1;
+    }
+
+    users[key] = {
+      auth: toUser(row),
+      caseRole: config.caseRole,
+      incidentRole: config.incidentRole
+    };
+  }
+
+  return { users, createdUsers, reusedUsers };
+}
+
+async function listExistingCaseNames(pool: Database) {
+  const result = await pool.query<{ case_name: string }>("select case_name from cases");
+  return new Set(result.rows.map((row) => row.case_name));
+}
+
+export async function seedDemoDataset(
+  pool: Database,
+  options?: {
+    anchorTime?: Date;
+    skipExistingCases?: boolean;
+  }
+) {
+  const anchorTime = options?.anchorTime ?? getDemoAnchorTime();
+  const { users, createdUsers, reusedUsers } = await ensureDemoUsers(pool);
+  const plans = buildSeedCases(anchorTime);
+  const existingCaseNames = options?.skipExistingCases === false ? new Set<string>() : await listExistingCaseNames(pool);
+
+  let createdCases = 0;
+  let skippedCases = 0;
+  let createdIncidents = 0;
+
+  for (const plan of plans) {
+    if (existingCaseNames.has(plan.caseName)) {
+      skippedCases += 1;
+      continue;
+    }
+
+    const result = await seedCase(pool, users, plan);
+    createdCases += 1;
+    createdIncidents += result.incidentCount;
+  }
+
+  return {
+    anchorTime: anchorTime.toISOString(),
+    createdUsers,
+    reusedUsers,
+    createdCases,
+    skippedCases,
+    createdIncidents,
+    caseNames: plans.map((plan) => plan.caseName)
+  };
 }
 
 async function startDemoServer() {
+  const { newDb } = await import("pg-mem");
   const db = newDb();
   const adapter = db.adapters.createPg();
   const pool = new adapter.Pool();
 
   await runMigrations(pool);
-
-  const commanderRow = await createUser(pool, {
-    email: "commander@example.com",
-    displayName: "Demo Commander",
-    globalRole: "commander"
+  await seedDemoDataset(pool, {
+    anchorTime: getDemoAnchorTime()
   });
-
-  const leadRow = await createUser(pool, {
-    email: "lead@example.com",
-    displayName: "Demo Response Lead",
-    globalRole: "response_lead"
-  });
-
-  const analystRow = await createUser(pool, {
-    email: "analyst@example.com",
-    displayName: "Demo Analyst",
-    globalRole: "analyst"
-  });
-
-  const users: Record<"commander" | "lead" | "analyst", SeedUser> = {
-    commander: {
-      auth: toUser(commanderRow),
-      caseRole: "incident_commander",
-      incidentRole: "incident_commander"
-    },
-    lead: {
-      auth: toUser(leadRow),
-      caseRole: "response_lead",
-      incidentRole: "investigation_lead"
-    },
-    analyst: {
-      auth: toUser(analystRow),
-      caseRole: "analyst",
-      incidentRole: "triage_analyst"
-    }
-  };
-
-  for (const plan of buildSeedCases(new Date("2026-05-18T09:00:00.000Z"))) {
-    await seedCase(pool, users, plan);
-  }
 
   const app = createApp(pool);
   app.listen(env.PORT, () => {
@@ -1454,7 +1547,9 @@ async function startDemoServer() {
   });
 }
 
-startDemoServer().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  startDemoServer().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exit(1);
+  });
+}
