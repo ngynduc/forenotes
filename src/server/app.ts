@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { ZodError } from "zod";
 import type { Database } from "./db/types.js";
@@ -7,6 +8,9 @@ import { pool } from "./db/pool.js";
 import { isAppError } from "./errors.js";
 import { createRoutes } from "./routes/index.js";
 import { getUploadsDir } from "./storage.js";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const clientDistDir = path.resolve(currentDir, "../client");
 
 export function createApp(database: Database = pool) {
   const app = express();
@@ -18,6 +22,10 @@ export function createApp(database: Database = pool) {
   });
 
   app.use(createRoutes(database));
+  app.use(express.static(clientDistDir));
+  app.get("/{*path}", (_request, response) => {
+    response.sendFile(path.join(clientDistDir, "index.html"));
+  });
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof ZodError) {
