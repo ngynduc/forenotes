@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CodeMirror from "@uiw/react-codemirror";
 import {
   Dialog,
   DialogContent,
@@ -180,9 +181,25 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
                   />
                   <span className="text-sm text-[var(--color-text-muted)]">{String(form[field.name] ?? "#0f766e").toUpperCase()}</span>
                 </div>
+              ) : field.type === "code" ? (
+                <div className="cm-editor-wrapper">
+                  <CodeMirror
+                    value={String(form[field.name] ?? "")}
+                    onChange={(val) => updateField(field.name, val)}
+                    height="260px"
+                    extensions={[]}
+                    basicSetup={{
+                      lineNumbers: true,
+                      foldGutter: true,
+                      highlightActiveLine: true,
+                      bracketMatching: true,
+                    }}
+                    placeholder={field.placeholder}
+                  />
+                </div>
               ) : (
                 <Input
-                  type={field.type === "code" ? "text" : field.type}
+                  type={field.type}
                   value={String(form[field.name] ?? "")}
                   onChange={(e) => updateField(field.name, e.target.value)}
                   placeholder={field.placeholder}
