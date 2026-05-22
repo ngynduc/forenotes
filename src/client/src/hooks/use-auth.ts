@@ -1,13 +1,45 @@
-import { useQuery } from "@tanstack/react-query";
-import { api, type CurrentUser } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type CurrentUser, type LoginInput } from "@/lib/api";
 import { useScopeStore } from "@/stores/scope-store";
 
+interface AuthSession {
+  user: CurrentUser;
+  permissions: string[];
+}
+
 export function useCurrentUser() {
-  const activeUserId = useScopeStore((s) => s.activeUserId);
   return useQuery({
-    queryKey: ["auth", "me", activeUserId],
+    queryKey: ["auth", "me"],
     queryFn: () => api.getMe(),
-    enabled: !!activeUserId,
+    retry: false,
+  });
+}
+
+export function useLogin() {
+  const qc = useQueryClient();
+  const setActiveUser = useScopeStore((s) => s.setActiveUser);
+
+  return useMutation({
+    mutationFn: (input: LoginInput) => api.login(input),
+    onSuccess: async ({ user }) => {
+      setActiveUser(user.id);
+      await qc.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
+  });
+}
+
+export function useLogout() {
+  const qc = useQueryClient();
+  const clearSessionScope = useScopeStore((s) => s.clearSessionScope);
+
+  return useMutation({
+    mutationFn: () => api.logout(),
+    onSuccess: () => {
+      clearSessionScope();
+      qc.setQueryData<AuthSession | null>(["auth", "me"], null);
+      qc.removeQueries({ queryKey: ["dashboard"] });
+      qc.removeQueries({ queryKey: ["notifications"] });
+    },
   });
 }
 

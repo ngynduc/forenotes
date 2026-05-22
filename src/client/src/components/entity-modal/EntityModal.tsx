@@ -279,20 +279,11 @@ function getSelectOptions(
 }
 
 function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = {};
-  // Parse from zustand persist
-  try {
-    const stored = JSON.parse(localStorage.getItem("forenotes-scope") || "{}");
-    const state = stored?.state;
-    if (state?.activeUserId) h["x-user-id"] = state.activeUserId;
-  } catch {
-    // ignore
-  }
-  return h;
+  return {};
 }
 
 async function requestApi(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { ...init, credentials: "include" });
   if (response.ok) {
     return response.status === 204 ? null : response.json().catch(() => null);
   }

@@ -1,7 +1,18 @@
 import { cleanObject, dateInputToIso, localDateTimeToIso, toDateInputValue, toLocalInputValue } from "@/lib/utils";
 import type { GraphNodeType } from "@shared/domain";
 
-export type FieldType = "text" | "textarea" | "select" | "date" | "datetime-local" | "email" | "code" | "color" | "user-select" | "member-select";
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "select"
+  | "date"
+  | "datetime-local"
+  | "email"
+  | "password"
+  | "code"
+  | "color"
+  | "user-select"
+  | "member-select";
 type EntityLinkSourceType = Extract<GraphNodeType, "finding" | "timeline_event">;
 
 export interface EntityField {
@@ -53,7 +64,7 @@ export const OPTION_SETS = {
   indicatorType: ["host", "ip", "domain", "url", "email", "file_hash", "registry", "mutex", "process", "user_agent", "other"],
   accountStatus: ["active", "disabled", "compromised", "locked"],
   systemStatus: ["online", "offline", "compromised", "unknown"],
-  globalRole: ["commander", "response_lead", "analyst"],
+  globalRole: ["admin", "commander", "response_lead", "analyst", "viewer"],
   evidenceType: ["timeline_event", "indicator", "system", "account", "query"],
 } as const;
 
@@ -428,12 +439,14 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       create: () => ({ url: "/api/users", method: "POST" }),
       update: () => ({ url: "/api/users", method: "POST" }),
       fields: () => [
-        { name: "email", label: "Email", type: "email", required: true, autofocus: true },
+        { name: "username", label: "Username", type: "text", required: true, autofocus: true },
+        { name: "email", label: "Email", type: "email", required: true },
         { name: "displayName", label: "Display Name", type: "text", required: true },
+        { name: "password", label: "Temporary Password", type: "password", required: true },
         { name: "globalRole", label: "Global Role", type: "select", options: [...OPTION_SETS.globalRole], required: true },
       ],
-      values: () => ({ email: "", displayName: "", globalRole: "analyst" }),
-      fromForm: (data) => data,
+      values: () => ({ username: "", email: "", displayName: "", password: "", globalRole: "analyst" }),
+      fromForm: (data) => cleanObject(data),
     },
     case_member: {
       collection: "caseMembers",

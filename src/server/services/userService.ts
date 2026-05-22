@@ -4,14 +4,16 @@ import type { GlobalRole } from "../../shared/domain.js";
 
 interface CreateUserInput {
   email: string;
+  username?: string;
   displayName: string;
   globalRole: GlobalRole;
+  passwordHash?: string | null;
 }
 
 export async function listUsers(database: Database) {
   const result = await database.query(
     `
-      select id, email, display_name, global_role, status, created_at
+      select id, username, email, display_name, global_role, status, created_at, last_login_at
       from users
       order by created_at asc
     `
@@ -21,21 +23,26 @@ export async function listUsers(database: Database) {
 
 export async function createUser(database: Database, input: CreateUserInput) {
   const userId = randomUUID();
+  const username = normalizeUsername(input.username ?? input.email.split("@")[0]);
   await database.query(
     `
-      insert into users (id, email, display_name, global_role, status)
-      values ($1, $2, $3, $4, 'active')
+      insert into users (id, username, email, display_name, global_role, status, password_hash)
+      values ($1, $2, $3, $4, $5, 'active', $6)
     `,
-    [userId, input.email, input.displayName, input.globalRole]
+    [userId, username, input.email, input.displayName, input.globalRole, input.passwordHash ?? null]
   );
 
   const result = await database.query(
     `
-      select id, email, display_name, global_role, status, created_at
+      select id, username, email, display_name, global_role, status, created_at, last_login_at
       from users
       where id = $1
     `,
     [userId]
   );
   return result.rows[0];
+}
+
+function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
 }

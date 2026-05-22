@@ -1,14 +1,11 @@
-import { useScopeStore } from "@/stores/scope-store";
-import { useUsers } from "@/hooks/use-entities";
-import { Select } from "@/components/ui/Select";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
+import { useCurrentUser } from "@/hooks/use-auth";
 
 export default function SettingsPage() {
-  const { activeUserId, setActiveUser } = useScopeStore();
-  const { data } = useUsers();
+  const { data } = useCurrentUser();
   const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
-  const users = data?.users ?? [];
+  const user = data?.user;
 
   return (
     <div>
@@ -17,15 +14,13 @@ export default function SettingsPage() {
 
       <div className="max-w-md space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Active User</label>
-          <Select value={activeUserId} onChange={(e) => setActiveUser(e.target.value)}>
-            <option value="">Select User</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {String(u.displayName ?? u.email)} ({String(u.globalRole ?? "user")})
-              </option>
-            ))}
-          </Select>
+          <label className="mb-1 block text-sm font-medium">Signed In User</label>
+          <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+            <div className="font-medium">{user?.displayName ?? "Authenticated user"}</div>
+            <div className="text-xs text-[var(--color-text-muted)]">
+              {user?.username} {user?.globalRole ? `(${user.globalRole})` : ""}
+            </div>
+          </div>
         </div>
 
         <div>

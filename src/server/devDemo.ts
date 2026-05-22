@@ -30,9 +30,10 @@ import type { Database } from "./db/types.js";
 function toUser(row: Record<string, unknown>): AuthenticatedUser {
   return {
     id: String(row.id),
+    username: String(row.username ?? row.email),
     email: String(row.email),
     displayName: String(row.display_name),
-    globalRole: String(row.global_role),
+    globalRole: String(row.global_role) as AuthenticatedUser["globalRole"],
     status: String(row.status)
   };
 }
@@ -1443,9 +1444,9 @@ export async function seedCase(
 }
 
 async function findUserByEmail(pool: Database, email: string) {
-  const result = await pool.query<{ id: string; email: string; display_name: string; global_role: string; status: string }>(
+  const result = await pool.query<{ id: string; username: string; email: string; display_name: string; global_role: string; status: string }>(
     `
-      select id, email, display_name, global_role, status
+      select id, username, email, display_name, global_role, status
       from users
       where email = $1
     `,

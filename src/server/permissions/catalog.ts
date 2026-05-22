@@ -12,6 +12,7 @@ export const PERMISSIONS: PermissionDefinition[] = PERMISSION_KEYS.map((key) => 
 }));
 
 export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
+  admin: [...PERMISSION_KEYS],
   commander: [...PERMISSION_KEYS],
   response_lead: [...PERMISSION_KEYS],
   analyst: [
@@ -31,6 +32,12 @@ export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
     "query:update",
     "tag:custom_create",
     "tag:custom_update",
+    "notification:read"
+  ],
+  viewer: [
+    "entity_link:read",
+    "graph:read",
+    "mitre_matrix:read",
     "notification:read"
   ]
 };

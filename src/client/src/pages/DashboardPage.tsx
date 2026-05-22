@@ -20,8 +20,21 @@ export default function DashboardPage() {
   const { metrics, sla, breakdowns, activity, recentActivity } = summary;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Dashboard</h2>
+    <div className="space-y-6 bg-[#f7f8f6]">
+      <div className="rounded-[20px] border border-[#dfe5e1] bg-[#fbfcfa] p-5 shadow-[0_18px_48px_rgba(25,38,34,0.08)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#0f766e]">Incident Command</p>
+        <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-[#17201d] md:text-3xl">Dashboard</h2>
+            <p className="mt-1 max-w-2xl text-sm text-[#66716d]">
+              Operational pulse across cases, incidents, findings, and tasks.
+            </p>
+          </div>
+          <div className="rounded-full border border-[#c9d5d0] bg-white px-3 py-1 text-xs font-medium text-[#40514d] shadow-[0_1px_2px_rgba(25,38,34,0.05)]">
+            Live workspace view
+          </div>
+        </div>
+      </div>
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

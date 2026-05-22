@@ -1,4 +1,4 @@
-export const GLOBAL_ROLES = ["commander", "response_lead", "analyst"] as const;
+export const GLOBAL_ROLES = ["admin", "commander", "response_lead", "analyst", "viewer"] as const;
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
 
 export const CASE_STATUSES = ["open", "closed"] as const;
@@ -97,7 +97,8 @@ export const PERMISSION_KEYS = [
   "graph:read",
   "mitre_matrix:read",
   "notification:read",
-  "audit:read"
+  "audit:read",
+  "user:manage"
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];

@@ -1,10 +1,10 @@
-import { useScopeStore } from "@/stores/scope-store";
 import type { TimeFilterRequest } from "@/lib/timeFilters";
 
 const BASE = "/api";
 
 export interface CurrentUser {
   id: string;
+  username: string;
   email: string;
   displayName: string;
   globalRole: string;
@@ -13,16 +13,25 @@ export interface CurrentUser {
 
 export interface UserItem {
   id: string;
+  username: string;
   email: string;
   displayName: string;
   globalRole: string;
   status: string;
+  lastLoginAt?: string;
 }
 
 export interface CreateUserInput {
+  username?: string;
   email: string;
   displayName: string;
   globalRole: string;
+  password?: string;
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
 }
 
 export interface MemberItem {
@@ -313,6 +322,7 @@ export interface SearchResponse {
 
 interface RawCurrentUser {
   id: string;
+  username?: string;
   email: string;
   displayName?: string;
   display_name?: string;
@@ -323,10 +333,12 @@ interface RawCurrentUser {
 
 interface RawUserItem {
   id: string;
+  username?: string;
   email: string;
   display_name?: string;
   global_role?: string;
   status: string;
+  last_login_at?: string;
 }
 
 interface RawMemberItem {
@@ -517,6 +529,7 @@ interface RawSearchResultItem {
 function normalizeCurrentUser(user: RawCurrentUser): CurrentUser {
   return {
     id: user.id,
+    username: user.username ?? user.email,
     email: user.email,
     displayName: user.displayName ?? user.display_name ?? user.email,
     globalRole: user.globalRole ?? user.global_role ?? "analyst",
@@ -527,10 +540,12 @@ function normalizeCurrentUser(user: RawCurrentUser): CurrentUser {
 function normalizeUser(user: RawUserItem): UserItem {
   return {
     id: user.id,
+    username: user.username ?? user.email,
     email: user.email,
     displayName: user.display_name ?? user.email,
     globalRole: user.global_role ?? "analyst",
     status: user.status,
+    lastLoginAt: user.last_login_at,
   };
 }
 
@@ -750,12 +765,7 @@ function normalizeSearchResult(item: RawSearchResultItem): SearchResultItem {
 
 class ApiClient {
   private headers(): Record<string, string> {
-    const h: Record<string, string> = {};
-    const userId = useScopeStore.getState().activeUserId;
-    if (userId) {
-      h["x-user-id"] = userId;
-    }
-    return h;
+    return {};
   }
 
   private withQueryParams(path: string, params?: Record<string, string | undefined>) {
@@ -783,6 +793,7 @@ class ApiClient {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
     });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
@@ -796,6 +807,15 @@ class ApiClient {
   getMe = async () => {
     const payload = await this.request<{ user: RawCurrentUser; permissions: string[] }>("/auth/me");
     return { user: normalizeCurrentUser(payload.user), permissions: payload.permissions };
+  };
+
+  login = async (data: LoginInput) => {
+    const payload = await this.request<{ user: RawCurrentUser }>("/auth/login", "POST", data);
+    return { user: normalizeCurrentUser(payload.user) };
+  };
+
+  logout = async () => {
+    await this.request<void>("/auth/logout", "POST");
   };
 
   listUsers = async () => {
@@ -935,6 +955,7 @@ class ApiClient {
   uploadTaskNoteImage = async (incidentId: string, taskId: string, file: File) => {
     const res = await fetch(`${BASE}/incidents/${incidentId}/tasks/${taskId}/notes/images`, {
       method: "POST",
+      credentials: "include",
       headers: {
         ...this.headers(),
         "Content-Type": file.type,

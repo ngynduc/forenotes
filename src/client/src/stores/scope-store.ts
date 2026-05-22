@@ -9,6 +9,7 @@ interface ScopeState {
   selectCase: (caseId: string) => void;
   selectIncident: (incidentId: string) => void;
   clearIncident: () => void;
+  clearSessionScope: () => void;
 }
 
 export const useScopeStore = create<ScopeState>()(
@@ -21,6 +22,7 @@ export const useScopeStore = create<ScopeState>()(
       selectCase: (caseId) => set({ selectedCaseId: caseId, selectedIncidentId: "" }),
       selectIncident: (incidentId) => set({ selectedIncidentId: incidentId }),
       clearIncident: () => set({ selectedIncidentId: "" }),
+      clearSessionScope: () => set({ activeUserId: "", selectedCaseId: "", selectedIncidentId: "" }),
     }),
     {
       name: "forenotes-scope",

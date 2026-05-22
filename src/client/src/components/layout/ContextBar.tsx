@@ -1,37 +1,28 @@
 import { useScopeStore } from "@/stores/scope-store";
 import { useCases } from "@/hooks/use-cases";
 import { useIncidents } from "@/hooks/use-incidents";
-import { useUsers } from "@/hooks/use-entities";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
+import { useCurrentUser, useLogout } from "@/hooks/use-auth";
 
 export function ContextBar() {
-  const { selectedCaseId, selectedIncidentId, selectCase, selectIncident, activeUserId, setActiveUser } =
-    useScopeStore();
+  const { selectedCaseId, selectedIncidentId, selectCase, selectIncident } = useScopeStore();
   const { data: casesData } = useCases();
-  const { data: usersData } = useUsers();
   const { data: incidentsData } = useIncidents();
   const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
+  const { data: authData } = useCurrentUser();
+  const logout = useLogout();
 
-  const users = usersData?.users ?? [];
   const cases = casesData?.cases ?? [];
   const incidents = incidentsData?.incidents ?? [];
+  const user = authData?.user;
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">
       <ContextField label="Current User">
-        <select
-          value={activeUserId}
-          onChange={(e) => setActiveUser(e.target.value)}
-          className="min-w-40 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
-        >
-          <option value="">Select User</option>
-          {users.map((user) => (
-            <option key={user.id} value={user.id}>
-              {String(user.displayName ?? user.email)} ({String(user.globalRole ?? "user")})
-            </option>
-          ))}
-        </select>
+        <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]">
+          {user ? `${user.displayName} (${user.globalRole})` : "Authenticated"}
+        </span>
       </ContextField>
 
       <span className="text-[var(--color-border)]">|</span>
@@ -79,6 +70,15 @@ export function ContextBar() {
           className="min-w-64"
         />
       </ContextField>
+
+      <button
+        type="button"
+        onClick={() => logout.mutate()}
+        disabled={logout.isPending}
+        className="ml-auto min-h-9 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text)] transition-[background-color,transform] hover:bg-[var(--color-surface-muted)] active:scale-[0.96]"
+      >
+        {logout.isPending ? "Logging out..." : "Logout"}
+      </button>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { newDb } from "pg-mem";
 import { createApp } from "../app.js";
 import { runMigrations } from "../db/setup.js";
+import { hashPassword } from "../services/authService.js";
 
 async function createTestApp() {
   const db = newDb();
@@ -23,14 +24,30 @@ async function createTestApp() {
 
 async function insertUser(
   pool: { query: (text: string, params?: unknown[]) => Promise<unknown> },
-  input: { id: string; email: string; displayName: string; globalRole: string }
+  input: {
+    id: string;
+    email: string;
+    displayName: string;
+    globalRole: string;
+    username?: string;
+    passwordHash?: string | null;
+    status?: string;
+  }
 ) {
   await pool.query(
     `
-      insert into users (id, email, display_name, global_role, status)
-      values ($1, $2, $3, $4, 'active')
+      insert into users (id, username, email, display_name, global_role, status, password_hash)
+      values ($1, $2, $3, $4, $5, $6, $7)
     `,
-    [input.id, input.email, input.displayName, input.globalRole]
+    [
+      input.id,
+      input.username ?? input.email.split("@")[0],
+      input.email,
+      input.displayName,
+      input.globalRole,
+      input.status ?? "active",
+      input.passwordHash ?? null
+    ]
   );
 }
 
@@ -118,6 +135,108 @@ describe("Forenotes API", () => {
     expect(response.body.user.globalRole).toBe("commander");
     expect(response.body.permissions).toContain("case:create");
     expect(response.body.permissions).toContain("audit:read");
+  });
+
+  it("logs in with username and password and hydrates /me from the session cookie", async () => {
+    const leadId = randomUUID();
+    await insertUser(pool, {
+      id: leadId,
+      username: "lead",
+      email: "lead@example.com",
+      displayName: "Response Lead",
+      globalRole: "response_lead",
+      passwordHash: await hashPassword("lead123")
+    });
+
+    const agent = request.agent(app);
+    const loginResponse = await agent.post("/api/auth/login").send({
+      username: "lead",
+      password: "lead123"
+    });
+
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers["set-cookie"]?.[0]).toContain("forenotes_session=");
+    expect(loginResponse.body.user).toMatchObject({
+      id: leadId,
+      username: "lead",
+      displayName: "Response Lead",
+      globalRole: "response_lead"
+    });
+    expect(loginResponse.body.user.passwordHash).toBeUndefined();
+
+    const meResponse = await agent.get("/api/auth/me");
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.user.id).toBe(leadId);
+    expect(meResponse.body.permissions).toContain("finding:create");
+  });
+
+  it("rejects login with a wrong password", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "lead",
+      email: "lead-login-fail@example.com",
+      displayName: "Response Lead",
+      globalRole: "response_lead",
+      passwordHash: await hashPassword("lead123")
+    });
+
+    const response = await request(app).post("/api/auth/login").send({
+      username: "lead",
+      password: "wrong-password"
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Invalid username or password.");
+  });
+
+  it("rejects disabled users during login", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "disabled",
+      email: "disabled@example.com",
+      displayName: "Disabled User",
+      globalRole: "analyst",
+      status: "disabled",
+      passwordHash: await hashPassword("disabled123")
+    });
+
+    const response = await request(app).post("/api/auth/login").send({
+      username: "disabled",
+      password: "disabled123"
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Your account is disabled.");
+  });
+
+  it("clears the session on logout", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "logout",
+      email: "logout@example.com",
+      displayName: "Logout User",
+      globalRole: "analyst",
+      passwordHash: await hashPassword("logout123")
+    });
+
+    const agent = request.agent(app);
+    expect((await agent.post("/api/auth/login").send({ username: "logout", password: "logout123" })).status).toBe(200);
+
+    const logoutResponse = await agent.post("/api/auth/logout");
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.headers["set-cookie"]?.[0]).toContain("forenotes_session=");
+
+    const meResponse = await agent.get("/api/auth/me");
+    expect(meResponse.status).toBe(401);
+    expect(meResponse.body.error).toBe("Authentication required");
+  });
+
+  it("rejects unauthenticated protected API requests", async () => {
+    const response = await request(app).get("/api/cases");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
   });
 
   it("creates a case and incident for a permitted user", async () => {
