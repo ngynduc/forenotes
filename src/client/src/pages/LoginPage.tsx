@@ -1,10 +1,104 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useLogin } from "@/hooks/use-auth";
+import logo from "@/assets/forenotes_logo.png";
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
+}
+
+interface Node {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+}
+
+const NODE_COUNT = 60;
+const MAX_DIST = 150;
+const NODE_SPEED = 0.3;
+
+function ParticleCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const nodesRef = useRef<Node[]>([]);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    function resize() {
+      if (!canvas) return;
+      canvas.width = canvas.offsetWidth * devicePixelRatio;
+      canvas.height = canvas.offsetHeight * devicePixelRatio;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const nodes: Node[] = Array.from({ length: NODE_COUNT }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * NODE_SPEED * 2,
+      vy: (Math.random() - 0.5) * NODE_SPEED * 2,
+      radius: Math.random() * 2 + 1,
+    }));
+    nodesRef.current = nodes;
+
+    function draw() {
+      if (!canvas || !ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const n of nodes) {
+        n.x += n.vx;
+        n.y += n.vy;
+        if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+        if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+      }
+
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < MAX_DIST * devicePixelRatio) {
+            const alpha = 1 - dist / (MAX_DIST * devicePixelRatio);
+            ctx.strokeStyle = `rgba(15,118,110,${alpha * 0.15})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      for (const n of nodes) {
+        ctx.fillStyle = "rgba(15,118,110,0.35)";
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.radius * devicePixelRatio, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    draw();
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 h-full w-full"
+    />
+  );
 }
 
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
@@ -26,11 +120,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f8f6] px-4 py-10 text-[#17201d]">
-      <section className="w-full max-w-[420px] rounded-[24px] border border-[#dfe5e1] bg-white p-6 shadow-[0_24px_60px_rgba(25,38,34,0.1)]">
-        <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#0f766e]">Forenotes</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sign in</h1>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0d1512] px-4 py-10 text-[#17201d]">
+      <ParticleCanvas />
+      <section className="relative z-10 w-full max-w-[420px] rounded-[24px] border border-[#1e3530] bg-white/95 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.4)] backdrop-blur-sm">
+        <div className="mb-6 flex flex-col items-center">
+          <img src={logo} alt="Forenotes" className="mb-2 h-32 w-auto" />
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="mt-1 text-sm text-[#66716d]">
             Use your incident workspace credentials to continue.
           </p>
