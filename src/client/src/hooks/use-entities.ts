@@ -264,3 +264,29 @@ export function useEntityLinks() {
     enabled: !!id,
   });
 }
+
+export function useCreateEntityLink() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.createEntityLink>[1]) => api.createEntityLink(id!, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["incidents", id, "entity-links"] });
+      qc.invalidateQueries({ queryKey: ["graph", id] });
+      qc.invalidateQueries({ queryKey: ["mitre-matrix", id] });
+    },
+  });
+}
+
+export function useDeleteEntityLink() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: string) => api.deleteEntityLink(id!, linkId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["incidents", id, "entity-links"] });
+      qc.invalidateQueries({ queryKey: ["graph", id] });
+      qc.invalidateQueries({ queryKey: ["mitre-matrix", id] });
+    },
+  });
+}

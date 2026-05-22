@@ -17,6 +17,7 @@ import { useScopeStore } from "@/stores/scope-store";
 import type { EntityDefinition } from "@/config/entity-definitions";
 import { useUsers } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
+import { EntityLinksSection } from "@/components/entity-modal/EntityLinksSection";
 
 interface EntityModalProps {
   open: boolean;
@@ -130,7 +131,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? definition.createTitle : definition.editTitle}</DialogTitle>
           <DialogDescription>
@@ -235,6 +236,12 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
               )}
             </div>
           ))}
+          {mode === "edit" && definition.entityLinkSourceType && typeof item?.id === "string" && (
+            <EntityLinksSection
+              sourceType={definition.entityLinkSourceType}
+              sourceId={item.id}
+            />
+          )}
         </div>
 
         <DialogFooter>

@@ -1,6 +1,8 @@
 import { cleanObject, dateInputToIso, localDateTimeToIso, toDateInputValue, toLocalInputValue } from "@/lib/utils";
+import type { GraphNodeType } from "@shared/domain";
 
 export type FieldType = "text" | "textarea" | "select" | "date" | "datetime-local" | "email" | "code" | "color" | "user-select" | "member-select";
+type EntityLinkSourceType = Extract<GraphNodeType, "finding" | "timeline_event">;
 
 export interface EntityField {
   name: string;
@@ -35,6 +37,7 @@ export interface EntityDefinition {
   values: (item?: Record<string, unknown> | null) => Record<string, unknown>;
   fromForm: (data: Record<string, unknown>) => Record<string, unknown>;
   inline?: Record<string, InlineField>;
+  entityLinkSourceType?: EntityLinkSourceType;
 }
 
 // Option sets
@@ -175,6 +178,7 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         severity: { type: "select", payloadKey: "severity", options: ["", ...OPTION_SETS.findingSeverity] },
         confidence: { type: "select", payloadKey: "confidence", options: ["", ...OPTION_SETS.confidence] },
       },
+      entityLinkSourceType: "finding",
     },
     timeline_event: {
       collection: "timelineEvents",
@@ -210,6 +214,7 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         eventTime: { type: "datetime-local", payloadKey: "eventTime" },
         source: { type: "text", payloadKey: "source" },
       },
+      entityLinkSourceType: "timeline_event",
     },
     task: {
       collection: "tasks",

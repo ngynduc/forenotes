@@ -479,6 +479,11 @@ interface RawEntityLinkItem {
   link_type: string;
 }
 
+interface RawEntityLinksResponse {
+  entityLinks?: RawEntityLinkItem[];
+  links?: RawEntityLinkItem[];
+}
+
 interface RawNotificationItem {
   id: string;
   title: string;
@@ -1037,12 +1042,15 @@ class ApiClient {
     this.request(`/cases/${caseId}/custom-tags/${id}`, "DELETE");
 
   listEntityLinks = async (incidentId: string) => {
-    const payload = await this.request<{ links: RawEntityLinkItem[] }>(`/incidents/${incidentId}/entity-links`);
-    return { links: payload.links.map(normalizeEntityLink) };
+    const payload = await this.request<RawEntityLinksResponse>(`/incidents/${incidentId}/entity-links`);
+    const links = payload.entityLinks ?? payload.links ?? [];
+    return { links: links.map(normalizeEntityLink) };
   };
 
-  createEntityLink = (incidentId: string, data: CreateEntityLinkInput) =>
-    this.request(`/incidents/${incidentId}/entity-links`, "POST", data);
+  createEntityLink = async (incidentId: string, data: CreateEntityLinkInput) => {
+    const payload = await this.request<{ entityLink: RawEntityLinkItem }>(`/incidents/${incidentId}/entity-links`, "POST", data);
+    return { entityLink: normalizeEntityLink(payload.entityLink) };
+  };
 
   deleteEntityLink = (incidentId: string, id: string) =>
     this.request(`/incidents/${incidentId}/entity-links/${id}`, "DELETE");
