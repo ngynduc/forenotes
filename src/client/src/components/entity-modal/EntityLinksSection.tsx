@@ -23,7 +23,7 @@ type LinkableType = Exclude<GraphNodeType, "mitre_technique" | "mitre_tactic">;
 
 interface EntityLinksSectionProps {
   sourceType: LinkableType;
-  sourceId: string;
+  sourceId?: string;
 }
 
 interface EntityOption {
@@ -73,12 +73,14 @@ const TYPE_LABELS: Record<LinkableType, string> = {
 
 export function EntityLinksSection({ sourceType, sourceId }: EntityLinksSectionProps) {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
+  const hasId = !!sourceId;
   const [targetType, setTargetType] = useState<LinkableType>(sourceType === "finding" ? "timeline_event" : "finding");
   const [targetId, setTargetId] = useState("");
   const [linkType, setLinkType] = useState<GraphEdgeType>("related_to");
   const [error, setError] = useState<string | null>(null);
 
   const { data: linksData, isLoading: linksLoading } = useEntityLinks();
+  const linksEnabled = hasId && !!incidentId;
   const { data: findingsData } = useFindings();
   const { data: timelineData } = useTimelineEvents();
   const { data: tasksData } = useTasks();
@@ -117,16 +119,19 @@ export function EntityLinksSection({ sourceType, sourceId }: EntityLinksSectionP
     optionLabels.set(entityKey(option.type, option.id), option);
   }
 
-  const currentLinks = (linksData?.links ?? []).filter(
-    (link) =>
-      (link.sourceType === sourceType && link.sourceId === sourceId) ||
-      (link.targetType === sourceType && link.targetId === sourceId)
-  );
+  const currentLinks = hasId
+    ? (linksData?.links ?? []).filter(
+        (link) =>
+          (link.sourceType === sourceType && link.sourceId === sourceId) ||
+          (link.targetType === sourceType && link.targetId === sourceId)
+      )
+    : [];
   const targetOptions = optionsByType.get(targetType) ?? [];
   const hasTargetOptions = targetOptions.length > 0;
   const busy = createLink.isPending || deleteLink.isPending;
 
   async function handleAddLink() {
+    if (!sourceId) return;
     if (!targetId) {
       setError(`Select a ${TYPE_LABELS[targetType].toLowerCase()} to link.`);
       return;
@@ -171,48 +176,54 @@ export function EntityLinksSection({ sourceType, sourceId }: EntityLinksSectionP
         </div>
       )}
 
-      <div className="grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto]">
-        <Select
-          aria-label="Link target type"
-          value={targetType}
-          onChange={(event) => setTargetType(event.target.value as LinkableType)}
-          disabled={busy}
-        >
-          {TARGET_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {TYPE_LABELS[type]}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Link target entity"
-          value={targetId}
-          onChange={(event) => setTargetId(event.target.value)}
-          disabled={busy || !hasTargetOptions}
-        >
-          <option value="">{hasTargetOptions ? `Select ${TYPE_LABELS[targetType].toLowerCase()}` : "No records available"}</option>
-          {targetOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.detail ? `${option.label} - ${option.detail}` : option.label}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Relationship type"
-          value={linkType}
-          onChange={(event) => setLinkType(event.target.value as GraphEdgeType)}
-          disabled={busy}
-        >
-          {LINK_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {formatLabel(type)}
-            </option>
-          ))}
-        </Select>
-        <Button type="button" size="sm" onClick={handleAddLink} disabled={busy || !targetId}>
-          Link
-        </Button>
-      </div>
+      {!hasId ? (
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Save this {TYPE_LABELS[sourceType].toLowerCase()} first to start linking entities.
+        </p>
+      ) : (
+        <div className="grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto]">
+          <Select
+            aria-label="Link target type"
+            value={targetType}
+            onChange={(event) => setTargetType(event.target.value as LinkableType)}
+            disabled={busy}
+          >
+            {TARGET_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {TYPE_LABELS[type]}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Link target entity"
+            value={targetId}
+            onChange={(event) => setTargetId(event.target.value)}
+            disabled={busy || !hasTargetOptions}
+          >
+            <option value="">{hasTargetOptions ? `Select ${TYPE_LABELS[targetType].toLowerCase()}` : "No records available"}</option>
+            {targetOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.detail ? `${option.label} - ${option.detail}` : option.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            aria-label="Relationship type"
+            value={linkType}
+            onChange={(event) => setLinkType(event.target.value as GraphEdgeType)}
+            disabled={busy}
+          >
+            {LINK_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {formatLabel(type)}
+              </option>
+            ))}
+          </Select>
+          <Button type="button" size="sm" onClick={handleAddLink} disabled={busy || !targetId}>
+            Link
+          </Button>
+        </div>
+      )}
 
       <div className="mt-3 space-y-2">
         {linksLoading ? (

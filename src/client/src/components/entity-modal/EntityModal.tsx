@@ -236,10 +236,10 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
               )}
             </div>
           ))}
-          {mode === "edit" && definition.entityLinkSourceType && typeof item?.id === "string" && (
+          {definition.entityLinkSourceType && (
             <EntityLinksSection
               sourceType={definition.entityLinkSourceType}
-              sourceId={item.id}
+              sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
             />
           )}
         </div>
