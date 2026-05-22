@@ -182,20 +182,47 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
                   <span className="text-sm text-[var(--color-text-muted)]">{String(form[field.name] ?? "#0f766e").toUpperCase()}</span>
                 </div>
               ) : field.type === "code" ? (
-                <div className="cm-editor-wrapper">
-                  <CodeMirror
-                    value={String(form[field.name] ?? "")}
-                    onChange={(val) => updateField(field.name, val)}
-                    height="260px"
-                    extensions={[]}
-                    basicSetup={{
-                      lineNumbers: true,
-                      foldGutter: true,
-                      highlightActiveLine: true,
-                      bracketMatching: true,
-                    }}
-                    placeholder={field.placeholder}
-                  />
+                <div className="space-y-1">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      style={{
+                        padding: "2px 8px",
+                        fontSize: "12px",
+                        border: "1px solid #888",
+                        borderRadius: "4px",
+                        background: "#fff",
+                        color: "#333",
+                        cursor: "pointer",
+                      }}
+                      title="Copy to clipboard"
+                      onClick={() => {
+                        navigator.clipboard.writeText(String(form[field.name] ?? "")).then(() => {
+                          const btn = document.activeElement as HTMLButtonElement;
+                          const orig = btn.textContent;
+                          btn.textContent = "Copied!";
+                          setTimeout(() => { btn.textContent = orig; }, 1500);
+                        });
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="cm-editor-wrapper">
+                    <CodeMirror
+                      value={String(form[field.name] ?? "")}
+                      onChange={(val) => updateField(field.name, val)}
+                      height="260px"
+                      extensions={[]}
+                      basicSetup={{
+                        lineNumbers: true,
+                        foldGutter: true,
+                        highlightActiveLine: true,
+                        bracketMatching: true,
+                      }}
+                      placeholder={field.placeholder}
+                    />
+                  </div>
                 </div>
               ) : (
                 <Input
