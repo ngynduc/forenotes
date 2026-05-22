@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
 
-const children = [
-  startProcess("api", "npm", ["run", "dev:demo"]),
-  startProcess("client", "npm", ["run", "dev:client"]),
-];
+import http from "node:http";
+
+const children = [];
+
+children.push(startProcess("api", "npm", ["run", "dev:demo"]));
+await waitForBackend();
+children.push(startProcess("client", "npm", ["run", "dev:client"]));
 
 let shuttingDown = false;
 
@@ -40,6 +43,29 @@ function waitForExit(child) {
       }
       resolve(code ?? 0);
     });
+  });
+}
+
+function waitForBackend(maxAttempts = 30) {
+  const port = 8787;
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    function probe() {
+      const req = http.get(`http://127.0.0.1:${port}/api/cases`, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on("error", () => {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          reject(new Error(`Backend on :${port} not ready after ${maxAttempts}s`));
+          return;
+        }
+        setTimeout(probe, 1000);
+      });
+      req.setTimeout(2000, () => { req.destroy(); });
+    }
+    probe();
   });
 }
 
