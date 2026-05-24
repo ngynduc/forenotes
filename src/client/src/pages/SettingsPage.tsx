@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Copy, Eye, Plus, Save, Trash2, Wifi } from "lucide-react";
+import { CheckCircle2, Copy, Eye, LogOut, Plus, Save, Trash2, Wifi } from "lucide-react";
 import type { PdfTemplate } from "@shared/reportTypes";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 import { Button } from "@/components/ui/Button";
@@ -16,7 +16,7 @@ import {
   useTestLlmSettings,
   useUpdatePdfTemplate,
 } from "@/hooks/use-entities";
-import { useChangePassword, useCurrentUser } from "@/hooks/use-auth";
+import { useChangePassword, useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { useTimezone } from "@/providers/TimezoneProvider";
 
 function messageFromError(error: unknown, fallback: string) {
@@ -109,6 +109,7 @@ export default function SettingsPage() {
   const deletePdfTemplate = useDeletePdfTemplate();
   const previewPdfTemplate = usePreviewPdfTemplate();
   const changePassword = useChangePassword();
+  const logout = useLogout();
   const user = data?.user;
   const llmStatus = llmSettings.data;
   const [llmForm, setLlmForm] = useState({
@@ -279,6 +280,19 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Timezone</label>
             <TimezonePicker value={timezone} onChange={setTimezone} options={timezoneOptions} />
+          </div>
+
+          <div className="border-t border-[var(--color-border)] pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+            >
+              <LogOut className="h-4 w-4" />
+              {logout.isPending ? "Logging out..." : "Log Out"}
+            </Button>
           </div>
 
           <div className="space-y-3 border-t border-[var(--color-border)] pt-4">

@@ -57,7 +57,7 @@ export function KanbanColumn({ label, status, tasks, memberNames, onTaskClick, o
   return (
     <div
       className={cn(
-        "flex min-w-[250px] flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-muted)]",
+        "flex min-w-0 flex-col overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-muted)]",
         dragOver && "border-[var(--color-primary)] bg-[var(--color-primary-soft)]"
       )}
       onDragOver={handleDragOver}

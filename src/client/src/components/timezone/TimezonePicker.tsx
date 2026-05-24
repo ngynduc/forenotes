@@ -7,6 +7,7 @@ interface TimezonePickerProps {
   options: string[];
   onChange: (timezone: string) => void;
   className?: string;
+  compactOnSmall?: boolean;
 }
 
 const KEYWORDS: Record<string, string> = {
@@ -14,7 +15,7 @@ const KEYWORDS: Record<string, string> = {
   UTC: "GMT Coordinated Universal Time Zulu",
 };
 
-export function TimezonePicker({ value, options, onChange, className }: TimezonePickerProps) {
+export function TimezonePicker({ value, options, onChange, className, compactOnSmall = false }: TimezonePickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -44,7 +45,14 @@ export function TimezonePicker({ value, options, onChange, className }: Timezone
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <span className="block truncate">{formatTimezoneLabel(value)}</span>
+        {compactOnSmall ? (
+          <>
+            <span className="block truncate sm:hidden">{formatCompactTimezoneLabel(value)}</span>
+            <span className="hidden truncate sm:block">{formatTimezoneLabel(value)}</span>
+          </>
+        ) : (
+          <span className="block truncate">{formatTimezoneLabel(value)}</span>
+        )}
       </button>
 
       {open && (
@@ -96,6 +104,14 @@ function formatTimezoneLabel(timezone: string) {
 function timezoneOffset(timezone: string) {
   const offset = DateTime.now().setZone(timezone).toFormat("ZZ");
   return offset === "Invalid DateTime" ? "+00:00" : offset;
+}
+
+function formatCompactTimezoneLabel(timezone: string) {
+  const offset = timezoneOffset(timezone);
+  const sign = offset.startsWith("-") ? "-" : "+";
+  const [hours = "00", minutes = "00"] = offset.replace(/^[-+]/, "").split(":");
+  const compactHours = String(Number(hours));
+  return minutes === "00" ? `UTC${sign}${compactHours}` : `UTC${sign}${compactHours}:${minutes}`;
 }
 
 function timezoneSearchText(timezone: string) {

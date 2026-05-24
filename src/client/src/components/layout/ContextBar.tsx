@@ -3,7 +3,7 @@ import { useCases } from "@/hooks/use-cases";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
-import { useCurrentUser, useLogout } from "@/hooks/use-auth";
+import { useCurrentUser } from "@/hooks/use-auth";
 
 export function ContextBar() {
   const { selectedCaseId, selectedIncidentId, selectCase, selectIncident } = useScopeStore();
@@ -11,7 +11,6 @@ export function ContextBar() {
   const { data: incidentsData } = useIncidents();
   const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
   const { data: authData } = useCurrentUser();
-  const logout = useLogout();
 
   const cases = casesData?.cases ?? [];
   const incidents = incidentsData?.incidents ?? [];
@@ -20,12 +19,12 @@ export function ContextBar() {
   return (
     <div className="flex w-full flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">
       <ContextField label="Current User">
-        <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]">
-          {user ? `${user.displayName} (${user.globalRole})` : "Authenticated"}
+        <span className="max-w-40 truncate rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)] sm:max-w-56">
+          {user?.displayName ?? "Authenticated"}
         </span>
       </ContextField>
 
-      <span className="text-[var(--color-border)]">|</span>
+      <span className="hidden text-[var(--color-border)] sm:inline">|</span>
 
       <ContextField label="Case">
         <select
@@ -42,7 +41,7 @@ export function ContextBar() {
         </select>
       </ContextField>
 
-      <span className="text-[var(--color-border)]">|</span>
+      <span className="hidden text-[var(--color-border)] sm:inline">|</span>
 
       <ContextField label="Incident">
         <select
@@ -60,25 +59,17 @@ export function ContextBar() {
         </select>
       </ContextField>
 
-      <span className="text-[var(--color-border)]">|</span>
+      <span className="hidden text-[var(--color-border)] sm:inline">|</span>
 
       <ContextField label="Timezone">
         <TimezonePicker
           value={timezone}
           onChange={setTimezone}
           options={timezoneOptions}
-          className="min-w-64"
+          compactOnSmall
+          className="w-20 sm:w-64"
         />
       </ContextField>
-
-      <button
-        type="button"
-        onClick={() => logout.mutate()}
-        disabled={logout.isPending}
-        className="ml-auto min-h-9 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text)] transition-[background-color,transform] hover:bg-[var(--color-surface-muted)] active:scale-[0.96]"
-      >
-        {logout.isPending ? "Logging out..." : "Logout"}
-      </button>
     </div>
   );
 }

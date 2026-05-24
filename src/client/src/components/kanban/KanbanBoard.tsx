@@ -14,7 +14,7 @@ export function KanbanBoard({ tasks, memberNames, onTaskClick, onOpenNotes, onSt
   const columns = TASK_BOARD_COLUMNS;
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="grid w-full grid-cols-1 gap-4 pb-4 md:grid-cols-4">
       {columns.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.value);
         return (
