@@ -1,4 +1,5 @@
 import type { TimeFilterRequest } from "@/lib/timeFilters";
+import type { IncidentReport, LlmSettingsStatus, PdfTemplate, ReportContext, ReportTemplate } from "@shared/reportTypes";
 
 const BASE = "/api";
 
@@ -320,6 +321,50 @@ export interface SearchResponse {
   results: SearchResultItem[];
 }
 
+export interface CreateReportTemplateInput {
+  name: string;
+  reportType: "daily" | "incident";
+  content: string;
+}
+
+export interface GenerateReportInput {
+  templateId: string;
+  reportType: "daily" | "incident";
+  date?: string;
+  timezone?: string;
+  useLlm?: boolean;
+}
+
+export interface CreateReportInput {
+  templateId?: string;
+  title: string;
+  reportType: "daily" | "incident";
+  reportDate?: string | null;
+  timezone?: string | null;
+  markdown: string;
+  generationMode: "deterministic" | "llm";
+  generatedContext: ReportContext;
+  unresolvedPlaceholders?: string[];
+}
+
+export interface SaveLlmSettingsInput {
+  provider: string;
+  baseUrl?: string;
+  model: string;
+  apiKey?: string;
+  customHeaders?: Array<{ name: string; value: string }>;
+}
+
+export interface CreatePdfTemplateInput {
+  name: string;
+  description?: string;
+  scope: "global" | "incident";
+  incidentId?: string | null;
+  htmlTemplate: string;
+  css?: string;
+  isDefault?: boolean;
+}
+
 interface RawCurrentUser {
   id: string;
   username?: string;
@@ -524,6 +569,49 @@ interface RawSearchResultItem {
   case_name: string;
   incident_name: string;
   snippet?: string;
+}
+
+interface RawReportTemplate {
+  id: string;
+  incident_id: string;
+  name: string;
+  report_type: "daily" | "incident";
+  content: string;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RawIncidentReport {
+  id: string;
+  incident_id: string;
+  template_id?: string | null;
+  title: string;
+  report_type: "daily" | "incident";
+  report_date?: string | null;
+  timezone?: string | null;
+  markdown: string;
+  generation_mode: "deterministic" | "llm";
+  generated_context: ReportContext;
+  unresolved_placeholders?: string[];
+  created_by_user_id: string;
+  updated_by_user_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RawPdfTemplate {
+  id: string;
+  name: string;
+  description?: string | null;
+  scope: "global" | "incident";
+  incident_id?: string | null;
+  html_template: string;
+  css: string;
+  is_default: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 function normalizeCurrentUser(user: RawCurrentUser): CurrentUser {
@@ -760,6 +848,55 @@ function normalizeSearchResult(item: RawSearchResultItem): SearchResultItem {
     caseName: item.case_name,
     incidentName: item.incident_name,
     snippet: item.snippet,
+  };
+}
+
+function normalizeReportTemplate(item: RawReportTemplate): ReportTemplate {
+  return {
+    id: item.id,
+    incidentId: item.incident_id,
+    name: item.name,
+    reportType: item.report_type,
+    content: item.content,
+    createdByUserId: item.created_by_user_id,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
+}
+
+function normalizeReport(item: RawIncidentReport): IncidentReport {
+  return {
+    id: item.id,
+    incidentId: item.incident_id,
+    templateId: item.template_id,
+    title: item.title,
+    reportType: item.report_type,
+    reportDate: item.report_date,
+    timezone: item.timezone,
+    markdown: item.markdown,
+    generationMode: item.generation_mode,
+    generatedContext: item.generated_context,
+    unresolvedPlaceholders: item.unresolved_placeholders ?? [],
+    createdByUserId: item.created_by_user_id,
+    updatedByUserId: item.updated_by_user_id,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
+}
+
+function normalizePdfTemplate(item: RawPdfTemplate): PdfTemplate {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    scope: item.scope,
+    incidentId: item.incident_id,
+    htmlTemplate: item.html_template,
+    css: item.css,
+    isDefault: item.is_default,
+    createdBy: item.created_by,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
   };
 }
 
@@ -1110,6 +1247,122 @@ class ApiClient {
     const payload = await this.request<{ results: RawSearchResultItem[] }>(`/search/search?${params}`);
     return { results: payload.results.map(normalizeSearchResult) };
   };
+
+  listReportTemplates = async (incidentId: string) => {
+    const payload = await this.request<{ templates: RawReportTemplate[] }>(`/incidents/${incidentId}/report-templates`);
+    return { templates: payload.templates.map(normalizeReportTemplate) };
+  };
+
+  createReportTemplate = async (incidentId: string, data: CreateReportTemplateInput) => {
+    const payload = await this.request<{ template: RawReportTemplate }>(`/incidents/${incidentId}/report-templates`, "POST", data);
+    return { template: normalizeReportTemplate(payload.template) };
+  };
+
+  updateReportTemplate = async (incidentId: string, templateId: string, data: Partial<CreateReportTemplateInput>) => {
+    const payload = await this.request<{ template: RawReportTemplate }>(`/incidents/${incidentId}/report-templates/${templateId}`, "PATCH", data);
+    return { template: normalizeReportTemplate(payload.template) };
+  };
+
+  duplicateReportTemplate = async (incidentId: string, templateId: string, name?: string) => {
+    const payload = await this.request<{ template: RawReportTemplate }>(
+      `/incidents/${incidentId}/report-templates/${templateId}/duplicate`,
+      "POST",
+      { name }
+    );
+    return { template: normalizeReportTemplate(payload.template) };
+  };
+
+  deleteReportTemplate = (incidentId: string, templateId: string) =>
+    this.request(`/incidents/${incidentId}/report-templates/${templateId}`, "DELETE");
+
+  generateReport = async (incidentId: string, data: GenerateReportInput) =>
+    this.request<{ preview: CreateReportInput }>(`/incidents/${incidentId}/reports/generate`, "POST", data);
+
+  listReports = async (incidentId: string) => {
+    const payload = await this.request<{ reports: RawIncidentReport[] }>(`/incidents/${incidentId}/reports`);
+    return { reports: payload.reports.map(normalizeReport) };
+  };
+
+  createReport = async (incidentId: string, data: CreateReportInput) => {
+    const payload = await this.request<{ report: RawIncidentReport }>(`/incidents/${incidentId}/reports`, "POST", data);
+    return { report: normalizeReport(payload.report) };
+  };
+
+  updateReport = async (incidentId: string, reportId: string, data: { title?: string; markdown?: string }) => {
+    const payload = await this.request<{ report: RawIncidentReport }>(`/incidents/${incidentId}/reports/${reportId}`, "PATCH", data);
+    return { report: normalizeReport(payload.report) };
+  };
+
+  deleteReport = (incidentId: string, reportId: string) =>
+    this.request(`/incidents/${incidentId}/reports/${reportId}`, "DELETE");
+
+  exportReportPdf = async (incidentId: string, reportId: string, data?: { pdfTemplateId?: string }) => {
+    const res = await fetch(`${BASE}/incidents/${incidentId}/reports/${reportId}/export/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.headers() },
+      credentials: "include",
+      body: JSON.stringify(data ?? {}),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error ?? "PDF export failed");
+    }
+    const blob = await res.blob();
+    if (blob.size === 0) {
+      throw new Error("PDF export returned an empty file.");
+    }
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const fileName = match?.[1] ?? "incident-report.pdf";
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return { fileName, size: blob.size };
+  };
+
+  listPdfTemplates = async (incidentId?: string | null) => {
+    const qs = incidentId ? `?${new URLSearchParams({ incidentId }).toString()}` : "";
+    const payload = await this.request<{ templates: RawPdfTemplate[] }>(`/pdf-templates${qs}`);
+    return { templates: payload.templates.map(normalizePdfTemplate) };
+  };
+
+  createPdfTemplate = async (data: CreatePdfTemplateInput) => {
+    const payload = await this.request<{ template: RawPdfTemplate }>("/pdf-templates", "POST", data);
+    return { template: normalizePdfTemplate(payload.template) };
+  };
+
+  updatePdfTemplate = async (templateId: string, data: Partial<CreatePdfTemplateInput>) => {
+    const payload = await this.request<{ template: RawPdfTemplate }>(`/pdf-templates/${templateId}`, "PATCH", data);
+    return { template: normalizePdfTemplate(payload.template) };
+  };
+
+  duplicatePdfTemplate = async (templateId: string, name?: string) => {
+    const payload = await this.request<{ template: RawPdfTemplate }>(`/pdf-templates/${templateId}/duplicate`, "POST", { name });
+    return { template: normalizePdfTemplate(payload.template) };
+  };
+
+  deletePdfTemplate = (templateId: string) =>
+    this.request(`/pdf-templates/${templateId}`, "DELETE");
+
+  previewPdfTemplate = (data: { pdfTemplateId?: string; htmlTemplate?: string; css?: string; sampleMarkdown?: string }) =>
+    this.request<{ html: string }>("/pdf-templates/preview", "POST", data);
+
+  getLlmSettings = () =>
+    this.request<LlmSettingsStatus>("/me/llm-settings");
+
+  saveLlmSettings = (data: SaveLlmSettingsInput) =>
+    this.request<LlmSettingsStatus>("/me/llm-settings", "PUT", data);
+
+  deleteLlmSettings = () =>
+    this.request("/me/llm-settings", "DELETE");
+
+  testLlmSettings = () =>
+    this.request<{ ok: boolean; model?: string; source?: "user" | "env"; error?: string }>("/me/llm-settings/test", "POST");
 }
 
 export const api = new ApiClient();

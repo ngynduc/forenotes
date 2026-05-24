@@ -62,6 +62,7 @@ export const GRAPH_EDGE_TYPES = [
   "has_tag"
 ] as const;
 export const GRAPH_MODES = ["overview", "investigation", "timeline", "assets", "tasks", "mitre"] as const;
+export const REPORT_TYPES = ["daily", "incident"] as const;
 
 export const PERMISSION_KEYS = [
   "case:create",
@@ -89,6 +90,15 @@ export const PERMISSION_KEYS = [
   "query:create",
   "query:update",
   "query:delete",
+  "report_template:create",
+  "report_template:update",
+  "report_template:delete",
+  "report:read",
+  "report:generate",
+  "report:update",
+  "report:delete",
+  "report:export",
+  "llm_settings:manage",
   "tag:custom_create",
   "tag:custom_update",
   "entity_link:read",
@@ -105,3 +115,4 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export type GraphNodeType = (typeof GRAPH_NODE_TYPES)[number];
 export type GraphEdgeType = (typeof GRAPH_EDGE_TYPES)[number];
 export type GraphMode = (typeof GRAPH_MODES)[number];
+export type ReportType = (typeof REPORT_TYPES)[number];

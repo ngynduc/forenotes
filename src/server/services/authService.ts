@@ -5,6 +5,7 @@ import argon2 from "argon2";
 import type { Database } from "../db/types.js";
 import { AppError } from "../errors.js";
 import type { GlobalRole } from "../../shared/domain.js";
+import { env } from "../env.js";
 
 const SESSION_COOKIE_NAME = "forenotes_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -141,7 +142,7 @@ export function setSessionCookie(response: Response, sessionId: string, expiresA
   response.cookie(SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env.SECURE_SESSION_COOKIES,
     expires: expiresAt,
     path: "/"
   });
@@ -151,7 +152,7 @@ export function clearSessionCookie(response: Response) {
   response.clearCookie(SESSION_COOKIE_NAME, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env.SECURE_SESSION_COOKIES,
     path: "/"
   });
 }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newDb } from "pg-mem";
 import { createApp } from "../app.js";
 import { runMigrations } from "../db/setup.js";
@@ -156,6 +156,7 @@ describe("Forenotes API", () => {
 
     expect(loginResponse.status).toBe(200);
     expect(loginResponse.headers["set-cookie"]?.[0]).toContain("forenotes_session=");
+    expect(loginResponse.headers["set-cookie"]?.[0]).not.toContain("Secure");
     expect(loginResponse.body.user).toMatchObject({
       id: leadId,
       username: "lead",
@@ -169,6 +170,33 @@ describe("Forenotes API", () => {
     expect(meResponse.status).toBe(200);
     expect(meResponse.body.user.id).toBe(leadId);
     expect(meResponse.body.permissions).toContain("finding:create");
+  });
+
+  it("can opt into secure session cookies", async () => {
+    const previous = process.env.SECURE_SESSION_COOKIES;
+    process.env.SECURE_SESSION_COOKIES = "true";
+    vi.resetModules();
+
+    const { setSessionCookie } = await import("../services/authService.js");
+
+    const response = {
+      cookie: vi.fn()
+    } as any;
+
+    setSessionCookie(response, randomUUID(), new Date("2026-05-24T00:00:00.000Z"));
+
+    expect(response.cookie).toHaveBeenCalledWith(
+      "forenotes_session",
+      expect.any(String),
+      expect.objectContaining({ secure: true })
+    );
+
+    if (previous === undefined) {
+      delete process.env.SECURE_SESSION_COOKIES;
+    } else {
+      process.env.SECURE_SESSION_COOKIES = previous;
+    }
+    vi.resetModules();
   });
 
   it("rejects login with a wrong password", async () => {

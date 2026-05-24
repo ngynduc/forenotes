@@ -17,6 +17,7 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const CasesPage = lazy(() => import("@/pages/CasesPage"));
 const FindingsPage = lazy(() => import("@/pages/FindingsPage"));
 const TimelinePage = lazy(() => import("@/pages/TimelinePage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
 const TasksPage = lazy(() => import("@/pages/TasksPage"));
 const EntitiesPage = lazy(() => import("@/pages/EntitiesPage"));
 const QueriesPage = lazy(() => import("@/pages/QueriesPage"));
@@ -36,6 +37,7 @@ export const routes: RouteObject[] = [
       { path: "cases", element: <LazyPage Component={CasesPage} /> },
       { path: "findings", element: <LazyPage Component={FindingsPage} /> },
       { path: "timeline", element: <LazyPage Component={TimelinePage} /> },
+      { path: "reports", element: <LazyPage Component={ReportsPage} /> },
       { path: "tasks", element: <LazyPage Component={TasksPage} /> },
       { path: "entities", element: <LazyPage Component={EntitiesPage} /> },
       { path: "queries", element: <LazyPage Component={QueriesPage} /> },

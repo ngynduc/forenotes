@@ -9,6 +9,7 @@ import { createTagRoutes } from "./tagRoutes.js";
 import { createAuditLogRoutes } from "./auditLogRoutes.js";
 import { createDashboardRoutes } from "./dashboardRoutes.js";
 import { createUserRoutes } from "./userRoutes.js";
+import { createReportRoutes } from "./reportRoutes.js";
 
 export function createRoutes(database: Database) {
   const router = Router();
@@ -19,6 +20,7 @@ export function createRoutes(database: Database) {
   router.use("/api", createTagRoutes(database));
   router.use("/api", createSearchRoutes(database));
   router.use("/api", createAuditLogRoutes(database));
+  router.use("/api", createReportRoutes(database));
   router.use("/api/dashboard", createDashboardRoutes(database));
   router.use("/api/notifications", createNotificationRoutes(database));
   return router;

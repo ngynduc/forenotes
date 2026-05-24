@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgres://forenotes:forenotes@db:5432/forenotes
       PORT: "8787"
+      FORENOTES_SEED_DEV_USERS: "1"
     ports:
       - "8787:8787"
 

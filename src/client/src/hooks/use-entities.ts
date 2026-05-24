@@ -290,3 +290,176 @@ export function useDeleteEntityLink() {
     },
   });
 }
+
+export function useReportTemplates() {
+  const id = useIncidentId();
+  return useQuery({
+    queryKey: ["incidents", id, "report-templates"],
+    queryFn: () => api.listReportTemplates(id!),
+    enabled: !!id,
+  });
+}
+
+export function useCreateReportTemplate() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.createReportTemplate>[1]) => api.createReportTemplate(id!, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "report-templates"] }),
+  });
+}
+
+export function useUpdateReportTemplate() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, data }: { templateId: string; data: Parameters<typeof api.updateReportTemplate>[2] }) =>
+      api.updateReportTemplate(id!, templateId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "report-templates"] }),
+  });
+}
+
+export function useDuplicateReportTemplate() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, name }: { templateId: string; name?: string }) => api.duplicateReportTemplate(id!, templateId, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "report-templates"] }),
+  });
+}
+
+export function useDeleteReportTemplate() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (templateId: string) => api.deleteReportTemplate(id!, templateId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "report-templates"] }),
+  });
+}
+
+export function useReports() {
+  const id = useIncidentId();
+  return useQuery({
+    queryKey: ["incidents", id, "reports"],
+    queryFn: () => api.listReports(id!),
+    enabled: !!id,
+  });
+}
+
+export function useGenerateReport() {
+  const id = useIncidentId();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.generateReport>[1]) => api.generateReport(id!, data),
+  });
+}
+
+export function useCreateReport() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.createReport>[1]) => api.createReport(id!, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "reports"] }),
+  });
+}
+
+export function useUpdateReport() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reportId, data }: { reportId: string; data: Parameters<typeof api.updateReport>[2] }) =>
+      api.updateReport(id!, reportId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "reports"] }),
+  });
+}
+
+export function useDeleteReport() {
+  const id = useIncidentId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (reportId: string) => api.deleteReport(id!, reportId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incidents", id, "reports"] }),
+  });
+}
+
+export function useExportReportPdf() {
+  const id = useIncidentId();
+  return useMutation({
+    mutationFn: ({ reportId, pdfTemplateId }: { reportId: string; pdfTemplateId?: string }) => api.exportReportPdf(id!, reportId, { pdfTemplateId }),
+  });
+}
+
+export function usePdfTemplates() {
+  const id = useIncidentId();
+  return useQuery({
+    queryKey: ["pdf-templates", id ?? ""],
+    queryFn: () => api.listPdfTemplates(id),
+  });
+}
+
+export function useCreatePdfTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.createPdfTemplate>[0]) => api.createPdfTemplate(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pdf-templates"] }),
+  });
+}
+
+export function useUpdatePdfTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, data }: { templateId: string; data: Parameters<typeof api.updatePdfTemplate>[1] }) =>
+      api.updatePdfTemplate(templateId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pdf-templates"] }),
+  });
+}
+
+export function useDuplicatePdfTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, name }: { templateId: string; name?: string }) => api.duplicatePdfTemplate(templateId, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pdf-templates"] }),
+  });
+}
+
+export function useDeletePdfTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (templateId: string) => api.deletePdfTemplate(templateId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pdf-templates"] }),
+  });
+}
+
+export function usePreviewPdfTemplate() {
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.previewPdfTemplate>[0]) => api.previewPdfTemplate(data),
+  });
+}
+
+export function useLlmSettings() {
+  return useQuery({
+    queryKey: ["llm-settings"],
+    queryFn: () => api.getLlmSettings(),
+  });
+}
+
+export function useSaveLlmSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Parameters<typeof api.saveLlmSettings>[0]) => api.saveLlmSettings(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["llm-settings"] }),
+  });
+}
+
+export function useDeleteLlmSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.deleteLlmSettings(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["llm-settings"] }),
+  });
+}
+
+export function useTestLlmSettings() {
+  return useMutation({
+    mutationFn: () => api.testLlmSettings(),
+  });
+}

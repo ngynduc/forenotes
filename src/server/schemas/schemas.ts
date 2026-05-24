@@ -13,6 +13,7 @@ import {
   INDICATOR_TYPES,
   TASK_LINK_ENTITY_TYPES,
   TASK_PRIORITIES,
+  REPORT_TYPES,
   TASK_STATUSES
 } from "../../shared/domain.js";
 
@@ -121,6 +122,111 @@ export const createTaskLinkSchema = z.object({
 export const taskNoteSchema = z.object({
   content: z.string().max(1024 * 1024)
 });
+
+export const createReportTemplateSchema = z.object({
+  name: z.string().min(1).max(160),
+  reportType: z.enum(REPORT_TYPES),
+  content: z.string().min(1).max(1024 * 1024)
+});
+
+export const updateReportTemplateSchema = createReportTemplateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0);
+
+export const duplicateReportTemplateSchema = z.object({
+  name: z.string().min(1).max(160).optional()
+});
+
+export const reportContextQuerySchema = z.object({
+  type: z.enum(REPORT_TYPES),
+  date: z.iso.date().optional(),
+  timezone: z.string().min(1).optional()
+}).superRefine((value, ctx) => {
+  if (value.type === "daily" && (!value.date || !value.timezone)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Daily report context requires date and timezone.",
+      path: ["date"]
+    });
+  }
+});
+
+export const generateReportSchema = z.object({
+  templateId: uuidSchema,
+  reportType: z.enum(REPORT_TYPES),
+  date: z.iso.date().optional(),
+  timezone: z.string().min(1).optional(),
+  useLlm: z.boolean().optional().default(false)
+}).superRefine((value, ctx) => {
+  if (value.reportType === "daily" && (!value.date || !value.timezone)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Daily report generation requires date and timezone.",
+      path: ["date"]
+    });
+  }
+});
+
+export const createReportSchema = z.object({
+  templateId: uuidSchema.optional(),
+  title: z.string().min(1).max(220),
+  reportType: z.enum(REPORT_TYPES),
+  reportDate: z.iso.date().nullable().optional(),
+  timezone: z.string().min(1).nullable().optional(),
+  markdown: z.string().min(1).max(2 * 1024 * 1024),
+  generationMode: z.enum(["deterministic", "llm"]),
+  generatedContext: z.record(z.string(), z.unknown()),
+  unresolvedPlaceholders: z.array(z.string()).optional()
+});
+
+export const updateReportSchema = z.object({
+  title: z.string().min(1).max(220).optional(),
+  markdown: z.string().min(1).max(2 * 1024 * 1024).optional()
+}).refine((value) => Object.keys(value).length > 0);
+
+const customHeadersSchema = z
+  .array(z.object({
+    name: z.string().trim().min(1).max(120),
+    value: z.string().max(4096)
+  }))
+  .max(24)
+  .optional()
+  .default([]);
+
+export const upsertLlmSettingsSchema = z.object({
+  provider: z.string().min(1).max(80),
+  baseUrl: z.url().optional().or(z.literal("")),
+  model: z.string().min(1).max(120),
+  apiKey: z.string().max(4096).optional().default(""),
+  customHeaders: customHeadersSchema
+});
+
+export const createPdfTemplateSchema = z.object({
+  name: z.string().min(1).max(160),
+  description: z.string().max(500).optional().or(z.literal("")),
+  scope: z.enum(["global", "incident"]).optional().default("global"),
+  incidentId: uuidSchema.nullable().optional(),
+  htmlTemplate: z.string().min(1).max(1024 * 1024),
+  css: z.string().max(512 * 1024).optional().default(""),
+  isDefault: z.boolean().optional().default(false)
+});
+
+export const updatePdfTemplateSchema = createPdfTemplateSchema.partial().refine((value) => Object.keys(value).length > 0);
+
+export const duplicatePdfTemplateSchema = z.object({
+  name: z.string().min(1).max(160).optional()
+});
+
+export const previewPdfTemplateSchema = z.object({
+  pdfTemplateId: uuidSchema.optional(),
+  htmlTemplate: z.string().max(1024 * 1024).optional(),
+  css: z.string().max(512 * 1024).optional(),
+  sampleMarkdown: z.string().max(2 * 1024 * 1024).optional()
+});
+
+export const exportReportPdfSchema = z.object({
+  pdfTemplateId: uuidSchema.optional()
+}).optional().default({});
 
 export const createQuerySchema = z.object({
   name: z.string().min(1),

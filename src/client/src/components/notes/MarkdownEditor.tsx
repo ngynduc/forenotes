@@ -13,10 +13,18 @@ interface UploadedImage {
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
-  onUploadImage: (file: File) => Promise<UploadedImage>;
+  onUploadImage?: (file: File) => Promise<UploadedImage>;
+  uploadStatusLabel?: string;
+  helperText?: string;
 }
 
-export function MarkdownEditor({ value, onChange, onUploadImage }: MarkdownEditorProps) {
+export function MarkdownEditor({
+  value,
+  onChange,
+  onUploadImage,
+  uploadStatusLabel = "Uploading pasted image...",
+  helperText = "Images paste as Markdown when uploads are enabled."
+}: MarkdownEditorProps) {
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -25,7 +33,7 @@ export function MarkdownEditor({ value, onChange, onUploadImage }: MarkdownEdito
   async function handlePaste(event: React.ClipboardEvent) {
     const files = Array.from(event.clipboardData.files);
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) {
+    if (imageFiles.length === 0 || !onUploadImage) {
       return;
     }
 
@@ -92,7 +100,7 @@ export function MarkdownEditor({ value, onChange, onUploadImage }: MarkdownEdito
             Preview
           </button>
         </div>
-        {uploading && <span className="text-xs text-[var(--color-text-muted)]">Uploading pasted image...</span>}
+        {uploading && <span className="text-xs text-[var(--color-text-muted)]">{uploadStatusLabel}</span>}
       </div>
 
       {pasteError && (
@@ -149,7 +157,7 @@ export function MarkdownEditor({ value, onChange, onUploadImage }: MarkdownEdito
       )}
 
       <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-        <span>Images paste as Markdown and are uploaded to task note storage.</span>
+        <span>{helperText}</span>
         <Button type="button" variant="ghost" size="sm" onClick={() => setMode(mode === "edit" ? "preview" : "edit")}>
           Switch to {mode === "edit" ? "preview" : "edit"}
         </Button>
