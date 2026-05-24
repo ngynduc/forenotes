@@ -1214,6 +1214,38 @@ class ApiClient {
     return { customTags: payload.customTags.map(normalizeCustomTag) };
   };
 
+  listFindingTags = async (incidentId: string, findingId: string) => {
+    const payload = await this.request<{ attackTags: RawAttackTagItem[]; customTags: RawTagItem[] }>(
+      `/incidents/${incidentId}/findings/${findingId}/tags`
+    );
+    return {
+      attackTags: payload.attackTags.map(normalizeAttackTag),
+      customTags: payload.customTags.map(normalizeTag),
+    };
+  };
+
+  attachAttackTagToFinding = (incidentId: string, findingId: string, attackTagId: string) =>
+    this.request(`/incidents/${incidentId}/findings/${findingId}/attack-tags`, "POST", { attackTagId });
+
+  attachCustomTagToFinding = (incidentId: string, findingId: string, customTagId: string) =>
+    this.request(`/incidents/${incidentId}/findings/${findingId}/custom-tags`, "POST", { customTagId });
+
+  listTimelineEventTags = async (incidentId: string, timelineEventId: string) => {
+    const payload = await this.request<{ attackTags: RawAttackTagItem[]; customTags: RawTagItem[] }>(
+      `/incidents/${incidentId}/timeline-events/${timelineEventId}/tags`
+    );
+    return {
+      attackTags: payload.attackTags.map(normalizeAttackTag),
+      customTags: payload.customTags.map(normalizeTag),
+    };
+  };
+
+  attachAttackTagToTimelineEvent = (incidentId: string, timelineEventId: string, attackTagId: string) =>
+    this.request(`/incidents/${incidentId}/timeline-events/${timelineEventId}/attack-tags`, "POST", { attackTagId });
+
+  attachCustomTagToTimelineEvent = (incidentId: string, timelineEventId: string, customTagId: string) =>
+    this.request(`/incidents/${incidentId}/timeline-events/${timelineEventId}/custom-tags`, "POST", { customTagId });
+
   createCustomTag = (caseId: string, data: { name: string; color?: string }) =>
     this.request(`/cases/${caseId}/custom-tags`, "POST", data);
 

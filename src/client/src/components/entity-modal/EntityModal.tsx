@@ -18,6 +18,8 @@ import type { EntityDefinition } from "@/config/entity-definitions";
 import { useUsers } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { EntityLinksSection } from "@/components/entity-modal/EntityLinksSection";
+import { EntityTagsSection } from "@/components/entity-modal/EntityTagsSection";
+import type { AttackTagItem, TagItem } from "@/lib/api";
 
 interface EntityModalProps {
   open: boolean;
@@ -237,10 +239,18 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
             </div>
           ))}
           {definition.entityLinkSourceType && (
-            <EntityLinksSection
-              sourceType={definition.entityLinkSourceType}
-              sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
-            />
+            <>
+              <EntityTagsSection
+                sourceType={definition.entityLinkSourceType}
+                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+                initialCustomTags={Array.isArray(item?.customTags) ? (item.customTags as TagItem[]) : undefined}
+                initialAttackTags={Array.isArray(item?.attackTags) ? (item.attackTags as AttackTagItem[]) : undefined}
+              />
+              <EntityLinksSection
+                sourceType={definition.entityLinkSourceType}
+                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+              />
+            </>
           )}
         </div>
 
