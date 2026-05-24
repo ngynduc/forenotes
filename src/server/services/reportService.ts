@@ -652,8 +652,9 @@ export async function exportReportPdf(
   let pdf: Buffer;
   try {
     pdf = await renderHtmlToPdf(finalHtml);
-  } catch {
-    throw new AppError(500, "PDF export failed while rendering HTML.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new AppError(500, `PDF export failed: ${message}`);
   }
   const exportId = randomUUID();
   const fileName = `${safePathSegment(String(report.title)) || "report"}.pdf`;

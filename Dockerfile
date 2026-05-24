@@ -18,10 +18,13 @@ RUN npm exec vite build
 
 FROM node:22-alpine AS runtime
 
+RUN apk add --no-cache chromium
+
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8787
+ENV PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
