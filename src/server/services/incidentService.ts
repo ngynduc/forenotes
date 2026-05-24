@@ -5,6 +5,7 @@ import { AppError } from "../errors.js";
 import { requireCaseMembership, requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
 import { createNotification } from "./notificationService.js";
+import { syncCaseMembersToIncident } from "./membershipService.js";
 
 interface CreateIncidentInput {
   caseId: string;
@@ -46,13 +47,7 @@ export async function createIncident(database: Database, user: AuthenticatedUser
     [incidentId, input.caseId, input.name, input.summary ?? null, input.severity ?? null, input.status, user.id]
   );
 
-  await database.query(
-    `
-      insert into incident_members (incident_id, user_id, incident_role, added_by_user_id)
-      values ($1, $2, $3, $4)
-    `,
-    [incidentId, user.id, "incident_lead", user.id]
-  );
+  await syncCaseMembersToIncident(database, input.caseId, incidentId, user.id);
 
   await createAuditLog(database, {
     actorUserId: user.id,

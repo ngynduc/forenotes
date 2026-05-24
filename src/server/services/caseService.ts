@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "../db/types.js";
 import type { AuthenticatedUser } from "./authService.js";
+import type { CaseMemberRole } from "../../shared/domain.js";
 import { AppError } from "../errors.js";
-import { requirePermission } from "../permissions/permissionService.js";
+import { requireCasePermission, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
 
 interface CreateCaseInput {
@@ -12,6 +13,7 @@ interface CreateCaseInput {
   endDate?: string;
   status: string;
   summary?: string;
+  members?: Array<{ userId: string; caseRole: CaseMemberRole }>;
 }
 
 export async function listCases(database: Database, userId: string) {
@@ -55,6 +57,14 @@ export async function listCases(database: Database, userId: string) {
 export async function createCase(database: Database, user: AuthenticatedUser, input: CreateCaseInput) {
   await requirePermission(database, user, "case:create");
 
+  const initialMembers = (input.members ?? []).filter((member) => member.userId !== user.id);
+  for (const member of initialMembers) {
+    const userResult = await database.query("select 1 from users where id = $1 and status = 'active'", [member.userId]);
+    if (userResult.rowCount === 0) {
+      throw new AppError(404, "Case member user not found");
+    }
+  }
+
   const caseId = randomUUID();
   await database.query(
     `
@@ -72,6 +82,16 @@ export async function createCase(database: Database, user: AuthenticatedUser, in
     `,
     [caseId, user.id, "case_lead", user.id]
   );
+
+  for (const member of initialMembers) {
+    await database.query(
+      `
+        insert into case_members (case_id, user_id, case_role, added_by_user_id)
+        values ($1, $2, $3, $4)
+      `,
+      [caseId, member.userId, member.caseRole ?? "analyst", user.id]
+    );
+  }
 
   await createAuditLog(database, {
     actorUserId: user.id,
@@ -92,7 +112,7 @@ export async function updateCase(
   caseId: string,
   input: Partial<CreateCaseInput>
 ) {
-  await requirePermission(database, user, "case:update");
+  await requireCasePermission(database, user, caseId, "case:update");
   const existing = await database.query("select * from cases where id = $1", [caseId]);
   if (existing.rowCount === 0) {
     throw new AppError(404, "Case not found");

@@ -4,6 +4,7 @@ import { env } from "./env.js";
 import { runMigrations } from "./db/setup.js";
 import { createUser } from "./services/userService.js";
 import type { AuthenticatedUser } from "./services/authService.js";
+import type { CaseMemberRole } from "../shared/domain.js";
 import { createCase } from "./services/caseService.js";
 import { createIncident } from "./services/incidentService.js";
 import { addCaseMember, addIncidentMember } from "./services/membershipService.js";
@@ -34,13 +35,15 @@ function toUser(row: Record<string, unknown>): AuthenticatedUser {
     email: String(row.email),
     displayName: String(row.display_name),
     globalRole: String(row.global_role) as AuthenticatedUser["globalRole"],
-    status: String(row.status)
+    status: String(row.status),
+    mustChangePassword: Boolean(row.must_change_password),
+    isBootstrapAdmin: Boolean(row.is_bootstrap_admin)
   };
 }
 
 type SeedUser = {
   auth: AuthenticatedUser;
-  caseRole: string;
+  caseRole: CaseMemberRole;
   incidentRole: string;
 };
 
@@ -259,7 +262,7 @@ const demoUsers: Record<
     email: string;
     displayName: string;
     globalRole: "commander" | "response_lead" | "analyst";
-    caseRole: string;
+    caseRole: CaseMemberRole;
     incidentRole: string;
   }
 > = {
@@ -267,7 +270,7 @@ const demoUsers: Record<
     email: "commander@example.com",
     displayName: "Demo Commander",
     globalRole: "commander",
-    caseRole: "incident_commander",
+    caseRole: "case_lead",
     incidentRole: "incident_commander"
   },
   lead: {

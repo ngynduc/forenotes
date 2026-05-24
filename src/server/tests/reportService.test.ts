@@ -97,7 +97,9 @@ function user(id: string, globalRole: AuthenticatedUser["globalRole"] = "analyst
     email: "analyst@example.com",
     displayName: "Analyst",
     globalRole,
-    status: "active"
+    status: "active",
+    mustChangePassword: false,
+    isBootstrapAdmin: false
   };
 }
 

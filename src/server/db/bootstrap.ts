@@ -3,6 +3,7 @@ import type { Database } from "./types.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../permissions/catalog.js";
 import { hashPassword } from "../services/authService.js";
 import type { GlobalRole } from "../../shared/domain.js";
+import { env } from "../env.js";
 
 const ATTACK_TAG_SEED = [
   {
@@ -127,6 +128,8 @@ export async function bootstrapSecurityModel(database: Database) {
   if (shouldSeedDevelopmentUsers()) {
     await ensureDevelopmentUsers(database);
   }
+
+  await ensureBootstrapAdmin(database);
 }
 
 async function ensureDevelopmentUsers(database: Database) {
@@ -153,6 +156,39 @@ async function ensureDevelopmentUsers(database: Database) {
       ]
     );
   }
+}
+
+async function ensureBootstrapAdmin(database: Database) {
+  const existingAdmin = await database.query("select 1 from users where global_role = 'admin' limit 1");
+  if (existingAdmin.rowCount && existingAdmin.rowCount > 0) {
+    return;
+  }
+
+  if (process.env.NODE_ENV === "production" && env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!") {
+    console.warn("Bootstrap admin is using the default temporary password; change it immediately after first login.");
+  }
+
+  await database.query(
+    `
+      insert into users (
+        id, username, email, display_name, global_role, status, password_hash, must_change_password, is_bootstrap_admin
+      )
+      values ($1, $2, $3, $4, 'admin', 'active', $5, $6, true)
+      on conflict (email) do nothing
+    `,
+    [
+      randomUUID(),
+      normalizeUsername(env.FORENOTES_BOOTSTRAP_ADMIN_USERNAME),
+      env.FORENOTES_BOOTSTRAP_ADMIN_EMAIL,
+      env.FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME,
+      await hashPassword(env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD),
+      env.FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY || env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!"
+    ]
+  );
+}
+
+function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
 }
 
 function shouldSeedDevelopmentUsers() {

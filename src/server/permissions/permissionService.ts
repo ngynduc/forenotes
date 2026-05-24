@@ -39,12 +39,23 @@ export async function requireCaseMembership(database: Database, userId: string, 
   }
 }
 
+export async function requireCasePermission(
+  database: Database,
+  user: AuthenticatedUser,
+  caseId: string,
+  key: PermissionKey
+) {
+  await requirePermission(database, user, key);
+  await requireCaseMembership(database, user.id, caseId);
+}
+
 export async function requireIncidentMembership(database: Database, userId: string, incidentId: string) {
   const result = await database.query(
     `
       select 1
-      from incident_members
-      where incident_id = $1 and user_id = $2
+      from incidents i
+      inner join case_members cm on cm.case_id = i.case_id and cm.user_id = $2
+      where i.id = $1
     `,
     [incidentId, userId]
   );
@@ -52,4 +63,14 @@ export async function requireIncidentMembership(database: Database, userId: stri
   if (result.rowCount === 0) {
     throw new AppError(404, "Incident not found");
   }
+}
+
+export async function requireIncidentPermission(
+  database: Database,
+  user: AuthenticatedUser,
+  incidentId: string,
+  key: PermissionKey
+) {
+  await requirePermission(database, user, key);
+  await requireIncidentMembership(database, user.id, incidentId);
 }

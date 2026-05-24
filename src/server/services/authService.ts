@@ -17,6 +17,8 @@ export interface AuthenticatedUser {
   displayName: string;
   globalRole: GlobalRole;
   status: string;
+  mustChangePassword: boolean;
+  isBootstrapAdmin: boolean;
 }
 
 interface UserRecord {
@@ -26,6 +28,8 @@ interface UserRecord {
   display_name: string;
   global_role: GlobalRole;
   status: string;
+  must_change_password: boolean;
+  is_bootstrap_admin: boolean;
 }
 
 interface PasswordUserRecord extends UserRecord {
@@ -49,6 +53,7 @@ export async function loginWithPassword(database: Database, input: { username: s
   const result = await database.query<PasswordUserRecord>(
     `
       select id, username, email, display_name, global_role, status, password_hash
+        , must_change_password, is_bootstrap_admin
       from users
       where username = $1
     `,
@@ -112,7 +117,7 @@ export async function getAuthenticatedUser(request: Request, database: Database)
   }
 
   const result = await database.query<UserRecord>(
-    "select id, username, email, display_name, global_role, status from users where id = $1",
+    "select id, username, email, display_name, global_role, status, must_change_password, is_bootstrap_admin from users where id = $1",
     [userId]
   );
 
@@ -160,7 +165,7 @@ export function clearSessionCookie(response: Response) {
 async function getUserFromSession(database: Database, sessionId: string): Promise<AuthenticatedUser | null> {
   const result = await database.query<UserRecord>(
     `
-      select u.id, u.username, u.email, u.display_name, u.global_role, u.status
+      select u.id, u.username, u.email, u.display_name, u.global_role, u.status, u.must_change_password, u.is_bootstrap_admin
       from sessions s
       join users u on u.id = s.user_id
       where s.id = $1 and s.expires_at > now()
@@ -188,8 +193,67 @@ function mapUser(user: UserRecord): AuthenticatedUser {
     email: user.email,
     displayName: user.display_name,
     globalRole: user.global_role,
-    status: user.status
+    status: user.status,
+    mustChangePassword: user.must_change_password,
+    isBootstrapAdmin: user.is_bootstrap_admin
   };
+}
+
+export function validatePasswordPolicy(password: string) {
+  if (password.length < 12) {
+    throw new AppError(400, "Password must be at least 12 characters.");
+  }
+  if (!/[A-Za-z]/.test(password) || !/[0-9\W_]/.test(password)) {
+    throw new AppError(400, "Password must contain at least one letter and one number or symbol.");
+  }
+}
+
+export async function changeOwnPassword(
+  database: Database,
+  user: AuthenticatedUser,
+  input: { currentPassword: string; newPassword: string; confirmPassword: string }
+) {
+  if (input.newPassword !== input.confirmPassword) {
+    throw new AppError(400, "Password confirmation does not match.");
+  }
+  validatePasswordPolicy(input.newPassword);
+
+  const result = await database.query<{ password_hash: string | null }>("select password_hash from users where id = $1", [user.id]);
+  if (result.rowCount === 0 || !result.rows[0].password_hash) {
+    throw new AppError(401, "Current password is required.");
+  }
+  if (!(await verifyPassword(result.rows[0].password_hash, input.currentPassword))) {
+    throw new AppError(401, "Current password is incorrect.");
+  }
+  if (await verifyPassword(result.rows[0].password_hash, input.newPassword)) {
+    throw new AppError(400, "New password must differ from the current password.");
+  }
+
+  await database.query(
+    "update users set password_hash = $2, must_change_password = false, updated_at = now() where id = $1",
+    [user.id, await hashPassword(input.newPassword)]
+  );
+}
+
+export async function resetUserPassword(
+  database: Database,
+  targetUserId: string,
+  input: { newPassword: string; confirmPassword: string }
+) {
+  if (input.newPassword !== input.confirmPassword) {
+    throw new AppError(400, "Password confirmation does not match.");
+  }
+  validatePasswordPolicy(input.newPassword);
+
+  const result = await database.query("select 1 from users where id = $1", [targetUserId]);
+  if (result.rowCount === 0) {
+    throw new AppError(404, "User not found");
+  }
+
+  await database.query(
+    "update users set password_hash = $2, must_change_password = true, updated_at = now() where id = $1",
+    [targetUserId, await hashPassword(input.newPassword)]
+  );
 }
 
 function normalizeUsername(username: string) {

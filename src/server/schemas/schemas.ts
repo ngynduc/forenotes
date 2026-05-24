@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CASE_MEMBER_ROLES,
   CASE_STATUSES,
   CONFIDENCE_LEVELS,
   EVIDENCE_TYPES,
@@ -18,6 +19,10 @@ import {
 } from "../../shared/domain.js";
 
 export const uuidSchema = z.string().uuid();
+const caseMemberRoleSchema = z.preprocess(
+  (value) => (value === "member" ? "analyst" : value),
+  z.enum(CASE_MEMBER_ROLES)
+);
 export const utcIsoDatetimeSchema = z
   .iso
   .datetime()
@@ -44,7 +49,29 @@ export const createCaseSchema = z.object({
   startDate: utcIsoDatetimeSchema.optional(),
   endDate: utcIsoDatetimeSchema.optional(),
   status: z.enum(CASE_STATUSES),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  members: z
+    .array(
+      z.object({
+        userId: uuidSchema,
+        caseRole: caseMemberRoleSchema.optional().default("analyst")
+      })
+    )
+    .optional()
+    .default([])
+    .superRefine((members, ctx) => {
+      const seen = new Set<string>();
+      for (const [index, member] of members.entries()) {
+        if (seen.has(member.userId)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Duplicate case member.",
+            path: [index, "userId"]
+          });
+        }
+        seen.add(member.userId);
+      }
+    })
 });
 
 export const updateCaseSchema = createCaseSchema.partial().refine((value) => Object.keys(value).length > 0);
@@ -317,10 +344,25 @@ export const mitreMatrixQuerySchema = z.object({
 
 export const addCaseMemberSchema = z.object({
   userId: uuidSchema,
-  caseRole: z.string().min(1)
+  caseRole: caseMemberRoleSchema.optional().default("analyst")
+});
+
+export const updateCaseMemberSchema = z.object({
+  caseRole: caseMemberRoleSchema
 });
 
 export const addIncidentMemberSchema = z.object({
   userId: uuidSchema,
   incidentRole: z.string().min(1)
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(1),
+  confirmPassword: z.string().min(1)
+});
+
+export const resetPasswordSchema = z.object({
+  newPassword: z.string().min(1),
+  confirmPassword: z.string().min(1)
 });

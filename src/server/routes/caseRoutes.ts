@@ -4,8 +4,14 @@ import { asyncHandler } from "../http.js";
 import { getAuthenticatedUser } from "../services/authService.js";
 import { createCase, listCases, updateCase } from "../services/caseService.js";
 import { createIncident, listIncidentsForCase } from "../services/incidentService.js";
-import { addCaseMember, listCaseMembers, removeCaseMember } from "../services/membershipService.js";
-import { addCaseMemberSchema, createCaseSchema, createIncidentSchema, updateCaseSchema } from "../schemas/schemas.js";
+import { addCaseMember, listCaseMembers, removeCaseMember, updateCaseMemberRole } from "../services/membershipService.js";
+import {
+  addCaseMemberSchema,
+  createCaseSchema,
+  createIncidentSchema,
+  updateCaseMemberSchema,
+  updateCaseSchema
+} from "../schemas/schemas.js";
 import { getRequiredParam } from "./params.js";
 
 export function createCaseRoutes(database: Database) {
@@ -67,6 +73,18 @@ export function createCaseRoutes(database: Database) {
       const caseId = getRequiredParam(request.params.caseId, "caseId");
       const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
       await removeCaseMember(database, user, caseId, memberUserId);
+      response.status(204).send();
+    })
+  );
+
+  router.patch(
+    "/:caseId/members/:memberUserId",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const caseId = getRequiredParam(request.params.caseId, "caseId");
+      const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
+      const payload = updateCaseMemberSchema.parse(request.body);
+      await updateCaseMemberRole(database, user, caseId, memberUserId, payload.caseRole);
       response.status(204).send();
     })
   );

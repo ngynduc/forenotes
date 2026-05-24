@@ -4,8 +4,10 @@ import type { Database } from "../db/types.js";
 import { GLOBAL_ROLES } from "../../shared/domain.js";
 import { asyncHandler } from "../http.js";
 import { createUser, listUsers } from "../services/userService.js";
-import { hashPassword, requireAuth } from "../services/authService.js";
+import { hashPassword, requireAuth, resetUserPassword } from "../services/authService.js";
 import { requirePermission } from "../permissions/permissionService.js";
+import { resetPasswordSchema } from "../schemas/schemas.js";
+import { getRequiredParam } from "./params.js";
 
 const createUserSchema = z.object({
   username: z.string().trim().min(1).optional(),
@@ -40,6 +42,18 @@ export function createUserRoutes(database: Database) {
         passwordHash: payload.password ? await hashPassword(payload.password) : null
       });
       response.status(201).json({ user });
+    })
+  );
+
+  router.post(
+    "/:userId/reset-password",
+    asyncHandler(async (request, response) => {
+      const actor = await requireAuth(request, database);
+      await requirePermission(database, actor, "user:manage");
+      const userId = getRequiredParam(request.params.userId, "userId");
+      const payload = resetPasswordSchema.parse(request.body);
+      await resetUserPassword(database, userId, payload);
+      response.status(204).send();
     })
   );
 

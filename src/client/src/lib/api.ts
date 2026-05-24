@@ -10,6 +10,8 @@ export interface CurrentUser {
   displayName: string;
   globalRole: string;
   status: string;
+  mustChangePassword: boolean;
+  isBootstrapAdmin: boolean;
 }
 
 export interface UserItem {
@@ -19,6 +21,8 @@ export interface UserItem {
   displayName: string;
   globalRole: string;
   status: string;
+  mustChangePassword?: boolean;
+  isBootstrapAdmin?: boolean;
   lastLoginAt?: string;
 }
 
@@ -64,6 +68,7 @@ export interface CreateCaseInput {
   endDate?: string | null;
   status: string;
   summary?: string;
+  members?: Array<{ userId: string; caseRole: string }>;
 }
 
 export interface IncidentItem {
@@ -374,6 +379,10 @@ interface RawCurrentUser {
   globalRole?: string;
   global_role?: string;
   status: string;
+  mustChangePassword?: boolean;
+  must_change_password?: boolean;
+  isBootstrapAdmin?: boolean;
+  is_bootstrap_admin?: boolean;
 }
 
 interface RawUserItem {
@@ -383,6 +392,8 @@ interface RawUserItem {
   display_name?: string;
   global_role?: string;
   status: string;
+  must_change_password?: boolean;
+  is_bootstrap_admin?: boolean;
   last_login_at?: string;
 }
 
@@ -622,6 +633,8 @@ function normalizeCurrentUser(user: RawCurrentUser): CurrentUser {
     displayName: user.displayName ?? user.display_name ?? user.email,
     globalRole: user.globalRole ?? user.global_role ?? "analyst",
     status: user.status,
+    mustChangePassword: user.mustChangePassword ?? user.must_change_password ?? false,
+    isBootstrapAdmin: user.isBootstrapAdmin ?? user.is_bootstrap_admin ?? false,
   };
 }
 
@@ -633,6 +646,8 @@ function normalizeUser(user: RawUserItem): UserItem {
     displayName: user.display_name ?? user.email,
     globalRole: user.global_role ?? "analyst",
     status: user.status,
+    mustChangePassword: user.must_change_password,
+    isBootstrapAdmin: user.is_bootstrap_admin,
     lastLoginAt: user.last_login_at,
   };
 }
@@ -988,8 +1003,17 @@ class ApiClient {
   addCaseMember = (caseId: string, data: { userId: string; caseRole: string }) =>
     this.request(`/cases/${caseId}/members`, "POST", data);
 
+  updateCaseMember = (caseId: string, userId: string, data: { caseRole: string }) =>
+    this.request(`/cases/${caseId}/members/${userId}`, "PATCH", data);
+
   removeCaseMember = (caseId: string, userId: string) =>
     this.request(`/cases/${caseId}/members/${userId}`, "DELETE");
+
+  changePassword = (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    this.request("/auth/change-password", "POST", data);
+
+  resetUserPassword = (userId: string, data: { newPassword: string; confirmPassword: string }) =>
+    this.request(`/users/${userId}/reset-password`, "POST", data);
 
   listIncidents = async (caseId: string) => {
     const payload = await this.request<{ incidents: RawIncidentItem[] }>(`/cases/${caseId}/incidents`);

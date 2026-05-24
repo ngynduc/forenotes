@@ -16,7 +16,7 @@ import {
   useTestLlmSettings,
   useUpdatePdfTemplate,
 } from "@/hooks/use-entities";
-import { useCurrentUser } from "@/hooks/use-auth";
+import { useChangePassword, useCurrentUser } from "@/hooks/use-auth";
 import { useTimezone } from "@/providers/TimezoneProvider";
 
 function messageFromError(error: unknown, fallback: string) {
@@ -106,6 +106,7 @@ export default function SettingsPage() {
   const duplicatePdfTemplate = useDuplicatePdfTemplate();
   const deletePdfTemplate = useDeletePdfTemplate();
   const previewPdfTemplate = usePreviewPdfTemplate();
+  const changePassword = useChangePassword();
   const user = data?.user;
   const llmStatus = llmSettings.data;
   const [llmForm, setLlmForm] = useState({
@@ -118,6 +119,8 @@ export default function SettingsPage() {
   const [llmMessage, setLlmMessage] = useState<string | null>(null);
   const [pdfDraft, setPdfDraft] = useState<PdfTemplate | null>(null);
   const [pdfMessage, setPdfMessage] = useState<string | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const pdfTemplates = pdfTemplatesQuery.data?.templates ?? [];
 
   useEffect(() => {
@@ -183,6 +186,17 @@ export default function SettingsPage() {
       ...value,
       customHeaders: value.customHeaders.filter((_header, currentIndex) => currentIndex !== index),
     }));
+  }
+
+  function submitPasswordChange() {
+    setPasswordMessage(null);
+    changePassword.mutate(passwordForm, {
+      onSuccess: () => {
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+        setPasswordMessage("Password changed.");
+      },
+      onError: (error) => setPasswordMessage(messageFromError(error, "Unable to change password.")),
+    });
   }
 
   function savePdfTemplate() {
@@ -262,6 +276,37 @@ export default function SettingsPage() {
           <div>
             <label className="mb-1 block text-sm font-medium">Timezone</label>
             <TimezonePicker value={timezone} onChange={setTimezone} options={timezoneOptions} />
+          </div>
+
+          <div className="space-y-3 border-t border-[var(--color-border)] pt-4">
+            <div>
+              <h4 className="text-sm font-semibold">Password</h4>
+              <p className="text-xs text-[var(--color-text-muted)]">
+                {user?.mustChangePassword ? "Password rotation is required before normal workspace use." : "Change your account password."}
+              </p>
+            </div>
+            <Input
+              type="password"
+              placeholder="Current password"
+              value={passwordForm.currentPassword}
+              onChange={(event) => setPasswordForm((value) => ({ ...value, currentPassword: event.target.value }))}
+            />
+            <Input
+              type="password"
+              placeholder="New password"
+              value={passwordForm.newPassword}
+              onChange={(event) => setPasswordForm((value) => ({ ...value, newPassword: event.target.value }))}
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              value={passwordForm.confirmPassword}
+              onChange={(event) => setPasswordForm((value) => ({ ...value, confirmPassword: event.target.value }))}
+            />
+            {passwordMessage ? <p className="text-xs text-[var(--color-text-muted)]">{passwordMessage}</p> : null}
+            <Button size="sm" onClick={submitPasswordChange} disabled={changePassword.isPending}>
+              {changePassword.isPending ? "Saving..." : "Change Password"}
+            </Button>
           </div>
         </section>
 

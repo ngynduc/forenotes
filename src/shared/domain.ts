@@ -1,6 +1,9 @@
 export const GLOBAL_ROLES = ["admin", "commander", "response_lead", "analyst", "viewer"] as const;
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
 
+export const CASE_MEMBER_ROLES = ["case_lead", "response_lead", "analyst", "viewer"] as const;
+export type CaseMemberRole = (typeof CASE_MEMBER_ROLES)[number];
+
 export const CASE_STATUSES = ["open", "closed"] as const;
 export const INCIDENT_SEVERITIES = ["low", "medium", "high", "critical"] as const;
 export const INCIDENT_STATUSES = ["open", "closed", "contained"] as const;

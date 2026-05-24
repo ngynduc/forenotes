@@ -33,3 +33,37 @@ export function useCaseMembers(caseId?: string) {
     enabled: !!caseId,
   });
 }
+
+export function useAddCaseMember(caseId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { userId: string; caseRole: string }) => api.addCaseMember(caseId!, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "members"] });
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "incidents"] });
+    },
+  });
+}
+
+export function useUpdateCaseMember(caseId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, caseRole }: { userId: string; caseRole: string }) =>
+      api.updateCaseMember(caseId!, userId, { caseRole }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "members"] });
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "incidents"] });
+    },
+  });
+}
+
+export function useRemoveCaseMember(caseId?: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.removeCaseMember(caseId!, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "members"] });
+      qc.invalidateQueries({ queryKey: ["cases", caseId, "incidents"] });
+    },
+  });
+}

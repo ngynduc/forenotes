@@ -71,6 +71,7 @@ async function addIncidentMember(
     `
       insert into incident_members (incident_id, user_id, incident_role, added_by_user_id)
       values ($1, $2, 'analyst', $3)
+      on conflict do nothing
     `,
     [incidentId, userId, addedByUserId]
   );

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useRoutes } from "react-router";
+import { Navigate, useLocation, useRoutes } from "react-router";
 import { routes } from "@/config/routes";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { LoginPage } from "@/pages/LoginPage";
@@ -7,6 +7,7 @@ import { useScopeStore } from "@/stores/scope-store";
 
 export default function App() {
   const element = useRoutes(routes);
+  const location = useLocation();
   const { data, isLoading, refetch } = useCurrentUser();
   const setActiveUser = useScopeStore((s) => s.setActiveUser);
   const clearSessionScope = useScopeStore((s) => s.clearSessionScope);
@@ -33,6 +34,10 @@ export default function App() {
 
   if (!data?.user) {
     return <LoginPage onLoginSuccess={() => void refetch()} />;
+  }
+
+  if (data.user.mustChangePassword && location.pathname !== "/settings") {
+    return <Navigate to="/settings" replace />;
   }
 
   return element;

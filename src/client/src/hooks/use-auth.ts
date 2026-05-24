@@ -43,6 +43,15 @@ export function useLogout() {
   });
 }
 
+export function useChangePassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+      api.changePassword(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
+  });
+}
+
 export function usePermissions() {
   const { data } = useCurrentUser();
   const permissions = data?.permissions ?? [];
@@ -66,7 +75,6 @@ export function usePermissions() {
       query: { create: "query:create", update: "query:update", delete: "query:delete" },
       custom_tag: { create: "tag:custom_create", update: "tag:custom_update", delete: "tag:custom_update" },
       case_member: { create: "case:member_manage", delete: "case:member_manage" },
-      incident_member: { create: "incident:member_manage", delete: "incident:member_manage" },
     };
     const permission = ENTITY_PERMISSIONS[entityType]?.[mode];
     if (entityType === "task" && mode === "update" && item) {

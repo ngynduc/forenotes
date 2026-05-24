@@ -65,6 +65,7 @@ export const OPTION_SETS = {
   accountStatus: ["active", "disabled", "compromised", "locked"],
   systemStatus: ["online", "offline", "compromised", "unknown"],
   globalRole: ["admin", "commander", "response_lead", "analyst", "viewer"],
+  caseRole: ["case_lead", "response_lead", "analyst", "viewer"],
   evidenceType: ["timeline_event", "indicator", "system", "account", "query"],
 } as const;
 
@@ -96,6 +97,8 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         { name: "endDate", label: "End Date", type: "date" },
         { name: "status", label: "Status", type: "select", options: [...OPTION_SETS.caseStatus], required: true },
         { name: "summary", label: "Summary", type: "textarea", span: 2 },
+        { name: "initialMemberUserId", label: "Initial Member", type: "user-select" },
+        { name: "initialMemberRole", label: "Initial Member Role", type: "select", options: [...OPTION_SETS.caseRole] },
       ],
       values: (item) => ({
         caseName: (item?.caseName as string) || "",
@@ -104,12 +107,20 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         endDate: toDateInputValue((item?.endDate as string) || ""),
         status: (item?.status as string) || "open",
         summary: (item?.summary as string) || "",
+        initialMemberUserId: "",
+        initialMemberRole: "analyst",
       }),
       fromForm: (data) =>
         cleanObject({
-          ...data,
+          caseName: data.caseName,
+          clientName: data.clientName,
+          status: data.status,
+          summary: data.summary,
           startDate: dateInputToIso((data.startDate as string) || ""),
           endDate: dateInputToIso((data.endDate as string) || ""),
+          members: data.initialMemberUserId
+            ? [{ userId: data.initialMemberUserId, caseRole: data.initialMemberRole || "analyst" }]
+            : undefined,
         }),
       inline: {
         caseName: { type: "text", payloadKey: "caseName" },
@@ -459,9 +470,9 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       update: () => ({ url: `/api/cases/${getScope().selectedCaseId}/members`, method: "POST" }),
       fields: () => [
         { name: "userId", label: "User", type: "user-select", required: true, autofocus: true },
-        { name: "caseRole", label: "Case Role", type: "text", required: true },
+        { name: "caseRole", label: "Case Role", type: "select", options: [...OPTION_SETS.caseRole], required: true },
       ],
-      values: () => ({ userId: "", caseRole: "member" }),
+      values: () => ({ userId: "", caseRole: "analyst" }),
       fromForm: (data) => data,
     },
     incident_member: {

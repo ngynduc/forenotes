@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
-import { useCaseMembers, useCases } from "@/hooks/use-cases";
+import { useAddCaseMember, useCaseMembers, useCases, useRemoveCaseMember, useUpdateCaseMember } from "@/hooks/use-cases";
+import { useUsers } from "@/hooks/use-entities";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
@@ -16,6 +17,7 @@ const CASE_TABS = [
   { key: "details", label: "Case Details" },
   { key: "members", label: "Members" },
 ] as const;
+const CASE_ROLES = ["case_lead", "response_lead", "analyst", "viewer"] as const;
 
 type CaseTabKey = (typeof CASE_TABS)[number]["key"];
 
@@ -26,15 +28,25 @@ export default function CasesPage() {
   const { data, isLoading } = useCases();
   const incidentsQuery = useIncidents();
   const membersQuery = useCaseMembers(selectedCaseId || undefined);
+  const usersQuery = useUsers();
+  const addCaseMember = useAddCaseMember(selectedCaseId || undefined);
+  const updateCaseMember = useUpdateCaseMember(selectedCaseId || undefined);
+  const removeCaseMember = useRemoveCaseMember(selectedCaseId || undefined);
   const [caseModalOpen, setCaseModalOpen] = useState(false);
   const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const [editCaseItem, setEditCaseItem] = useState<Record<string, unknown> | null>(null);
   const [editIncidentItem, setEditIncidentItem] = useState<Record<string, unknown> | null>(null);
   const [activeTab, setActiveTab] = useState<CaseTabKey>("incidents");
+  const [memberUserId, setMemberUserId] = useState("");
+  const [memberRole, setMemberRole] = useState<(typeof CASE_ROLES)[number]>("analyst");
+  const [memberMessage, setMemberMessage] = useState<string | null>(null);
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
   const cases = (data?.cases ?? []) as unknown as Record<string, unknown>[];
   const incidents = (incidentsQuery.data?.incidents ?? []) as unknown as Record<string, unknown>[];
   const members = (membersQuery.data?.members ?? []) as unknown as Record<string, unknown>[];
+  const users = usersQuery.data?.users ?? [];
+  const memberIds = new Set(members.map((member) => String(member.userId ?? "")));
+  const availableUsers = users.filter((user) => !memberIds.has(user.id));
   const selectedCase = cases.find((entry) => String(entry.id ?? "") === selectedCaseId) ?? null;
   const caseTargetId = searchParams.get("caseId");
   const incidentTargetId = searchParams.get("incidentId");
@@ -102,6 +114,27 @@ export default function CasesPage() {
   function handleSelectCase(caseId: string) {
     selectCase(caseId);
     setActiveTab("incidents");
+    setMemberMessage(null);
+    setMemberUserId("");
+  }
+
+  function handleAddMember() {
+    if (!memberUserId) {
+      setMemberMessage("Select a user to add.");
+      return;
+    }
+    setMemberMessage(null);
+    addCaseMember.mutate(
+      { userId: memberUserId, caseRole: memberRole },
+      {
+        onSuccess: () => {
+          setMemberUserId("");
+          setMemberRole("analyst");
+          setMemberMessage("Member added.");
+        },
+        onError: (error) => setMemberMessage(error instanceof Error ? error.message : "Unable to add member."),
+      }
+    );
   }
 
   return (
@@ -288,10 +321,53 @@ export default function CasesPage() {
 
             {activeTab === "members" ? (
               <div>
-                <div className="mb-4">
-                  <h4 className="text-lg font-semibold">Case Members</h4>
-                  <p className="text-sm text-[var(--color-text-muted)]">Users currently assigned to this case.</p>
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h4 className="text-lg font-semibold">Case Members</h4>
+                    <p className="text-sm text-[var(--color-text-muted)]">Manage case access. Incidents inherit these members automatically.</p>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="text-xs font-medium text-[var(--color-text-muted)]">
+                      User
+                      <select
+                        className="mt-1 h-9 min-w-48 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
+                        value={memberUserId}
+                        onChange={(event) => setMemberUserId(event.target.value)}
+                        disabled={addCaseMember.isPending || usersQuery.isLoading}
+                      >
+                        <option value="">Select user</option>
+                        {availableUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.displayName} ({user.username})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-medium text-[var(--color-text-muted)]">
+                      Role
+                      <select
+                        className="mt-1 h-9 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
+                        value={memberRole}
+                        onChange={(event) => setMemberRole(event.target.value as (typeof CASE_ROLES)[number])}
+                        disabled={addCaseMember.isPending}
+                      >
+                        {CASE_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Button size="sm" onClick={handleAddMember} disabled={addCaseMember.isPending || !selectedCaseId}>
+                      Add
+                    </Button>
+                  </div>
                 </div>
+                {memberMessage ? (
+                  <p className="mb-3 rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+                    {memberMessage}
+                  </p>
+                ) : null}
                 {membersQuery.isLoading ? (
                   <p className="text-sm text-[var(--color-text-muted)]">Loading members...</p>
                 ) : members.length ? (
@@ -305,8 +381,40 @@ export default function CasesPage() {
                           {String(member.displayName ?? member.email ?? member.userId)}
                         </div>
                         <div className="mt-1 text-sm text-[var(--color-text-muted)]">{String(member.email ?? "No email")}</div>
-                        <div className="mt-3 text-xs uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
-                          {String(member.caseRole ?? "member")}
+                        <div className="mt-3 flex items-center gap-2">
+                          <select
+                            className="h-8 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)]"
+                            value={String(member.caseRole ?? "analyst")}
+                            onChange={(event) =>
+                              updateCaseMember.mutate(
+                                { userId: String(member.userId), caseRole: event.target.value },
+                                {
+                                  onError: (error) =>
+                                    setMemberMessage(error instanceof Error ? error.message : "Unable to update member role."),
+                                }
+                              )
+                            }
+                            disabled={updateCaseMember.isPending}
+                          >
+                            {CASE_ROLES.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              removeCaseMember.mutate(String(member.userId), {
+                                onError: (error) =>
+                                  setMemberMessage(error instanceof Error ? error.message : "Unable to remove member."),
+                              })
+                            }
+                            disabled={removeCaseMember.isPending}
+                          >
+                            Remove
+                          </Button>
                         </div>
                       </div>
                     ))}
