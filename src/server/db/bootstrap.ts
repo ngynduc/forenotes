@@ -4,40 +4,7 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from "../permissions/catalog.js";
 import { hashPassword } from "../services/authService.js";
 import type { GlobalRole } from "../../shared/domain.js";
 import { env } from "../env.js";
-
-const ATTACK_TAG_SEED = [
-  {
-    attackId: "TA0002",
-    name: "Execution",
-    type: "tactic",
-    tactic: "Execution"
-  },
-  {
-    attackId: "T1003",
-    name: "OS Credential Dumping",
-    type: "technique",
-    tactic: "Credential Access"
-  },
-  {
-    attackId: "T1059",
-    name: "Command and Scripting Interpreter",
-    type: "technique",
-    tactic: "Execution"
-  },
-  {
-    attackId: "T1059.001",
-    name: "PowerShell",
-    type: "technique",
-    parentAttackId: "T1059",
-    tactic: "Execution"
-  },
-  {
-    attackId: "TA0006",
-    name: "Credential Access",
-    type: "tactic",
-    tactic: "Credential Access"
-  }
-] as const;
+import { ATTACK_TAG_SEED } from "./attackTagsSeed.js";
 
 const DEVELOPMENT_USERS: Array<{
   username: string;
@@ -119,8 +86,8 @@ export async function bootstrapSecurityModel(database: Database) {
         tag.type,
         "parentAttackId" in tag ? tag.parentAttackId : null,
         tag.tactic,
-        "phase1-seed",
-        `https://attack.mitre.org/${tag.type === "tactic" ? "tactics" : "techniques"}/${tag.attackId}/`
+        tag.attackVersion,
+        tag.externalUrl
       ]
     );
   }

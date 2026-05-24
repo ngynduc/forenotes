@@ -1227,9 +1227,15 @@ describe("Forenotes API", () => {
     const attackTagsResponse = await request(app).get("/api/attack-tags");
 
     expect(attackTagsResponse.status).toBe(200);
-    expect(attackTagsResponse.body.attackTags.length).toBeGreaterThan(0);
+    expect(attackTagsResponse.body.attackTags.length).toBeGreaterThanOrEqual(690);
     expect(
       attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1003")
+    ).toBe(true);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1001.001")
+    ).toBe(true);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1685")
     ).toBe(true);
 
     const deleteCustomTagResponse = await request(app)
