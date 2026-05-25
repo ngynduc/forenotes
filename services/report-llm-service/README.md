@@ -15,16 +15,26 @@ Configure the Forenotes backend with:
 
 ```env
 REPORT_LLM_SERVICE_URL=http://localhost:8001
-LLM_PROVIDER=openai-compatible
-LLM_MODEL=GLM-4.7
-LLM_API_KEY=
-LLM_API_ENDPOINT=https://api.z.ai/api/paas/v4
-LLM_CUSTOM_HEADERS_JSON={}
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+LLM_API_KEY=your-provider-key
+LLM_SYSTEM_PROMPT=Optional custom report-generation system prompt
 ```
 
 User LLM settings in Forenotes override the `LLM_*` provider settings. `REPORT_LLM_SERVICE_URL` always points to this service.
 
-For Z.ai, set Provider to `openai-compatible`, Model to `GLM-4.7`, API Base URL to `https://api.z.ai/api/paas/v4`, and provide the user API key. Optional custom headers can be sent as a JSON object.
+Supported provider names are normalized by the backend to LiteLLM model prefixes. Examples:
+
+- `openai` + `gpt-4o-mini` -> `openai/gpt-4o-mini`
+- `anthropic` + `claude-sonnet-4-5-20250929` -> `anthropic/claude-sonnet-4-5-20250929`
+- `gemini` + `gemini-2.5-flash` -> `gemini/gemini-2.5-flash`
+- `openrouter` + `openai/gpt-4.1-nano` -> `openrouter/openai/gpt-4.1-nano`
+- `xai` + `grok-4.1-fast-non-reasoning` -> `xai/grok-4.1-fast-non-reasoning`
+- `groq` + `llama-3.3-70b-versatile` -> `groq/llama-3.3-70b-versatile`
+- `zai` + `glm-4.7` -> `zai/glm-4.7`
+- `ollama` + `llama3.1` -> `ollama/llama3.1`
+
+For older custom OpenAI-compatible endpoints, `provider=openai-compatible` still works, but it also requires `LLM_API_ENDPOINT`.
 
 ## API
 
@@ -32,10 +42,11 @@ For Z.ai, set Provider to `openai-compatible`, Model to `GLM-4.7`, API Base URL 
 
 ```json
 {
-  "provider": "openai-compatible",
-  "model": "GLM-4.7",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "systemPrompt": "Optional per-user or per-env system prompt override.",
   "apiKey": "optional-user-api-key",
-  "apiBase": "optional-provider-endpoint",
+  "apiBase": "optional-custom-provider-endpoint",
   "customHeaders": {
     "HTTP-Referer": "https://forenotes.local",
     "X-Title": "Forenotes"

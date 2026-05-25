@@ -28,6 +28,7 @@ const originalLlmEnv = {
   endpoint: process.env.LLM_API_ENDPOINT,
   model: process.env.LLM_MODEL,
   provider: process.env.LLM_PROVIDER,
+  systemPrompt: process.env.LLM_SYSTEM_PROMPT,
   customHeaders: process.env.LLM_CUSTOM_HEADERS_JSON,
   serviceUrl: process.env.LITELLM_SERVICE_URL
 };
@@ -37,6 +38,7 @@ function clearLlmEnv() {
   delete process.env.LLM_API_ENDPOINT;
   delete process.env.LLM_MODEL;
   delete process.env.LLM_PROVIDER;
+  delete process.env.LLM_SYSTEM_PROMPT;
   delete process.env.LLM_CUSTOM_HEADERS_JSON;
   delete process.env.LITELLM_SERVICE_URL;
 }
@@ -50,6 +52,8 @@ function restoreLlmEnv() {
   else process.env.LLM_MODEL = originalLlmEnv.model;
   if (originalLlmEnv.provider === undefined) delete process.env.LLM_PROVIDER;
   else process.env.LLM_PROVIDER = originalLlmEnv.provider;
+  if (originalLlmEnv.systemPrompt === undefined) delete process.env.LLM_SYSTEM_PROMPT;
+  else process.env.LLM_SYSTEM_PROMPT = originalLlmEnv.systemPrompt;
   if (originalLlmEnv.customHeaders === undefined) delete process.env.LLM_CUSTOM_HEADERS_JSON;
   else process.env.LLM_CUSTOM_HEADERS_JSON = originalLlmEnv.customHeaders;
   if (originalLlmEnv.serviceUrl === undefined) delete process.env.LITELLM_SERVICE_URL;
@@ -236,7 +240,9 @@ describe("report service", () => {
     const payload = buildLiteLlmGenerateReportPayload(
       {
         serviceUrl: "http://localhost:8001",
+        provider: "openai",
         model: "openai/gpt-4o-mini",
+        systemPrompt: "Follow the incident timeline closely.",
         apiKey: "sk-test-secret",
         apiBase: "https://api.example.test",
         customHeaders: { "HTTP-Referer": "https://forenotes.local" }
@@ -247,7 +253,9 @@ describe("report service", () => {
     );
 
     expect(payload).toMatchObject({
+      provider: "openai",
       model: "openai/gpt-4o-mini",
+      systemPrompt: "Follow the incident timeline closely.",
       apiKey: "sk-test-secret",
       apiBase: "https://api.example.test",
       customHeaders: { "HTTP-Referer": "https://forenotes.local" },
@@ -258,9 +266,10 @@ describe("report service", () => {
 
   it("masks stored LLM settings without returning plaintext API keys", async () => {
     await saveLlmSettings(database, user(userId), {
-      provider: "litellm",
+      provider: "openai",
       baseUrl: "https://api.example.test",
       model: "gpt-test",
+      systemPrompt: "Use terse executive language.",
       apiKey: "sk-test-secret",
       customHeaders: [
         { name: "HTTP-Referer", value: "https://forenotes.local" },
@@ -273,8 +282,10 @@ describe("report service", () => {
     expect(response).toMatchObject({
       configured: true,
       source: "user",
-      provider: "litellm",
+      provider: "openai",
       model: "gpt-test",
+      systemPrompt: "Use terse executive language.",
+      systemPromptConfigured: true,
       endpointConfigured: true,
       apiKeyConfigured: true,
       customHeadersConfigured: true,
@@ -291,7 +302,8 @@ describe("report service", () => {
     process.env.LLM_API_KEY = "";
     process.env.LLM_API_ENDPOINT = "https://api.example.test";
     process.env.LLM_MODEL = "gpt-env";
-    process.env.LLM_PROVIDER = "litellm";
+    process.env.LLM_PROVIDER = "openai";
+    process.env.LLM_SYSTEM_PROMPT = "Use the env fallback system prompt.";
     process.env.LLM_CUSTOM_HEADERS_JSON = "{\"HTTP-Referer\":\"https://forenotes.local\",\"X-Title\":\"Forenotes\"}";
 
     const response = await getMaskedLlmSettings(database, user(userId));
@@ -299,8 +311,10 @@ describe("report service", () => {
     expect(response).toMatchObject({
       configured: true,
       source: "env",
-      provider: "litellm",
+      provider: "openai",
       model: "gpt-env",
+      systemPrompt: "Use the env fallback system prompt.",
+      systemPromptConfigured: true,
       endpointConfigured: true,
       apiKeyConfigured: false,
       customHeadersConfigured: true
@@ -310,10 +324,29 @@ describe("report service", () => {
     expect(JSON.stringify(response)).not.toContain("forenotes.local");
   });
 
+  it("derives the canonical provider from a prefixed env model when LLM_PROVIDER is omitted", async () => {
+    process.env.LLM_API_KEY = "sk-env-secret";
+    process.env.LLM_MODEL = "openrouter/openai/gpt-4.1-nano";
+
+    const response = await getMaskedLlmSettings(database, user(userId));
+
+    expect(response).toMatchObject({
+      configured: true,
+      source: "env",
+      provider: "openrouter",
+      model: "openrouter/openai/gpt-4.1-nano",
+      systemPrompt: "",
+      systemPromptConfigured: false,
+      endpointConfigured: false,
+      apiKeyConfigured: true
+    });
+  });
+
   it("tests the configured LiteLLM service using env fallback", async () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_API_ENDPOINT = "https://api.example.test/v1";
     process.env.LLM_MODEL = "gpt-env";
+    process.env.LLM_SYSTEM_PROMPT = "Return a concise validation response.";
     process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     const fetchMock = vi.fn(async () => new Response(
       JSON.stringify({ ok: true, markdown: "OK" }),
@@ -336,7 +369,9 @@ describe("report service", () => {
     );
     const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
     expect(fetchBody).toMatchObject({
+      provider: "openai",
       model: "gpt-env",
+      systemPrompt: "Return a concise validation response.",
       apiKey: "sk-env-secret",
       apiBase: "https://api.example.test/v1",
       reportType: "incident"
@@ -347,6 +382,7 @@ describe("report service", () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_API_ENDPOINT = "https://api.example.test";
     process.env.LLM_MODEL = "gpt-env";
+    process.env.LLM_SYSTEM_PROMPT = "Focus on client-ready wording.";
     process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     process.env.LLM_CUSTOM_HEADERS_JSON = "{\"HTTP-Referer\":\"https://forenotes.local\",\"X-Title\":\"Forenotes\"}";
     const fetchMock = vi.fn(async () => new Response(
@@ -373,7 +409,9 @@ describe("report service", () => {
     const fetchOptions = fetchCalls[0][1];
     const fetchBody = JSON.parse(String(fetchOptions.body));
     expect(fetchBody).toMatchObject({
+      provider: "openai",
       model: "gpt-env",
+      systemPrompt: "Focus on client-ready wording.",
       apiKey: "sk-env-secret",
       apiBase: "https://api.example.test",
       customHeaders: {
@@ -574,7 +612,7 @@ describe("report service", () => {
     expect(llmStatusResponse.body).toMatchObject({
       configured: true,
       source: "env",
-      provider: "litellm",
+      provider: "openai",
       model: "gpt-route",
       endpointConfigured: true,
       apiKeyConfigured: true,

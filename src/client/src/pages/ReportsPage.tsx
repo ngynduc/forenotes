@@ -298,7 +298,7 @@ export default function ReportsPage() {
       return;
     }
     if (generateForm.useLlm && llmStatus && !llmStatus.configured) {
-      setGenerationError("LLM is not configured. Open Settings to add provider credentials or set .env fallback values.");
+      setGenerationError("LLM is not configured. Open Settings or set LLM_PROVIDER, LLM_MODEL, and LLM_API_KEY.");
       return;
     }
     setGenerationError(null);
@@ -514,7 +514,7 @@ export default function ReportsPage() {
                     const checked = event.target.checked;
                     setGenerateForm((value) => ({ ...value, useLlm: checked }));
                     if (checked && llmStatus && !llmStatus.configured) {
-                      setGenerationError("LLM is not configured. Open Settings to add provider credentials or set .env fallback values.");
+                      setGenerationError("LLM is not configured. Open Settings or set LLM_PROVIDER, LLM_MODEL, and LLM_API_KEY.");
                     }
                   }}
                 />

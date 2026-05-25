@@ -356,6 +356,7 @@ export interface SaveLlmSettingsInput {
   provider: string;
   baseUrl?: string;
   model: string;
+  systemPrompt?: string;
   apiKey?: string;
   customHeaders?: Array<{ name: string; value: string }>;
 }

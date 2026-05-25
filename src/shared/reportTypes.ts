@@ -64,6 +64,8 @@ export interface LlmSettingsStatus {
   source: "user" | "env" | null;
   provider: string;
   model: string;
+  systemPrompt: string;
+  systemPromptConfigured: boolean;
   endpointConfigured: boolean;
   apiKeyConfigured: boolean;
   customHeadersConfigured: boolean;

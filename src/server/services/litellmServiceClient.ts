@@ -8,19 +8,24 @@ export const LITELLM_SYSTEM_PROMPT = [
   "If data is missing, write \"Not provided\" or omit the section.",
   "Return Markdown only.",
   "Do not wrap the response in JSON.",
-  "Do not include HTML."
+  "Do not include HTML.",
+  "For each section, if the context contains relevant information, summarize it in a clear and concise manner.",
 ].join(" ");
 
 export interface LiteLlmServiceConfig {
   serviceUrl: string;
+  provider: string;
   model: string;
+  systemPrompt: string;
   apiKey: string;
   apiBase: string | null;
   customHeaders: Record<string, string>;
 }
 
 export interface LiteLlmGenerateReportPayload {
+  provider: string;
   model: string;
+  systemPrompt?: string;
   apiKey?: string;
   apiBase?: string;
   customHeaders: Record<string, string>;
@@ -40,7 +45,9 @@ export function buildLiteLlmGenerateReportPayload(
   incidentContext: ReportContext
 ): LiteLlmGenerateReportPayload {
   return {
+    provider: config.provider,
     model: config.model,
+    systemPrompt: config.systemPrompt || undefined,
     apiKey: config.apiKey || undefined,
     apiBase: config.apiBase || undefined,
     customHeaders: config.customHeaders,

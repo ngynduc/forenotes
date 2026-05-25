@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, LogOut, Plus, Save, Trash2, Wifi } from "lucide-react";
+import { CheckCircle2, LogOut, Save, Trash2, Wifi } from "lucide-react";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -11,6 +11,18 @@ import {
 } from "@/hooks/use-entities";
 import { useChangePassword, useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { useTimezone } from "@/providers/TimezoneProvider";
+
+const LLM_PROVIDER_OPTIONS = [
+  { value: "openai", label: "OpenAI", modelExample: "gpt-4o-mini" },
+  { value: "anthropic", label: "Anthropic", modelExample: "claude-sonnet-4-5-20250929" },
+  { value: "gemini", label: "Google Gemini", modelExample: "gemini-2.5-flash" },
+  { value: "openrouter", label: "OpenRouter", modelExample: "openai/gpt-4.1-nano" },
+  { value: "xai", label: "xAI", modelExample: "grok-4.1-fast-non-reasoning" },
+  { value: "groq", label: "Groq", modelExample: "llama-3.3-70b-versatile" },
+  { value: "zai", label: "Z.ai", modelExample: "glm-4.7" },
+  { value: "ollama", label: "Ollama", modelExample: "llama3.1" },
+  { value: "custom", label: "Custom / Any LiteLLM provider", modelExample: "deepseek/deepseek-v4-flash" }
+] as const;
 
 function messageFromError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -28,21 +40,27 @@ export default function SettingsPage() {
   const user = data?.user;
   const llmStatus = llmSettings.data;
   const [llmForm, setLlmForm] = useState({
-    provider: "litellm",
-    baseUrl: "",
+    provider: "openai",
     model: "gpt-4o-mini",
+    systemPrompt: "",
     apiKey: "",
-    customHeaders: [] as Array<{ name: string; value: string }>,
   });
+  const selectedProvider = LLM_PROVIDER_OPTIONS.find((option) => option.value === llmForm.provider) ?? LLM_PROVIDER_OPTIONS.at(-1)!;
+  const providerSelectValue = LLM_PROVIDER_OPTIONS.some((option) => option.value === llmForm.provider) ? llmForm.provider : "custom";
   const [llmMessage, setLlmMessage] = useState<string | null>(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (llmStatus?.model) {
-      setLlmForm((value) => ({ ...value, provider: llmStatus.provider || value.provider, model: llmStatus.model }));
+      setLlmForm((value) => ({
+        ...value,
+        provider: llmStatus.provider || value.provider,
+        model: llmStatus.model,
+        systemPrompt: llmStatus.systemPrompt || ""
+      }));
     }
-  }, [llmStatus?.model, llmStatus?.provider]);
+  }, [llmStatus?.model, llmStatus?.provider, llmStatus?.systemPrompt]);
 
   function saveProviderSettings() {
     setLlmMessage(null);
@@ -73,34 +91,16 @@ export default function SettingsPage() {
     setLlmMessage(null);
     deleteLlmSettings.mutate(undefined, {
       onSuccess: () => {
-        setLlmForm((value) => ({ ...value, apiKey: "" }));
+        setLlmForm({
+          provider: "openai",
+          model: "gpt-4o-mini",
+          systemPrompt: "",
+          apiKey: "",
+        });
         setLlmMessage("User LLM settings removed. Reports will use .env fallback if configured.");
       },
       onError: (error) => setLlmMessage(messageFromError(error, "Unable to remove LLM settings.")),
     });
-  }
-
-  function addHeaderRow() {
-    setLlmForm((value) => ({
-      ...value,
-      customHeaders: [...value.customHeaders, { name: "", value: "" }],
-    }));
-  }
-
-  function updateHeaderRow(index: number, field: "name" | "value", nextValue: string) {
-    setLlmForm((value) => ({
-      ...value,
-      customHeaders: value.customHeaders.map((header, currentIndex) =>
-        currentIndex === index ? { ...header, [field]: nextValue } : header
-      ),
-    }));
-  }
-
-  function removeHeaderRow(index: number) {
-    setLlmForm((value) => ({
-      ...value,
-      customHeaders: value.customHeaders.filter((_header, currentIndex) => currentIndex !== index),
-    }));
   }
 
   function submitPasswordChange() {
@@ -192,7 +192,7 @@ export default function SettingsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold">LLM Provider</h3>
-              <p className="text-xs text-[var(--color-text-muted)]">Passed to the LiteLLM report service when provider-assisted generation is enabled.</p>
+              <p className="text-xs text-[var(--color-text-muted)]">Choose a provider, or enter any LiteLLM provider name such as `nano-gpt`, then add the model name and API key.</p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -204,48 +204,57 @@ export default function SettingsPage() {
             <div className="rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3 text-sm">
               <p className="font-medium">Configured model: {llmStatus.model}</p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                Provider: {llmStatus.provider}. Source: {llmStatus.source}. Endpoint {llmStatus.endpointConfigured ? "is configured" : "uses the provider default"}.
-                API key: {llmStatus.apiKeyConfigured ? "configured and hidden" : "not configured"}.
+                Provider: {llmStatus.provider}. Source: {llmStatus.source}. API key: {llmStatus.apiKeyConfigured ? "configured and hidden" : "not configured"}.
               </p>
-              {llmStatus.customHeaders.length ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {llmStatus.customHeaders.map((header) => (
-                    <span key={header.name} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs">
-                      {header.name}: configured
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                System prompt: {llmStatus.systemPromptConfigured ? "customized" : "default service prompt"}.
+              </p>
             </div>
           ) : (
             <div className="rounded border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">
-              Add user settings here or set `LITELLM_SERVICE_URL`, `LLM_MODEL`, and optional provider credentials in `.env`.
+              Add user settings here or set `LITELLM_SERVICE_URL`, `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` in `.env`.
             </div>
           )}
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm font-medium">
-              Provider name
-              <Input
-                value={llmForm.provider}
-                onChange={(event) => setLlmForm((value) => ({ ...value, provider: event.target.value }))}
-                placeholder="litellm"
-              />
+              Provider
+              <select
+                value={providerSelectValue}
+                onChange={(event) => {
+                  const nextProvider = event.target.value;
+                  setLlmForm((value) => ({
+                    ...value,
+                    provider: nextProvider === "custom"
+                      ? (LLM_PROVIDER_OPTIONS.some((option) => option.value === value.provider) ? "" : value.provider)
+                      : nextProvider
+                  }));
+                }}
+                className="flex h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm"
+              >
+                {LLM_PROVIDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
+            {providerSelectValue === "custom" ? (
+              <label className="space-y-1 text-sm font-medium">
+                Custom provider
+                <Input
+                  value={llmForm.provider}
+                  onChange={(event) => setLlmForm((value) => ({ ...value, provider: event.target.value }))}
+                  placeholder="nano-gpt"
+                />
+              </label>
+            ) : null}
             <label className="space-y-1 text-sm font-medium">
               Model
               <Input
                 value={llmForm.model}
                 onChange={(event) => setLlmForm((value) => ({ ...value, model: event.target.value }))}
-                placeholder="openai/gpt-4o-mini"
-              />
-            </label>
-            <label className="space-y-1 text-sm font-medium md:col-span-2">
-              Provider API base / Endpoint
-              <Input
-                value={llmForm.baseUrl}
-                onChange={(event) => setLlmForm((value) => ({ ...value, baseUrl: event.target.value }))}
-                placeholder="https://api.openai.com/v1"
+                placeholder={selectedProvider.modelExample}
               />
             </label>
             <label className="space-y-1 text-sm font-medium md:col-span-2">
@@ -254,49 +263,24 @@ export default function SettingsPage() {
                 type="password"
                 value={llmForm.apiKey}
                 onChange={(event) => setLlmForm((value) => ({ ...value, apiKey: event.target.value }))}
-                placeholder={llmStatus?.configured ? "Stored key is hidden. Enter a new key to replace it." : "Optional LiteLLM proxy key"}
+                placeholder={llmStatus?.configured ? "Stored key is hidden. Enter a new key to replace it." : "Provider API key"}
                 autoComplete="new-password"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium md:col-span-2">
+              System Prompt
+              <textarea
+                value={llmForm.systemPrompt}
+                onChange={(event) => setLlmForm((value) => ({ ...value, systemPrompt: event.target.value }))}
+                placeholder="Optional custom system prompt for report generation. Leave blank to use the default DFIR prompt."
+                className="min-h-40 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm"
               />
             </label>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-sm font-medium">Custom Headers</label>
-              <Button type="button" variant="outline" size="sm" onClick={addHeaderRow}>
-                <Plus className="h-4 w-4" />
-                Add Header
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {llmForm.customHeaders.map((header, index) => (
-                <div key={`${index}-${header.name}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <Input
-                    value={header.name}
-                    onChange={(event) => updateHeaderRow(index, "name", event.target.value)}
-                    placeholder="Header Name"
-                    aria-label="Header Name"
-                  />
-                  <Input
-                    type="password"
-                    value={header.value}
-                    onChange={(event) => updateHeaderRow(index, "value", event.target.value)}
-                    placeholder="Header Value"
-                    aria-label="Header Value"
-                    autoComplete="new-password"
-                  />
-                  <Button type="button" variant="ghost" size="icon" title="Remove header" onClick={() => removeHeaderRow(index)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              {llmForm.customHeaders.length === 0 ? (
-                <p className="rounded border border-dashed border-[var(--color-border)] p-3 text-xs text-[var(--color-text-muted)]">
-                  Add provider headers such as HTTP-Referer, X-Title, or anthropic-version. Values are stored server-side and masked after save.
-                </p>
-              ) : null}
-            </div>
-          </div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Example for NanoGPT: provider `nano-gpt`, model `deepseek/deepseek-v4-flash`.
+          </p>
 
           {llmMessage ? (
             <p className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-text-muted)]">

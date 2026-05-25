@@ -20,12 +20,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      report-llm-service:
+        condition: service_started
     environment:
       DATABASE_URL: postgres://forenotes:forenotes@db:5432/forenotes
       PORT: "8787"
       FORENOTES_SEED_DEV_USERS: "1"
+      LITELLM_SERVICE_URL: http://report-llm-service:8001
     ports:
       - "8787:8787"
+
+  report-llm-service:
+    build: ./services/report-llm-service
+    restart: unless-stopped
 
 volumes:
   forenotes_pgdata:

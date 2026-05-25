@@ -95,12 +95,44 @@ interface LlmProviderConfig {
   baseUrl: string | null;
   serviceUrl: string;
   model: string;
+  systemPrompt: string;
   apiKey: string;
   customHeaders: Record<string, string>;
   source: "user" | "env";
   endpointConfigured: boolean;
   apiKeyMask?: string | null;
   updatedAt?: unknown;
+}
+
+const CANONICAL_LLM_PROVIDERS = new Set([
+  "anthropic",
+  "gemini",
+  "groq",
+  "ollama",
+  "openai",
+  "openrouter",
+  "xai",
+  "zai"
+]);
+
+function providerFromModel(model: string) {
+  const cleanModel = model.trim().toLowerCase();
+  const [prefix] = cleanModel.split("/", 1);
+  return prefix && CANONICAL_LLM_PROVIDERS.has(prefix) ? prefix : null;
+}
+
+function normalizeLlmProvider(rawProvider: string | null | undefined, model: string) {
+  const cleanProvider = rawProvider?.trim().toLowerCase();
+  if (!cleanProvider || cleanProvider === "litellm" || cleanProvider === "model-prefixed") {
+    return providerFromModel(model) ?? "openai";
+  }
+  if (cleanProvider === "google" || cleanProvider === "google-ai-studio") {
+    return "gemini";
+  }
+  if (cleanProvider === "z-ai" || cleanProvider === "z.ai") {
+    return "zai";
+  }
+  return cleanProvider;
 }
 
 export async function listReportTemplates(database: Database, user: AuthenticatedUser, incidentId: string) {
@@ -581,27 +613,30 @@ export async function previewPdfTemplate(
 export async function saveLlmSettings(
   database: Database,
   user: AuthenticatedUser,
-  input: { provider: string; baseUrl?: string; model: string; apiKey?: string; customHeaders?: CustomHeaderInput[] }
+  input: { provider: string; baseUrl?: string; model: string; systemPrompt?: string; apiKey?: string; customHeaders?: CustomHeaderInput[] }
 ) {
   await requirePermission(database, user, "llm_settings:manage");
   const apiKey = input.apiKey ?? "";
+  const provider = normalizeLlmProvider(input.provider, input.model);
+  const systemPrompt = input.systemPrompt?.trim() ?? "";
   const encrypted = encryptSecret(apiKey);
   const mask = maskApiKey(apiKey);
   const customHeaders = normalizeCustomHeaders(input.customHeaders ?? []);
   await database.query(
     `
-      insert into llm_settings (user_id, provider_name, base_url, model, encrypted_api_key, api_key_mask, custom_headers_json)
-      values ($1, $2, $3, $4, $5, $6, $7)
+      insert into llm_settings (user_id, provider_name, base_url, model, system_prompt, encrypted_api_key, api_key_mask, custom_headers_json)
+      values ($1, $2, $3, $4, $5, $6, $7, $8)
       on conflict (user_id) do update set
         provider_name = excluded.provider_name,
         base_url = excluded.base_url,
         model = excluded.model,
+        system_prompt = excluded.system_prompt,
         encrypted_api_key = excluded.encrypted_api_key,
         api_key_mask = excluded.api_key_mask,
         custom_headers_json = excluded.custom_headers_json,
         updated_at = now()
     `,
-    [user.id, input.provider, input.baseUrl || null, input.model, encrypted, mask, JSON.stringify(customHeaders)]
+    [user.id, provider, input.baseUrl || null, input.model, systemPrompt, encrypted, mask, JSON.stringify(customHeaders)]
   );
   return getMaskedLlmSettings(database, user);
 }
@@ -1203,11 +1238,13 @@ async function readLlmSettings(database: Database, userId: string) {
     return null;
   }
   const row = result.rows[0];
+  const model = String(row.model);
   return {
-    provider: String(row.provider_name),
+    provider: normalizeLlmProvider(row.provider_name ? String(row.provider_name) : null, model),
     baseUrl: row.base_url ? String(row.base_url) : null,
     serviceUrl: resolveLiteLlmServiceUrl(),
-    model: String(row.model),
+    model,
+    systemPrompt: row.system_prompt ? String(row.system_prompt) : "",
     apiKey: decryptSecret(String(row.encrypted_api_key)),
     customHeaders: normalizeStoredHeaders(row.custom_headers_json),
     source: "user" as const,
@@ -1220,7 +1257,7 @@ async function readLlmSettings(database: Database, userId: string) {
 async function generateLlmMarkdown(database: Database, user: AuthenticatedUser, template: string, context: ReportContext) {
   const config = await resolveLlmConfig(database, user.id);
   if (!config) {
-    throw new AppError(400, "LLM is not configured. Add provider settings or set LLM_API_KEY and LLM_MODEL.");
+    throw new AppError(400, "LLM is not configured. Add provider settings or set LLM_PROVIDER, LLM_MODEL, and LLM_API_KEY.");
   }
   try {
     return await callLiteLlmGenerateReportService(
@@ -1239,18 +1276,20 @@ async function resolveLlmConfig(database: Database, userId: string): Promise<Llm
   }
 
   const apiKey = process.env.LLM_API_KEY?.trim();
-  const provider = process.env.LLM_PROVIDER?.trim() || "litellm";
   const model = process.env.LLM_MODEL?.trim();
+  const systemPrompt = process.env.LLM_SYSTEM_PROMPT?.trim() ?? "";
   const baseUrl = process.env.LLM_API_ENDPOINT?.trim() || null;
   if (!model) {
     return null;
   }
+  const provider = normalizeLlmProvider(process.env.LLM_PROVIDER, model);
 
   return {
     provider,
     baseUrl,
     serviceUrl: resolveLiteLlmServiceUrl(),
     model,
+    systemPrompt,
     apiKey: apiKey ?? "",
     customHeaders: parseEnvCustomHeaders(),
     source: "env",
@@ -1266,6 +1305,8 @@ function llmStatusFromConfig(config: LlmProviderConfig | null): LlmSettingsStatu
       source: null,
       provider: "",
       model: "",
+      systemPrompt: "",
+      systemPromptConfigured: false,
       endpointConfigured: false,
       apiKeyConfigured: false,
       customHeadersConfigured: false,
@@ -1278,6 +1319,8 @@ function llmStatusFromConfig(config: LlmProviderConfig | null): LlmSettingsStatu
     source: config.source,
     provider: config.provider,
     model: config.model,
+    systemPrompt: config.systemPrompt,
+    systemPromptConfigured: Boolean(config.systemPrompt.trim()),
     endpointConfigured: config.endpointConfigured,
     apiKeyConfigured: Boolean(config.apiKey),
     customHeadersConfigured: Object.keys(config.customHeaders).length > 0,
@@ -1288,7 +1331,9 @@ function llmStatusFromConfig(config: LlmProviderConfig | null): LlmSettingsStatu
 function toLiteLlmServiceConfig(config: LlmProviderConfig): LiteLlmServiceConfig {
   return {
     serviceUrl: config.serviceUrl,
+    provider: config.provider,
     model: config.model,
+    systemPrompt: config.systemPrompt,
     apiKey: config.apiKey,
     apiBase: config.baseUrl,
     customHeaders: config.customHeaders

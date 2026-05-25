@@ -224,6 +224,7 @@ export const upsertLlmSettingsSchema = z.object({
   provider: z.string().min(1).max(80),
   baseUrl: z.url().optional().or(z.literal("")),
   model: z.string().min(1).max(120),
+  systemPrompt: z.string().max(32 * 1024).optional().default(""),
   apiKey: z.string().max(4096).optional().default(""),
   customHeaders: customHeadersSchema
 });
