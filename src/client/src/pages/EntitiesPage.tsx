@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { useIndicators, useSystems, useAccounts } from "@/hooks/use-entities";
 import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 
@@ -41,7 +42,7 @@ export default function EntitiesPage() {
   };
 
   if (!incidentId) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view entities.</p>;
+    return <ScopeGate required="incident" />;
   }
 
   const tab = TABS.find((t) => t.key === activeTab) ?? TABS[0];

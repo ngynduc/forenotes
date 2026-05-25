@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { useCustomTags, useAttackTags } from "@/hooks/use-entities";
 import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 
@@ -38,7 +39,7 @@ export default function TagsPage() {
           )}
         </div>
         {!caseId ? (
-          <p className="text-sm text-[var(--color-text-muted)]">Select a case to manage tags.</p>
+          <ScopeGate required="case" />
         ) : (
           <DataTable
             columns={customDef.columns}

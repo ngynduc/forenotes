@@ -3,6 +3,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { RelationshipGraph } from "@/components/graph/RelationshipGraph";
 import { GraphToolbar } from "@/components/graph/GraphToolbar";
 import { MitreMatrix } from "@/components/mitre/MitreMatrix";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { cn } from "@/lib/utils";
 
 export default function GraphPage() {
@@ -11,7 +12,7 @@ export default function GraphPage() {
   const setGraphView = useUIStore((s) => s.setGraphView);
 
   if (!incidentId) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view graph.</p>;
+    return <ScopeGate required="incident" />;
   }
 
   return (

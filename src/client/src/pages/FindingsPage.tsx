@@ -8,6 +8,7 @@ import { useFindings } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
@@ -63,7 +64,7 @@ export default function FindingsPage() {
   }, [findings, isLoading, itemId, searchParams, setSearchParams]);
 
   if (!incidentId) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view findings.</p>;
+    return <ScopeGate required="incident" />;
   }
 
   return (

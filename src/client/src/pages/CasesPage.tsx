@@ -152,6 +152,24 @@ export default function CasesPage() {
       </div>
       {isLoading ? (
         <p className="text-sm text-[var(--color-text-muted)]">Loading...</p>
+      ) : cases.length === 0 ? (
+        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+          <h3 className="text-lg font-semibold text-[var(--color-text)]">No cases assigned</h3>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            You are not assigned to any cases yet. Create a case if you have permission, or contact an administrator to be added to an existing case.
+          </p>
+          {tableDef.createLabel ? (
+            <Button
+              className="mt-4"
+              onClick={() => {
+                setEditCaseItem(null);
+                setCaseModalOpen(true);
+              }}
+            >
+              {tableDef.createLabel}
+            </Button>
+          ) : null}
+        </section>
       ) : (
         <DataTable
           columns={tableDef.columns}

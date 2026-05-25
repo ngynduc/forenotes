@@ -33,6 +33,7 @@ import {
   useUpdateReportTemplate,
 } from "@/hooks/use-entities";
 import { useTimezone } from "@/providers/TimezoneProvider";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { useScopeStore } from "@/stores/scope-store";
 
 const DEFAULT_TEMPLATE = `# Executive Summary
@@ -241,7 +242,7 @@ export default function ReportsPage() {
   const pdfTemplates = pdfTemplatesQuery.data?.templates ?? [];
 
   if (!incidentId) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to work with reports.</p>;
+    return <ScopeGate required="incident" />;
   }
 
   function startNewTemplate() {

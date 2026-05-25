@@ -10,6 +10,7 @@ import { useTasks, useUpdateTask } from "@/hooks/use-tasks";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
+import { ScopeGate } from "@/components/shared/ScopeGate";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
@@ -57,7 +58,7 @@ export default function TasksPage() {
   }, [isLoading, itemId, searchParams, setSearchParams, tasks]);
 
   if (!incidentId) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Select an incident to view tasks.</p>;
+    return <ScopeGate required="incident" />;
   }
 
   function handleStatusChange(taskId: string, newStatus: string) {
