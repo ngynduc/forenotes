@@ -455,6 +455,34 @@ describe("report service", () => {
     expect(html).not.toContain("onclick");
   });
 
+  it("returns PDF template HTML in API responses for create and list", async () => {
+    const app = createApp(database);
+    const originalHtml = "<!doctype html><html><body><main>{{content}}</main></body></html>";
+
+    const createResponse = await request(app)
+      .post("/api/pdf-templates")
+      .set("x-user-id", userId)
+      .send({
+        name: "Teal",
+        scope: "global",
+        htmlTemplate: originalHtml,
+        css: "body { color: teal; }",
+        isDefault: true
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.template.htmlTemplate).toBe(originalHtml);
+    const templateId = createResponse.body.template.id as string;
+
+    const listResponse = await request(app)
+      .get(`/api/pdf-templates?incidentId=${incidentId}`)
+      .set("x-user-id", userId);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.templates).toHaveLength(1);
+    expect(listResponse.body.templates[0].htmlTemplate).toBe(originalHtml);
+  });
+
   it("persists preview-approved reports and exports a non-empty PDF buffer", async () => {
     const template = await createReportTemplate(database, user(userId), incidentId, {
       name: "Incident report",

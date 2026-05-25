@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { ChevronLeft, ChevronRight, Copy, Download, FileText, Plus, Save, Trash2, Wand2 } from "lucide-react";
 import type { IncidentReport, ReportTemplate } from "@shared/reportTypes";
 import { Button } from "@/components/ui/Button";
+import { PdfTemplateWorkspace } from "@/components/reports/PdfTemplateWorkspace";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { MarkdownEditor } from "@/components/notes/MarkdownEditor";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   useCreateReport,
   useCreateReportTemplate,
@@ -123,17 +125,24 @@ const GUIDE_SECTIONS = [
   },
 ];
 
-type CenterTab = "editor" | "guide";
+type CenterTab = "editor" | "guide" | "pdf";
 
 function messageFromError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function copyVariable(variable: string) {
-  navigator.clipboard?.writeText(variable).catch(() => undefined);
-}
-
 function TemplateGuide() {
+  const [copiedVariable, setCopiedVariable] = useState<string | null>(null);
+
+  async function copyVariable(variable: string) {
+    const copied = await copyTextToClipboard(variable);
+    if (!copied) return;
+    setCopiedVariable(variable);
+    window.setTimeout(() => {
+      setCopiedVariable((currentValue) => (currentValue === variable ? null : currentValue));
+    }, 1500);
+  }
+
   return (
     <div className="space-y-5" data-report-template-guide>
       <div className="space-y-1">
@@ -161,14 +170,17 @@ function TemplateGuide() {
                   <code className="min-w-0 truncate text-xs">{variable}</code>
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon"
+                    variant={copiedVariable === variable ? "secondary" : "ghost"}
+                    size="sm"
                     title={`Copy ${variable}`}
                     aria-label={`Copy ${variable}`}
-                    onClick={() => copyVariable(variable)}
-                    className="h-7 w-7 shrink-0"
+                    onClick={() => {
+                      void copyVariable(variable);
+                    }}
+                    className="shrink-0"
                   >
                     <Copy className="h-3.5 w-3.5" />
+                    {copiedVariable === variable ? "Copied" : "Copy"}
                   </Button>
                 </div>
               ))}
@@ -465,6 +477,15 @@ export default function ReportsPage() {
                 >
                   Template Guide
                 </Button>
+                <Button
+                  type="button"
+                  variant={centerTab === "pdf" ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-pressed={centerTab === "pdf"}
+                  onClick={() => setCenterTab("pdf")}
+                >
+                  PDF Templates
+                </Button>
               </div>
             </div>
 
@@ -518,6 +539,8 @@ export default function ReportsPage() {
           <div className="p-4">
             {centerTab === "guide" ? (
               <TemplateGuide />
+            ) : centerTab === "pdf" ? (
+              <PdfTemplateWorkspace />
             ) : (
               <div className="space-y-4">
                 {templateDraft ? (

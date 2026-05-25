@@ -616,13 +616,19 @@ interface RawPdfTemplate {
   name: string;
   description?: string | null;
   scope: "global" | "incident";
+  incidentId?: string | null;
   incident_id?: string | null;
-  html_template: string;
+  htmlTemplate?: string;
+  html_template?: string;
   css: string;
-  is_default: boolean;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+  isDefault?: boolean;
+  is_default?: boolean;
+  createdBy?: string;
+  created_by?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
 }
 
 function normalizeCurrentUser(user: RawCurrentUser): CurrentUser {
@@ -905,13 +911,13 @@ function normalizePdfTemplate(item: RawPdfTemplate): PdfTemplate {
     name: item.name,
     description: item.description,
     scope: item.scope,
-    incidentId: item.incident_id,
-    htmlTemplate: item.html_template,
+    incidentId: item.incidentId ?? item.incident_id,
+    htmlTemplate: item.htmlTemplate ?? item.html_template ?? "",
     css: item.css,
-    isDefault: item.is_default,
-    createdBy: item.created_by,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
+    isDefault: item.isDefault ?? item.is_default ?? false,
+    createdBy: item.createdBy ?? item.created_by ?? "",
+    createdAt: item.createdAt ?? item.created_at ?? "",
+    updatedAt: item.updatedAt ?? item.updated_at ?? "",
   };
 }
 
