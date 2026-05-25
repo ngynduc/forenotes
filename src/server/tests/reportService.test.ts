@@ -188,6 +188,34 @@ describe("report service", () => {
     expect(html).not.toContain("<script");
   });
 
+  it("wraps rendered markdown in a stable shell for branded PDF templates", () => {
+    const html = renderPdfHtml({
+      report: {
+        title: "Incident One Report",
+        type: "incident",
+        generatedAt: "2026-05-22T00:00:00.000Z",
+        markdown: [
+          "# Executive Summary",
+          "",
+          "| title | severity | status |",
+          "| --- | --- | --- |",
+          "| Suspicious login | high | confirmed |"
+        ].join("\n")
+      },
+      incident: {
+        name: "Incident One",
+        clientName: "Example Client",
+        status: "open"
+      },
+      htmlTemplate: "<main>{{content}}</main>",
+      css: ".forenotes-markdown table { border: 1px solid #000; }"
+    });
+
+    expect(html).toContain('class="forenotes-markdown"');
+    expect(html).toContain("<table>");
+    expect(html).toContain("<h1>Executive Summary</h1>");
+  });
+
   it("builds the LiteLLM service request without leaking secrets into headers", () => {
     const context = {
       generatedAt: "2026-05-22T00:00:00.000Z",

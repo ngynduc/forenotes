@@ -32,21 +32,30 @@ import {
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
 
-const DEFAULT_TEMPLATE = `# {{incident.name}} Report
+const DEFAULT_TEMPLATE = `# Executive Summary
 
-Generated at {{generatedAt}}
-
-## Summary
 {{incident.summary}}
 
-## Findings
+## Incident Snapshot
+
+- Incident: {{incident.name}}
+- Client: {{incident.clientName}}
+- Status: {{incident.status}}
+- Start date: {{incident.startDate}}
+- End date: {{incident.endDate}}
+- Generated: {{generatedAt}}
+
+## Findings Snapshot
 {{findings.table}}
 
-## Timeline
+## Timeline of Key Events
 {{timeline.table}}
 
-## Tasks
+## Response Tasks
 {{tasks.table}}
+
+## Analyst Notes
+{{notes.list}}
 `;
 
 const EXAMPLE_TEMPLATE = `# {{incident.name}} Daily Report
@@ -225,8 +234,8 @@ export default function ReportsPage() {
     setTemplateDraft({
       id: "",
       incidentId,
-      name: "Daily handoff",
-      reportType: "daily",
+      name: "Incident executive report",
+      reportType: "incident",
       content: DEFAULT_TEMPLATE,
       createdByUserId: "",
       createdAt: "",
