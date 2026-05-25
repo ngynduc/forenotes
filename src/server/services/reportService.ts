@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 import type { LlmSettingsStatus, PdfTemplate, ReportContext, ReportGenerationMode } from "../../shared/reportTypes.js";
@@ -8,7 +8,7 @@ import type { Database } from "../db/types.js";
 import { env } from "../env.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
-import { getDataDir } from "../storage.js";
+import { getDataDir, getUploadsDir } from "../storage.js";
 import type { AuthenticatedUser } from "./authService.js";
 import { createAuditLog } from "./auditLogService.js";
 import {
@@ -90,6 +90,12 @@ interface UpdatePdfTemplateInput {
   isDefault?: boolean;
 }
 
+interface UploadReportImageInput {
+  data: Buffer;
+  contentType: string;
+  filename?: string;
+}
+
 type DbRow = Record<string, unknown>;
 
 interface LlmProviderConfig {
@@ -151,6 +157,15 @@ const BLOCKED_CUSTOM_HEADERS = new Set([
   "x-forwarded-proto",
   "x-real-ip"
 ]);
+const MAX_REPORT_IMAGE_BYTES = 10 * 1024 * 1024;
+const REPORT_IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+export const REPORT_IMAGE_CONTENT_TYPES = Object.keys(REPORT_IMAGE_EXTENSIONS);
 
 function providerFromModel(model: string) {
   const cleanModel = model.trim().toLowerCase();
@@ -371,6 +386,103 @@ export async function generateReportPreview(
       unresolvedPlaceholders: rendered.unresolvedPlaceholders
     }
   };
+}
+
+function reportUploadDir(incidentId: string) {
+  return path.join(getUploadsDir(), "reports", safePathSegment(incidentId));
+}
+
+function safeDisplayFilename(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  return path.basename(trimmed).replace(/[^\w.-]/g, "_") || fallback;
+}
+
+function isSafeStoredImageFilename(value: string) {
+  return /^[0-9a-f-]{36}\.(gif|jpg|png|webp)$/i.test(value);
+}
+
+function contentTypeForStoredFilename(value: string) {
+  const extension = path.extname(value).slice(1).toLowerCase();
+  for (const [contentType, mappedExtension] of Object.entries(REPORT_IMAGE_EXTENSIONS)) {
+    if (mappedExtension === extension) {
+      return contentType;
+    }
+  }
+  return "application/octet-stream";
+}
+
+export async function uploadReportImage(
+  database: Database,
+  user: AuthenticatedUser,
+  incidentId: string,
+  input: UploadReportImageInput
+) {
+  await requirePermission(database, user, "report:update");
+  await requireIncidentMembership(database, user.id, incidentId);
+
+  const extension = REPORT_IMAGE_EXTENSIONS[input.contentType];
+  if (!extension) {
+    throw new AppError(400, "Only PNG, JPEG, GIF, and WebP images can be uploaded.");
+  }
+
+  if (input.data.length === 0) {
+    throw new AppError(400, "Image upload cannot be empty.");
+  }
+
+  if (input.data.length > MAX_REPORT_IMAGE_BYTES) {
+    throw new AppError(413, "Image upload must be 10MB or smaller.");
+  }
+
+  const id = randomUUID();
+  const filename = safeDisplayFilename(input.filename, "image");
+  const storedFilename = `${id}.${extension}`;
+  const directory = reportUploadDir(incidentId);
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, storedFilename), input.data);
+
+  await createAuditLog(database, {
+    actorUserId: user.id,
+    incidentId,
+    action: "report.image.upload",
+    entityType: "report",
+    entityId: incidentId,
+    afterJson: { filename, contentType: input.contentType, size: input.data.length },
+  });
+
+  return {
+    id,
+    url: `/api/uploads/reports/${safePathSegment(incidentId)}/${storedFilename}`,
+    filename,
+  };
+}
+
+export async function readReportImage(
+  database: Database,
+  user: AuthenticatedUser,
+  incidentId: string,
+  storedFilename: string
+) {
+  if (!isSafeStoredImageFilename(storedFilename)) {
+    throw new AppError(404, "Image not found");
+  }
+
+  await requireIncidentMembership(database, user.id, incidentId);
+
+  try {
+    const data = await readFile(path.join(reportUploadDir(incidentId), storedFilename));
+    return {
+      data,
+      contentType: contentTypeForStoredFilename(storedFilename),
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new AppError(404, "Image not found");
+    }
+    throw error;
+  }
 }
 
 export async function listReports(database: Database, user: AuthenticatedUser, incidentId: string) {
@@ -739,7 +851,7 @@ export async function exportReportPdf(
     "Incident not found"
   );
   const pdfTemplate = await resolvePdfTemplate(database, user, incidentId, options.pdfTemplateId);
-  const finalHtml = renderPdfHtml({
+  const renderedHtml = renderPdfHtml({
     report: {
       title: String(report.title),
       type: String(report.report_type),
@@ -754,6 +866,7 @@ export async function exportReportPdf(
     htmlTemplate: pdfTemplate.htmlTemplate,
     css: pdfTemplate.css
   });
+  const finalHtml = await inlineReportUploadImagesForPdf(renderedHtml, incidentId);
   let pdf: Buffer;
   try {
     pdf = await renderHtmlToPdf(finalHtml);
@@ -782,6 +895,41 @@ export async function exportReportPdf(
       createdAt: new Date().toISOString()
     }
   };
+}
+
+export async function inlineReportUploadImagesForPdf(html: string, incidentId: string) {
+  const safeIncidentId = safePathSegment(incidentId);
+  const imagePattern = new RegExp(
+    `<img\\b([^>]*?)\\bsrc="(/api/uploads/reports/${safeIncidentId}/([0-9a-f-]{36}\\.(?:gif|jpg|png|webp)))"([^>]*)>`,
+    "gi"
+  );
+
+  const matches = [...html.matchAll(imagePattern)];
+  if (matches.length === 0) {
+    return html;
+  }
+
+  const replacements = await Promise.all(matches.map(async (match) => {
+    const [fullMatch, beforeSrc, _url, storedFilename, afterSrc] = match;
+    if (!isSafeStoredImageFilename(storedFilename)) {
+      return [fullMatch, fullMatch] as const;
+    }
+
+    try {
+      const buffer = await readFile(path.join(reportUploadDir(incidentId), storedFilename));
+      const contentType = contentTypeForStoredFilename(storedFilename);
+      const dataUrl = `data:${contentType};base64,${buffer.toString("base64")}`;
+      return [fullMatch, `<img${beforeSrc}src="${dataUrl}"${afterSrc}>`] as const;
+    } catch {
+      return [fullMatch, fullMatch] as const;
+    }
+  }));
+
+  let nextHtml = html;
+  for (const [source, replacement] of replacements) {
+    nextHtml = nextHtml.replace(source, replacement);
+  }
+  return nextHtml;
 }
 
 export function renderReportTemplate(template: string, context: ReportContext) {
@@ -1033,7 +1181,7 @@ function resolvePlaceholder(key: string, context: ReportContext): unknown {
     const incident = context.incident as Record<string, unknown>;
     const camelKey = key.split(".")[1];
     const snakeKey = camelKey === "startDate" ? "start_date" : "end_date";
-    return incident[camelKey] ?? incident[snakeKey];
+    return incident[camelKey] ?? incident[snakeKey] ?? "";
   }
 
   if (key === "findings.count") {

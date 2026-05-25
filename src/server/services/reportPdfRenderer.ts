@@ -29,6 +29,7 @@ const allowedContentTags = [
   "h5",
   "h6",
   "hr",
+  "img",
   "li",
   "ol",
   "p",
@@ -63,6 +64,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedAttributes: {
     "*": ["class", "id"],
     a: ["href", "title", "target", "rel"],
+    img: ["src", "alt", "title"],
     meta: ["charset"],
     td: ["colspan", "rowspan"],
     th: ["colspan", "rowspan", "scope"]

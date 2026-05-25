@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, promises as fsPromises, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -15,6 +15,7 @@ import {
   createReportTemplate,
   exportReportPdf,
   buildLiteLlmGenerateReportPayload,
+  inlineReportUploadImagesForPdf,
   renderPdfHtml,
   renderMarkdownToSanitizedHtml,
   renderReportTemplate,
@@ -176,6 +177,27 @@ describe("report service", () => {
     expect(rendered.unresolvedPlaceholders).toEqual(["missing.value"]);
   });
 
+  it("treats missing incident start and end dates as resolved empty placeholders", async () => {
+    const rendered = renderReportTemplate("{{incident.startDate}}|{{incident.endDate}}", {
+      generatedAt: "2026-05-22T00:00:00.000Z",
+      reportType: "incident",
+      incident: { name: "Incident One", start_date: null, end_date: null },
+      findings: [],
+      timelineEvents: [],
+      tasks: [],
+      queries: [],
+      indicators: [],
+      systems: [],
+      accounts: [],
+      members: [],
+      entityLinks: [],
+      tags: { custom: [], attack: [] }
+    });
+
+    expect(rendered.markdown).toBe("|");
+    expect(rendered.unresolvedPlaceholders).toEqual([]);
+  });
+
   it("converts Markdown tables to sanitized HTML tables", () => {
     const html = renderMarkdownToSanitizedHtml([
       "| title | severity | status |",
@@ -190,6 +212,30 @@ describe("report service", () => {
     expect(html).toContain("<td>Suspicious login</td>");
     expect(html).not.toContain("| --- |");
     expect(html).not.toContain("<script");
+  });
+
+  it("preserves markdown images during sanitized report rendering", () => {
+    const html = renderMarkdownToSanitizedHtml("![Evidence image](/api/uploads/reports/incident-1/example.png)");
+
+    expect(html).toContain('<img src="/api/uploads/reports/incident-1/example.png"');
+    expect(html).toContain('alt="Evidence image"');
+  });
+
+  it("inlines uploaded report images for PDF export", async () => {
+    const imageIncidentId = "incident-1";
+    const storedFilename = "11111111-1111-1111-1111-111111111111.png";
+    const uploadDir = path.join(dataDir, "uploads", "reports", imageIncidentId);
+    await fsPromises.mkdir(uploadDir, { recursive: true });
+    await fsPromises.writeFile(path.join(uploadDir, storedFilename), Buffer.from("png-bytes"));
+
+    const html = await inlineReportUploadImagesForPdf(
+      `<div class="forenotes-markdown"><img src="/api/uploads/reports/${imageIncidentId}/${storedFilename}" alt="Evidence image"></div>`,
+      imageIncidentId
+    );
+
+    expect(html).toContain('src="data:image/png;base64,');
+    expect(html).toContain('alt="Evidence image"');
+    expect(html).not.toContain(`/api/uploads/reports/${imageIncidentId}/${storedFilename}`);
   });
 
   it("wraps rendered markdown in a stable shell for branded PDF templates", () => {
