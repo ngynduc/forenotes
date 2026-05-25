@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from "./authService.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
-import { createNotification } from "./notificationService.js";
+import { createNotification, formatNotificationScope, getIncidentNotificationScope } from "./notificationService.js";
 
 const TASK_LINK_TABLES: Record<string, string> = {
   finding: "findings",
@@ -111,12 +111,14 @@ export async function createTask(database: Database, user: AuthenticatedUser, in
   });
 
   if (input.assigneeUserId && input.assigneeUserId !== user.id) {
+    const scope = await getIncidentNotificationScope(database, input.incidentId);
     await createNotification(database, {
       recipientUserId: input.assigneeUserId,
       incidentId: input.incidentId,
       actorUserId: user.id,
       eventType: "task.assigned",
       title: `Task assigned: ${input.title}`,
+      body: formatNotificationScope(scope),
       entityType: "task",
       entityId: taskId
     });
@@ -236,12 +238,14 @@ export async function updateTask(
   });
 
   if (input.assigneeUserId && input.assigneeUserId !== existing.rows[0].assignee_user_id && input.assigneeUserId !== user.id) {
+    const scope = await getIncidentNotificationScope(database, incidentId);
     await createNotification(database, {
       recipientUserId: input.assigneeUserId,
       incidentId,
       actorUserId: user.id,
       eventType: "task.assigned",
       title: `Task assigned: ${next.title}`,
+      body: formatNotificationScope(scope),
       entityType: "task",
       entityId: taskId
     });

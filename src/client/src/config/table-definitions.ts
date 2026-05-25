@@ -159,6 +159,7 @@ export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
     emptyLabel: "No notifications yet.",
     columns: [
       { key: "title", label: "Notification", sortKey: "title", title: true },
+      { key: "body", label: "Context", sortKey: "body" },
       { key: "eventType", label: "Event", sortKey: "eventType" },
       { key: "entityType", label: "Entity", sortKey: "entityType" },
       { key: "createdAt", label: "Created", sortKey: "createdAt", format: (v) => formatDateTime(v as string) },

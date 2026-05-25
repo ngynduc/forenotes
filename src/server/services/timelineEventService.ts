@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from "./authService.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
-import { createNotification } from "./notificationService.js";
+import { createNotification, formatNotificationScope, getIncidentNotificationScope } from "./notificationService.js";
 
 interface CreateTimelineEventInput {
   incidentId: string;
@@ -173,6 +173,7 @@ export async function createTimelineEvent(database: Database, user: Authenticate
     "select user_id from incident_members where incident_id = $1 and user_id <> $2",
     [input.incidentId, user.id]
   );
+  const scope = await getIncidentNotificationScope(database, input.incidentId);
   for (const row of memberResult.rows) {
     await createNotification(database, {
       recipientUserId: row.user_id,
@@ -180,6 +181,7 @@ export async function createTimelineEvent(database: Database, user: Authenticate
       actorUserId: user.id,
       eventType: "timeline.created",
       title: `Timeline event created: ${input.title}`,
+      body: formatNotificationScope(scope),
       entityType: "timeline_event",
       entityId: timelineEventId
     });
@@ -265,6 +267,7 @@ export async function updateTimelineEvent(
     "select user_id from incident_members where incident_id = $1 and user_id <> $2",
     [incidentId, user.id]
   );
+  const scope = await getIncidentNotificationScope(database, incidentId);
   for (const row of memberResult.rows) {
     await createNotification(database, {
       recipientUserId: row.user_id,
@@ -272,6 +275,7 @@ export async function updateTimelineEvent(
       actorUserId: user.id,
       eventType: "timeline.updated",
       title: `Timeline event updated: ${next.title}`,
+      body: formatNotificationScope(scope),
       entityType: "timeline_event",
       entityId: timelineEventId
     });

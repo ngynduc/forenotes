@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { TimeFilterRequest } from "@/lib/timeFilters";
@@ -219,9 +220,31 @@ export function useNotifications() {
     queryKey: ["notifications", activeUserId],
     queryFn: () => api.listNotifications(),
     enabled: !!activeUserId,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: true,
   });
+}
+
+export function useNotificationStream() {
+  const activeUserId = useScopeStore((s) => s.activeUserId);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!activeUserId) {
+      return;
+    }
+
+    const stream = api.openNotificationStream();
+    const refreshNotifications = () => {
+      void qc.invalidateQueries({ queryKey: ["notifications", activeUserId] });
+      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    };
+
+    stream.addEventListener("notification.created", refreshNotifications);
+
+    return () => {
+      stream.removeEventListener("notification.created", refreshNotifications);
+      stream.close();
+    };
+  }, [activeUserId, qc]);
 }
 
 export function useMarkNotificationRead() {

@@ -1,7 +1,7 @@
 import { Outlet, NavLink } from "react-router";
 import { useUIStore } from "@/stores/ui-store";
 import { useScopeStore } from "@/stores/scope-store";
-import { useNotifications } from "@/hooks/use-entities";
+import { useNotificationStream, useNotifications } from "@/hooks/use-entities";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -42,6 +42,7 @@ export function AppShell() {
   const expanded = useUIStore((s) => s.sidebarExpanded);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const flash = useUIStore((s) => s.flash);
+  useNotificationStream();
   const { data: notificationsData } = useNotifications();
   const unreadNotifications = notificationsData?.notifications.filter((notification) => notification.unseen).length ?? 0;
   const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);

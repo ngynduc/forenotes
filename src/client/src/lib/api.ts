@@ -301,6 +301,7 @@ export interface CreateEntityLinkInput {
 export interface NotificationItem {
   id: string;
   title: string;
+  body?: string;
   eventType: string;
   entityType: string;
   entityId: string;
@@ -562,6 +563,7 @@ interface RawEntityLinksResponse {
 interface RawNotificationItem {
   id: string;
   title: string;
+  body?: string | null;
   event_type: string;
   entity_type: string;
   entity_id: string;
@@ -847,6 +849,7 @@ function normalizeNotification(item: RawNotificationItem): NotificationItem {
   return {
     id: item.id,
     title: item.title,
+    body: item.body ?? undefined,
     eventType: item.event_type,
     entityType: item.entity_type,
     entityId: item.entity_id,
@@ -1318,6 +1321,9 @@ class ApiClient {
     const payload = await this.request<{ notifications: RawNotificationItem[] }>("/notifications");
     return { notifications: payload.notifications.map(normalizeNotification) };
   };
+
+  openNotificationStream = () =>
+    new EventSource(`${BASE}/notifications/stream`);
 
   markNotificationRead = (id: string) =>
     this.request(`/notifications/${id}/read`, "POST");

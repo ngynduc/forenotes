@@ -4,7 +4,12 @@ import type { CaseMemberRole } from "../../shared/domain.js";
 import { AppError } from "../errors.js";
 import { requireCaseMembership, requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
-import { createNotification } from "./notificationService.js";
+import {
+  createNotification,
+  formatNotificationScope,
+  getCaseNotificationScope,
+  getIncidentNotificationScope
+} from "./notificationService.js";
 
 interface AddCaseMemberInput {
   caseId: string;
@@ -76,12 +81,13 @@ export async function addCaseMember(database: Database, user: AuthenticatedUser,
   });
 
   if (input.userId !== user.id) {
+    const scope = await getCaseNotificationScope(database, input.caseId);
     await createNotification(database, {
       recipientUserId: input.userId,
       actorUserId: user.id,
       eventType: "case.member_added",
       title: "Added to case",
-      body: `You were added to case ${input.caseId}`,
+      body: `You were added to ${formatNotificationScope(scope)}`,
       entityType: "case",
       entityId: input.caseId
     });
@@ -240,13 +246,14 @@ export async function addIncidentMember(database: Database, user: AuthenticatedU
   });
 
   if (input.userId !== user.id) {
+    const scope = await getIncidentNotificationScope(database, input.incidentId);
     await createNotification(database, {
       recipientUserId: input.userId,
       actorUserId: user.id,
       incidentId: input.incidentId,
       eventType: "incident.member_added",
       title: "Added to incident",
-      body: `You were added to incident ${input.incidentId}`,
+      body: `You were added to ${formatNotificationScope(scope)}`,
       entityType: "incident",
       entityId: input.incidentId
     });

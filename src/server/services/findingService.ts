@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from "./authService.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
-import { createNotification } from "./notificationService.js";
+import { createNotification, formatNotificationScope, getIncidentNotificationScope } from "./notificationService.js";
 
 interface CreateFindingInput {
   incidentId: string;
@@ -140,6 +140,7 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
     "select user_id from incident_members where incident_id = $1 and user_id <> $2",
     [input.incidentId, user.id]
   );
+  const scope = await getIncidentNotificationScope(database, input.incidentId);
 
   for (const row of memberResult.rows) {
     await createNotification(database, {
@@ -148,6 +149,7 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
       actorUserId: user.id,
       eventType: "finding.created",
       title: `Finding created: ${input.title}`,
+      body: formatNotificationScope(scope),
       entityType: "finding",
       entityId: findingId
     });
@@ -223,6 +225,7 @@ export async function updateFinding(
     "select user_id from incident_members where incident_id = $1 and user_id <> $2",
     [incidentId, user.id]
   );
+  const scope = await getIncidentNotificationScope(database, incidentId);
 
   for (const row of memberResult.rows) {
     await createNotification(database, {
@@ -231,6 +234,7 @@ export async function updateFinding(
       actorUserId: user.id,
       eventType: "finding.updated",
       title: `Finding updated: ${next.title}`,
+      body: formatNotificationScope(scope),
       entityType: "finding",
       entityId: findingId
     });

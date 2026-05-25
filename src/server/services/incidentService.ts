@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from "./authService.js";
 import { AppError } from "../errors.js";
 import { requireCaseMembership, requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
-import { createNotification } from "./notificationService.js";
+import { createNotification, formatNotificationScope, getCaseNotificationScope } from "./notificationService.js";
 import { syncCaseMembersToIncident } from "./membershipService.js";
 
 interface CreateIncidentInput {
@@ -59,12 +59,14 @@ export async function createIncident(database: Database, user: AuthenticatedUser
     afterJson: input
   });
 
+  const scope = await getCaseNotificationScope(database, input.caseId);
   await createNotification(database, {
     recipientUserId: user.id,
     incidentId,
     actorUserId: user.id,
     eventType: "incident.created",
     title: `Incident created: ${input.name}`,
+    body: formatNotificationScope(scope),
     entityType: "incident",
     entityId: incidentId
   });

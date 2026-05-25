@@ -8,6 +8,7 @@ import { newDb } from "pg-mem";
 import { createApp } from "../app.js";
 import { runMigrations } from "../db/setup.js";
 import { hashPassword } from "../services/authService.js";
+import { createNotification, subscribeToNotificationEvents } from "../services/notificationService.js";
 
 async function createTestApp() {
   const db = newDb();
@@ -120,6 +121,39 @@ describe("Forenotes API", () => {
   afterEach(() => {
     delete process.env.FORENOTES_DATA_DIR;
     rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("emits live notification events only to the recipient", async () => {
+    const analystEvents: unknown[] = [];
+    const analystTwoEvents: unknown[] = [];
+    const unsubscribeAnalyst = subscribeToNotificationEvents(analystId, (event) => analystEvents.push(event));
+    const unsubscribeAnalystTwo = subscribeToNotificationEvents(analystTwoId, (event) => analystTwoEvents.push(event));
+
+    try {
+      await createNotification(pool, {
+        recipientUserId: analystId,
+        actorUserId: commanderId,
+        eventType: "task.assigned",
+        title: "Task assigned",
+        body: "Review the suspicious host",
+        entityType: "task",
+        entityId: randomUUID()
+      });
+    } finally {
+      unsubscribeAnalyst();
+      unsubscribeAnalystTwo();
+    }
+
+    expect(analystEvents).toHaveLength(1);
+    expect(analystTwoEvents).toHaveLength(0);
+    expect(analystEvents[0]).toMatchObject({
+      recipientUserId: analystId,
+      notification: {
+        title: "Task assigned",
+        event_type: "task.assigned",
+        unseen: true
+      }
+    });
   });
 
   it("requires authentication", async () => {
@@ -674,6 +708,7 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.status).toBe(200);
     expect(notificationsResponse.body.notifications).toHaveLength(1);
     expect(notificationsResponse.body.notifications[0].event_type).toBe("finding.created");
+    expect(notificationsResponse.body.notifications[0].body).toBe("Case: Notify Case; Incident: Notify Incident");
     expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
   });
 
@@ -706,7 +741,9 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.status).toBe(200);
     expect(
       notificationsResponse.body.notifications.some(
-        (notification: { event_type: string }) => notification.event_type === "timeline.created"
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "timeline.created" &&
+          notification.body === "Case: Timeline Notify Case; Incident: Timeline Notify Incident"
       )
     ).toBe(true);
   });
@@ -1187,7 +1224,9 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.status).toBe(200);
     expect(
       notificationsResponse.body.notifications.some(
-        (notification: { event_type: string }) => notification.event_type === "task.assigned"
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "task.assigned" &&
+          notification.body === "Case: Task Case; Incident: Task Incident A"
       )
     ).toBe(true);
   });
@@ -1602,12 +1641,16 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.status).toBe(200);
     expect(
       notificationsResponse.body.notifications.some(
-        (notification: { event_type: string }) => notification.event_type === "case.member_added"
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "case.member_added" &&
+          notification.body === "You were added to Case: Membership Case"
       )
     ).toBe(true);
     expect(
       notificationsResponse.body.notifications.some(
-        (notification: { event_type: string }) => notification.event_type === "incident.member_added"
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "incident.member_added" &&
+          notification.body === "You were added to Case: Membership Case; Incident: Membership Incident"
       )
     ).toBe(true);
   });
