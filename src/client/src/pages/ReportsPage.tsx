@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ChevronLeft, ChevronRight, Copy, Download, FileText, Plus, Save, Trash2, Wand2 } from "lucide-react";
 import type { IncidentReport, ReportTemplate } from "@shared/reportTypes";
@@ -175,13 +175,14 @@ function TemplateGuide() {
                     size="sm"
                     title={`Copy ${variable}`}
                     aria-label={`Copy ${variable}`}
+                    data-report-guide-copy
                     onClick={() => {
                       void copyVariable(variable);
                     }}
                     className="shrink-0"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    {copiedVariable === variable ? "Copied" : "Copy"}
+                    <span className="report-guide-copy-label">{copiedVariable === variable ? "Copied" : "Copy"}</span>
                   </Button>
                 </div>
               ))}
@@ -358,12 +359,12 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Reports</h2>
           <p className="text-sm text-[var(--color-text-muted)]">Incident templates, generated reports, and provider-assisted drafts.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2" data-report-toolbar>
-          <span className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-2" data-report-toolbar>
+          <span className="min-w-0 max-w-full truncate rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
             {llmStatus?.configured ? `LLM configured: ${llmStatus.model} (${llmStatus.source})` : "LLM not configured"}
           </span>
           {!llmStatus?.configured ? (
@@ -382,7 +383,11 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-4" style={{ gridTemplateColumns }} data-reports-grid>
+      <div
+        className="grid items-start gap-4"
+        style={{ "--reports-grid-columns": gridTemplateColumns } as CSSProperties}
+        data-reports-grid
+      >
         {leftCollapsed ? (
           <section className="self-start rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-1" data-reports-pane="templates-collapsed">
             <Button
@@ -459,11 +464,11 @@ export default function ReportsPage() {
         <section className="min-w-0 self-start rounded border border-[var(--color-border)] bg-[var(--color-surface)]" data-reports-pane="center">
           <div className="space-y-3 border-b border-[var(--color-border)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">Report Workspace</h3>
                 <p className="text-xs text-[var(--color-text-muted)]">Generate previews, edit Markdown, and use the guide while authoring templates.</p>
               </div>
-              <div className="flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] p-1">
+              <div className="flex max-w-full flex-wrap gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] p-1">
                 <Button
                   type="button"
                   variant={centerTab === "editor" ? "secondary" : "ghost"}
@@ -576,7 +581,7 @@ export default function ReportsPage() {
                 {preview ? (
                   <section className="space-y-3" data-report-editor="preview">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Input value={preview.title} onChange={(event) => setPreview({ ...preview, title: event.target.value })} />
+                      <Input className="min-w-0 flex-1" value={preview.title} onChange={(event) => setPreview({ ...preview, title: event.target.value })} />
                       <Button type="button" onClick={savePreview} disabled={createReport.isPending}>
                         <Save className="h-4 w-4" />
                         Save report
@@ -597,7 +602,7 @@ export default function ReportsPage() {
                 {reportDraft ? (
                   <section className="space-y-3" data-report-editor="saved-report">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Input value={reportDraft.title} onChange={(event) => setReportDraft({ ...reportDraft, title: event.target.value })} />
+                      <Input className="min-w-0 flex-1" value={reportDraft.title} onChange={(event) => setReportDraft({ ...reportDraft, title: event.target.value })} />
                       <Button type="button" onClick={saveReportDraft} disabled={updateReport.isPending}>
                         <Save className="h-4 w-4" />
                         Save changes

@@ -548,7 +548,7 @@ export function PdfTemplateWorkspace() {
   return (
     <div className="space-y-4" data-report-editor="pdf-template">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold">PDF Templates</h3>
           <p className="text-xs text-[var(--color-text-muted)]">HTML/CSS wrappers for Markdown report exports.</p>
         </div>
@@ -617,11 +617,11 @@ export function PdfTemplateWorkspace() {
           {pdfDraft ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <h4 className="text-sm font-semibold">{pdfDraft.name || "Untitled PDF template"}</h4>
                   <p className="text-xs text-[var(--color-text-muted)]">Edit metadata, HTML, CSS, and preview output in separate workspaces.</p>
                 </div>
-                <div className="flex gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] p-1">
+                <div className="flex max-w-full flex-wrap gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] p-1">
                   {[
                     ["details", "Details"],
                     ["html", "HTML"],
