@@ -298,6 +298,104 @@ describe("report service", () => {
     expect(JSON.stringify(response)).not.toContain("Forenotes");
   });
 
+  it("rejects unsafe LLM endpoints and credential custom headers", async () => {
+    await expect(
+      saveLlmSettings(database, user(userId), {
+        provider: "openai",
+        baseUrl: "http://169.254.169.254/latest/meta-data",
+        model: "gpt-test",
+        apiKey: "sk-test-secret"
+      })
+    ).rejects.toThrow("LLM API base URL must use HTTPS");
+
+    await expect(
+      saveLlmSettings(database, user(userId), {
+        provider: "openai",
+        baseUrl: "https://api.example.test",
+        model: "gpt-test",
+        apiKey: "sk-test-secret",
+        customHeaders: [{ name: "Authorization", value: "Bearer leaked" }]
+      })
+    ).rejects.toThrow("Custom header names cannot override");
+  });
+
+  it("allows custom LiteLLM providers without forcing a base URL", async () => {
+    const response = await saveLlmSettings(database, user(userId), {
+      provider: "nano-gpt",
+      model: "deepseek/deepseek-v4-flash",
+      apiKey: "sk-test-secret"
+    });
+
+    expect(response.provider).toBe("nano-gpt");
+    expect(response.endpointConfigured).toBe(false);
+  });
+
+  it("preserves hidden LLM key, endpoint, and headers when the user saves only visible fields", async () => {
+    await saveLlmSettings(database, user(userId), {
+      provider: "nano-gpt",
+      baseUrl: "https://nano-gpt.example.test/v1",
+      model: "deepseek/deepseek-v4-flash",
+      apiKey: "sk-test-secret",
+      customHeaders: [
+        { name: "HTTP-Referer", value: "https://forenotes.local" },
+        { name: "X-Title", value: "Forenotes" }
+      ]
+    });
+
+    await saveLlmSettings(database, user(userId), {
+      provider: "nano-gpt",
+      model: "deepseek/deepseek-v4-flash",
+      systemPrompt: "Use an executive summary style.",
+      apiKey: "",
+      customHeaders: []
+    });
+
+    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ ok: true, markdown: "OK" }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await testLlmSettings(database, user(userId));
+
+    expect(response).toEqual({ ok: true, model: "deepseek/deepseek-v4-flash", source: "user" });
+    const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
+    expect(fetchBody).toMatchObject({
+      provider: "nano-gpt",
+      model: "deepseek/deepseek-v4-flash",
+      systemPrompt: "Use an executive summary style.",
+      apiKey: "sk-test-secret",
+      apiBase: "https://nano-gpt.example.test/v1",
+      customHeaders: {
+        "HTTP-Referer": "https://forenotes.local",
+        "X-Title": "Forenotes"
+      }
+    });
+  });
+
+  it("requires an explicit LLM secret key for production API key encryption", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    try {
+      await expect(
+        saveLlmSettings(database, user(userId), {
+          provider: "openai",
+          baseUrl: "https://api.example.test",
+          model: "gpt-test",
+          apiKey: "sk-test-secret"
+        })
+      ).rejects.toThrow("FORENOTES_LLM_SECRET_KEY is required in production.");
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
+  });
+
   it("falls back to env LLM config without returning provider secrets", async () => {
     process.env.LLM_API_KEY = "";
     process.env.LLM_API_ENDPOINT = "https://api.example.test";
@@ -374,6 +472,31 @@ describe("report service", () => {
       systemPrompt: "Return a concise validation response.",
       apiKey: "sk-env-secret",
       apiBase: "https://api.example.test/v1",
+      reportType: "incident"
+    });
+  });
+
+  it("passes custom provider env configs through to the LiteLLM service unchanged", async () => {
+    process.env.LLM_API_KEY = "sk-env-secret";
+    process.env.LLM_API_ENDPOINT = "https://nano-gpt.example.test/v1";
+    process.env.LLM_PROVIDER = "nano-gpt";
+    process.env.LLM_MODEL = "deepseek/deepseek-v4-flash";
+    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ ok: true, markdown: "OK" }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await testLlmSettings(database, user(userId));
+
+    expect(response).toEqual({ ok: true, model: "deepseek/deepseek-v4-flash", source: "env" });
+    const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
+    expect(fetchBody).toMatchObject({
+      provider: "nano-gpt",
+      model: "deepseek/deepseek-v4-flash",
+      apiKey: "sk-env-secret",
+      apiBase: "https://nano-gpt.example.test/v1",
       reportType: "incident"
     });
   });

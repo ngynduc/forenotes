@@ -1,6 +1,8 @@
 import json
 import os
+import ipaddress
 from typing import Any
+from urllib.parse import urlparse
 
 import litellm
 from fastapi import FastAPI, HTTPException
@@ -21,7 +23,7 @@ app = FastAPI(title="Forenotes Report LLM Service")
 
 PROVIDER_SPECS = {
     "anthropic": {"prefix": "anthropic", "local": False, "requires_api_base": False},
-    "custom": {"prefix": "openai", "local": False, "requires_api_base": True},
+    "custom": {"prefix": None, "local": False, "requires_api_base": False},
     "gemini": {"prefix": "gemini", "local": False, "requires_api_base": False},
     "google": {"prefix": "gemini", "local": False, "requires_api_base": False},
     "google-ai-studio": {"prefix": "gemini", "local": False, "requires_api_base": False},
@@ -36,7 +38,17 @@ PROVIDER_SPECS = {
     "z.ai": {"prefix": "zai", "local": False, "requires_api_base": False},
     "zai": {"prefix": "zai", "local": False, "requires_api_base": False},
 }
-MODEL_PREFIXES = tuple({f"{spec['prefix']}/" for spec in PROVIDER_SPECS.values() if spec["prefix"]})
+BLOCKED_HEADER_NAMES = {
+    "authorization",
+    "cookie",
+    "host",
+    "proxy-authorization",
+    "x-api-key",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip",
+}
 
 
 class GenerateReportRequest(BaseModel):
@@ -55,22 +67,21 @@ def provider_spec(provider: str) -> dict[str, Any]:
     clean_provider = provider.strip().lower() or "openai"
     if clean_provider == "litellm":
         clean_provider = "model-prefixed"
-    return PROVIDER_SPECS.get(clean_provider, {"prefix": clean_provider or "openai", "local": False, "requires_api_base": False})
+    return PROVIDER_SPECS.get(clean_provider, {"prefix": clean_provider, "local": False, "requires_api_base": False})
 
 
 def normalize_model(provider: str, model: str) -> str:
     clean_model = model.strip()
     if not clean_model:
         raise HTTPException(status_code=400, detail="Missing model.")
-    if clean_model.startswith(MODEL_PREFIXES):
-        return clean_model
 
     spec = provider_spec(provider)
-    if spec["prefix"] and clean_model.lower().startswith(f"{str(spec['prefix']).lower()}/"):
+    prefix = spec["prefix"]
+    if prefix is None:
         return clean_model
-    if spec["prefix"]:
-        return f"{spec['prefix']}/{clean_model}"
-    return clean_model
+    if clean_model.lower().startswith(f"{str(prefix).lower()}/"):
+        return clean_model
+    return f"{prefix}/{clean_model}"
 
 
 def validate_provider_config(provider: str, model: str, api_key: str | None, api_base: str | None) -> str:
@@ -80,7 +91,62 @@ def validate_provider_config(provider: str, model: str, api_key: str | None, api
         raise HTTPException(status_code=400, detail="Missing API base URL for OpenAI-compatible provider.")
     if not spec["local"] and not api_key:
         raise HTTPException(status_code=400, detail="Missing API key for LLM provider.")
+    if api_base:
+        validate_api_base(provider, api_base)
     return normalized_model
+
+
+def validate_api_base(provider: str, api_base: str) -> None:
+    parsed = urlparse(api_base)
+    if parsed.scheme != "https" and not is_allowed_local_endpoint(provider, parsed):
+        raise HTTPException(status_code=400, detail="LLM API base URL must use HTTPS unless using local Ollama in non-production.")
+    hostname = (parsed.hostname or "").lower()
+    if not hostname or is_blocked_host(hostname):
+        raise HTTPException(status_code=400, detail="LLM API base URL cannot target local, private, link-local, or metadata hosts.")
+
+
+def is_allowed_local_endpoint(provider: str, parsed: Any) -> bool:
+    return (
+        provider.strip().lower() == "ollama"
+        and os.getenv("NODE_ENV") != "production"
+        and parsed.scheme == "http"
+        and (parsed.hostname or "").lower() in {"localhost", "127.0.0.1", "::1"}
+    )
+
+
+def is_blocked_host(hostname: str) -> bool:
+    if hostname in {"localhost", "metadata.google.internal"} or hostname.endswith((".internal", ".local")):
+        return True
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return os.getenv("NODE_ENV") == "production" and "." not in hostname
+    return (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+        or address.is_unspecified
+    )
+
+
+def validate_custom_headers(headers: dict[str, str]) -> dict[str, str]:
+    safe_headers: dict[str, str] = {}
+    for raw_name, raw_value in headers.items():
+        name = raw_name.strip()
+        lower_name = name.lower()
+        if (
+            not name
+            or lower_name in BLOCKED_HEADER_NAMES
+            or lower_name.startswith(("proxy-", "x-forwarded-", "cf-"))
+            or lower_name == "true-client-ip"
+        ):
+            raise HTTPException(status_code=400, detail="Custom LLM headers cannot override credential, proxy, host, or forwarding headers.")
+        if "\r" in raw_value or "\n" in raw_value:
+            raise HTTPException(status_code=400, detail="Custom LLM header values cannot contain newlines.")
+        safe_headers[name] = raw_value
+    return safe_headers
 
 
 @app.post("/generate-report")
@@ -89,6 +155,7 @@ def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
     api_base = req.apiBase or os.getenv("LLM_API_ENDPOINT")
     system_prompt = (req.systemPrompt or os.getenv("LLM_SYSTEM_PROMPT") or SYSTEM_PROMPT).strip()
     model = validate_provider_config(req.provider, req.model, api_key, api_base)
+    custom_headers = validate_custom_headers(req.customHeaders or {})
 
     try:
         user_payload = {
@@ -101,7 +168,7 @@ def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
             model=model,
             api_key=api_key,
             api_base=api_base,
-            extra_headers=req.customHeaders or None,
+            extra_headers=custom_headers or None,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_payload, separators=(",", ":"))},

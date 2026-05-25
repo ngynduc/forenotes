@@ -1,9 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import path from "node:path";
 import type { LlmSettingsStatus, PdfTemplate, ReportContext, ReportGenerationMode } from "../../shared/reportTypes.js";
 import type { ReportType } from "../../shared/domain.js";
 import type { Database } from "../db/types.js";
+import { env } from "../env.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { getDataDir } from "../storage.js";
@@ -113,6 +115,41 @@ const CANONICAL_LLM_PROVIDERS = new Set([
   "openrouter",
   "xai",
   "zai"
+]);
+const CUSTOM_ENDPOINT_PROVIDERS = new Set([
+  "custom",
+  "openai-compatible",
+
+  // local / self-hosted / custom endpoint providers
+  "ollama",
+  "vllm",
+  "lmstudio",
+  "tgi", // HuggingFace Text Generation Inference
+  "litellm",
+  "azure-openai",
+  "deepseek",
+
+  // OpenAI-compatible routers / gateways
+  "together",
+  "fireworks",
+  "deepinfra",
+  "anyscale",
+  "perplexity",
+  "mistral",
+  "cerebras",
+  "nano-gpt"
+]);
+const ALLOWED_LLM_PROVIDERS = new Set([...CANONICAL_LLM_PROVIDERS, ...CUSTOM_ENDPOINT_PROVIDERS]);
+const BLOCKED_CUSTOM_HEADERS = new Set([
+  "authorization",
+  "cookie",
+  "host",
+  "proxy-authorization",
+  "x-api-key",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip"
 ]);
 
 function providerFromModel(model: string) {
@@ -616,12 +653,19 @@ export async function saveLlmSettings(
   input: { provider: string; baseUrl?: string; model: string; systemPrompt?: string; apiKey?: string; customHeaders?: CustomHeaderInput[] }
 ) {
   await requirePermission(database, user, "llm_settings:manage");
-  const apiKey = input.apiKey ?? "";
+  const existing = await readLlmSettings(database, user.id);
   const provider = normalizeLlmProvider(input.provider, input.model);
+  const apiKey = input.apiKey?.trim() ? input.apiKey : (existing?.apiKey ?? "");
+  const baseUrl = input.baseUrl?.trim()
+    ? normalizeLlmBaseUrl(provider, input.baseUrl)
+    : (existing?.baseUrl ?? null);
   const systemPrompt = input.systemPrompt?.trim() ?? "";
   const encrypted = encryptSecret(apiKey);
   const mask = maskApiKey(apiKey);
-  const customHeaders = normalizeCustomHeaders(input.customHeaders ?? []);
+  const hasCustomHeaderInput = (input.customHeaders ?? []).some((header) => header.name.trim() || header.value);
+  const customHeaders = hasCustomHeaderInput
+    ? normalizeCustomHeaders(input.customHeaders ?? [])
+    : (existing?.customHeaders ?? {});
   await database.query(
     `
       insert into llm_settings (user_id, provider_name, base_url, model, system_prompt, encrypted_api_key, api_key_mask, custom_headers_json)
@@ -636,7 +680,7 @@ export async function saveLlmSettings(
         custom_headers_json = excluded.custom_headers_json,
         updated_at = now()
     `,
-    [user.id, provider, input.baseUrl || null, input.model, systemPrompt, encrypted, mask, JSON.stringify(customHeaders)]
+    [user.id, provider, baseUrl, input.model, systemPrompt, encrypted, mask, JSON.stringify(customHeaders)]
   );
   return getMaskedLlmSettings(database, user);
 }
@@ -985,6 +1029,13 @@ function resolvePlaceholder(key: string, context: ReportContext): unknown {
     return activityValue;
   }
 
+  if (key === "incident.startDate" || key === "incident.endDate") {
+    const incident = context.incident as Record<string, unknown>;
+    const camelKey = key.split(".")[1];
+    const snakeKey = camelKey === "startDate" ? "start_date" : "end_date";
+    return incident[camelKey] ?? incident[snakeKey];
+  }
+
   if (key === "findings.count") {
     return context.findings.length;
   }
@@ -1225,7 +1276,14 @@ function decryptSecret(encrypted: string) {
 }
 
 function encryptionKey() {
-  return createHash("sha256").update(process.env.FORENOTES_LLM_SECRET_KEY ?? "forenotes-development-llm-key").digest();
+  const secret = env.FORENOTES_LLM_SECRET_KEY;
+  if (secret && secret.length >= 32) {
+    return createHash("sha256").update(secret).digest();
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new AppError(500, "FORENOTES_LLM_SECRET_KEY is required in production.");
+  }
+  return createHash("sha256").update("forenotes-development-llm-key").digest();
 }
 
 function maskApiKey(value: string) {
@@ -1239,9 +1297,11 @@ async function readLlmSettings(database: Database, userId: string) {
   }
   const row = result.rows[0];
   const model = String(row.model);
+  const provider = normalizeLlmProvider(row.provider_name ? String(row.provider_name) : null, model);
+  // validateLlmProvider(provider);
   return {
-    provider: normalizeLlmProvider(row.provider_name ? String(row.provider_name) : null, model),
-    baseUrl: row.base_url ? String(row.base_url) : null,
+    provider,
+    baseUrl: normalizeLlmBaseUrl(provider, row.base_url ? String(row.base_url) : null),
     serviceUrl: resolveLiteLlmServiceUrl(),
     model,
     systemPrompt: row.system_prompt ? String(row.system_prompt) : "",
@@ -1278,11 +1338,12 @@ async function resolveLlmConfig(database: Database, userId: string): Promise<Llm
   const apiKey = process.env.LLM_API_KEY?.trim();
   const model = process.env.LLM_MODEL?.trim();
   const systemPrompt = process.env.LLM_SYSTEM_PROMPT?.trim() ?? "";
-  const baseUrl = process.env.LLM_API_ENDPOINT?.trim() || null;
   if (!model) {
     return null;
   }
   const provider = normalizeLlmProvider(process.env.LLM_PROVIDER, model);
+  // validateLlmProvider(provider);
+  const baseUrl = normalizeLlmBaseUrl(provider, process.env.LLM_API_ENDPOINT?.trim() || null);
 
   return {
     provider,
@@ -1365,6 +1426,12 @@ function normalizeCustomHeaders(headers: CustomHeaderInput[]) {
     if (!name || !isSafeHeaderName(name)) {
       throw new AppError(400, "Custom header names may only contain standard HTTP token characters.");
     }
+    if (!isAllowedCustomHeaderName(name)) {
+      throw new AppError(400, "Custom header names cannot override credentials, proxy, host, or forwarding headers.");
+    }
+    if (/[\r\n]/.test(header.value)) {
+      throw new AppError(400, "Custom header values cannot contain newlines.");
+    }
     normalized[name] = header.value;
   }
   return normalized;
@@ -1383,7 +1450,7 @@ function normalizeStoredHeaders(value: unknown) {
   }
   const headers: Record<string, string> = {};
   for (const [name, headerValue] of Object.entries(value)) {
-    if (isSafeHeaderName(name) && typeof headerValue === "string") {
+    if (isSafeHeaderName(name) && isAllowedCustomHeaderName(name) && typeof headerValue === "string" && !/[\r\n]/.test(headerValue)) {
       headers[name] = headerValue;
     }
   }
@@ -1404,6 +1471,106 @@ function parseEnvCustomHeaders() {
 
 function isSafeHeaderName(name: string) {
   return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name);
+}
+
+function isAllowedCustomHeaderName(name: string) {
+  const lower = name.toLowerCase();
+  if (BLOCKED_CUSTOM_HEADERS.has(lower)) {
+    return false;
+  }
+  return !(
+    lower.startsWith("proxy-") ||
+    lower.startsWith("x-forwarded-") ||
+    lower.startsWith("cf-") ||
+    lower === "true-client-ip"
+  );
+}
+
+function validateLlmProvider(provider: string) {
+  if (!ALLOWED_LLM_PROVIDERS.has(provider)) {
+    throw new AppError(400, "Unsupported LLM provider.");
+  }
+}
+
+function normalizeLlmBaseUrl(provider: string, rawBaseUrl: string | null | undefined) {
+  const value = rawBaseUrl?.trim();
+  if (!value) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new AppError(400, "LLM API base URL must be a valid URL.");
+  }
+
+  if (parsed.protocol !== "https:" && !isAllowedLocalLlmEndpoint(provider, parsed)) {
+    throw new AppError(400, "LLM API base URL must use HTTPS unless local development endpoints are explicitly allowed.");
+  }
+
+  if (isBlockedLlmHost(parsed.hostname)) {
+    throw new AppError(400, "LLM API base URL cannot target local, private, link-local, or metadata hosts.");
+  }
+
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+function isAllowedLocalLlmEndpoint(provider: string, url: URL) {
+  return provider === "ollama" && process.env.NODE_ENV !== "production" && url.protocol === "http:" && isLoopbackHost(url.hostname);
+}
+
+function isBlockedLlmHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isLoopbackHost(host) || host === "metadata.google.internal" || host.endsWith(".internal") || host.endsWith(".local")) {
+    return true;
+  }
+  if (process.env.NODE_ENV === "production" && !host.includes(".")) {
+    return true;
+  }
+  if (isIP(host) === 4) {
+    return isBlockedIpv4(host);
+  }
+  if (isIP(host) === 6) {
+    return isBlockedIpv6(host);
+  }
+  return false;
+}
+
+function isLoopbackHost(host: string) {
+  return host === "localhost" || host === "::1" || host === "127.0.0.1" || host.startsWith("127.");
+}
+
+function isBlockedIpv4(host: string) {
+  const octets = host.split(".").map((part) => Number(part));
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return true;
+  }
+  const [first, second] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    first === 169 && second === 254 ||
+    first === 172 && second >= 16 && second <= 31 ||
+    first === 192 && second === 168 ||
+    first === 100 && second >= 64 && second <= 127 ||
+    first === 198 && (second === 18 || second === 19) ||
+    first >= 224
+  );
+}
+
+function isBlockedIpv6(host: string) {
+  return (
+    host === "::1" ||
+    host.startsWith("fc") ||
+    host.startsWith("fd") ||
+    host.startsWith("fe80:") ||
+    host.startsWith("::ffff:127.") ||
+    host.startsWith("::ffff:10.") ||
+    host.startsWith("::ffff:192.168.") ||
+    host.startsWith("::ffff:169.254.")
+  );
 }
 
 function safePathSegment(value: string) {
