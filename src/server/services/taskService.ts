@@ -77,6 +77,9 @@ export async function createTask(database: Database, user: AuthenticatedUser, in
     await requireIncidentMembership(database, input.assigneeUserId, input.incidentId);
   }
 
+  const ownerUserId = input.ownerUserId ?? user.id;
+  await requireIncidentMembership(database, ownerUserId, input.incidentId);
+
   const taskId = randomUUID();
   await database.query(
     `
@@ -91,7 +94,7 @@ export async function createTask(database: Database, user: AuthenticatedUser, in
       input.description ?? null,
       input.status,
       input.priority,
-      input.ownerUserId ?? null,
+      ownerUserId,
       input.assigneeUserId ?? null,
       user.id,
       input.dueAt ?? null
@@ -197,6 +200,9 @@ export async function updateTask(
 
   if (input.assigneeUserId) {
     await requireIncidentMembership(database, input.assigneeUserId, incidentId);
+  }
+  if (input.ownerUserId) {
+    await requireIncidentMembership(database, input.ownerUserId, incidentId);
   }
 
   const next = {

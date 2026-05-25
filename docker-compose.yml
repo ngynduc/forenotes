@@ -3,19 +3,22 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: forenotes
-      POSTGRES_PASSWORD: forenotes
-      POSTGRES_DB: forenotes
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
     volumes:
       - forenotes_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U forenotes"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 3s
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: forenotes:beta-v1-prod
     restart: unless-stopped
     depends_on:
       db:
@@ -23,12 +26,22 @@ services:
       report-llm-service:
         condition: service_started
     environment:
-      DATABASE_URL: postgres://forenotes:forenotes@db:5432/forenotes
-      PORT: "8787"
-      FORENOTES_SEED_DEV_USERS: "1"
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?set POSTGRES_DB}
+      PORT: "3000"
+      FORENOTES_DATA_DIR: /app/data
+      FORENOTES_BOOTSTRAP_ADMIN_USERNAME: ${FORENOTES_BOOTSTRAP_ADMIN_USERNAME:?set FORENOTES_BOOTSTRAP_ADMIN_USERNAME}
+      FORENOTES_BOOTSTRAP_ADMIN_EMAIL: ${FORENOTES_BOOTSTRAP_ADMIN_EMAIL:?set FORENOTES_BOOTSTRAP_ADMIN_EMAIL}
+      FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME:?set FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME}
+      FORENOTES_BOOTSTRAP_ADMIN_PASSWORD: ${FORENOTES_BOOTSTRAP_ADMIN_PASSWORD:?set FORENOTES_BOOTSTRAP_ADMIN_PASSWORD}
+      FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY: ${FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY:-true}
+      FORENOTES_LLM_SECRET_KEY: ${FORENOTES_LLM_SECRET_KEY:?set FORENOTES_LLM_SECRET_KEY}
+      SECURE_SESSION_COOKIES: ${SECURE_SESSION_COOKIES:-true}
       LITELLM_SERVICE_URL: http://report-llm-service:8001
     ports:
-      - "8787:8787"
+      - "${FORENOTES_HOST_PORT:-3000}:3000"
+    volumes:
+      - forenotes_data:/app/data
 
   report-llm-service:
     build: ./services/report-llm-service
@@ -36,3 +49,4 @@ services:
 
 volumes:
   forenotes_pgdata:
+  forenotes_data:

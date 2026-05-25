@@ -132,7 +132,7 @@ async function ensureBootstrapAdmin(database: Database) {
   }
 
   if (process.env.NODE_ENV === "production" && env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!") {
-    console.warn("Bootstrap admin is using the default temporary password; change it immediately after first login.");
+    throw new Error("Refusing to bootstrap production with the default admin password.");
   }
 
   await database.query(
@@ -159,8 +159,12 @@ function normalizeUsername(username: string) {
 }
 
 function shouldSeedDevelopmentUsers() {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
   return (
     process.env.FORENOTES_SEED_DEV_USERS === "1" ||
+    env.FORENOTES_DEMO_MODE ||
     (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test" && process.env.VITEST !== "true")
   );
 }

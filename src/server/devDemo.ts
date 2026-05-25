@@ -24,6 +24,8 @@ import { createSystem } from "./services/systemService.js";
 import { createAccount } from "./services/accountService.js";
 import { createTask, createTaskLink } from "./services/taskService.js";
 import { createQuery } from "./services/queryService.js";
+import { writeTaskNote } from "./services/noteService.js";
+import { createReport, createReportTemplate, generateReportPreview } from "./services/reportService.js";
 import { createEvidenceLink } from "./services/evidenceLinkService.js";
 import { createEntityLink } from "./graph/entityLinksRepository.js";
 import type { Database } from "./db/types.js";
@@ -1380,6 +1382,52 @@ export async function seedCase(
         });
       }
     }
+
+    if (tasks[0]) {
+      await writeTaskNote(pool, users.lead.auth, incident.id, tasks[0].id, [
+        "# Shift Handoff",
+        "",
+        "- Review the linked finding and validate containment evidence.",
+        "- Confirm affected systems are reflected in the incident graph.",
+        "- Add screenshot or command output evidence before closing this task."
+      ].join("\n"));
+    }
+
+    const reportTemplate = await createReportTemplate(pool, users.commander.auth, incident.id, {
+      name: "Demo incident report",
+      reportType: "incident",
+      content: [
+        "# {{incident.name}}",
+        "",
+        "## Executive Summary",
+        "{{incident.summary}}",
+        "",
+        "## Findings",
+        "{{findings}}",
+        "",
+        "## Timeline",
+        "{{timelineEvents}}",
+        "",
+        "## Tasks",
+        "{{tasks}}"
+      ].join("\n")
+    });
+    const reportPreview = await generateReportPreview(pool, users.commander.auth, incident.id, {
+      templateId: String(reportTemplate.id),
+      reportType: "incident",
+      useLlm: false
+    });
+    await createReport(pool, users.commander.auth, incident.id, {
+      templateId: String(reportTemplate.id),
+      title: reportPreview.preview.title,
+      reportType: reportPreview.preview.reportType,
+      reportDate: reportPreview.preview.reportDate,
+      timezone: reportPreview.preview.timezone,
+      markdown: reportPreview.preview.markdown,
+      generationMode: reportPreview.preview.generationMode,
+      generatedContext: reportPreview.preview.generatedContext,
+      unresolvedPlaceholders: reportPreview.preview.unresolvedPlaceholders
+    });
 
     const resolveEntityReference = (entityType: NonNullable<SeedIncidentPlan["entityLinks"]>[number]["sourceType"], options: {
       index?: number;

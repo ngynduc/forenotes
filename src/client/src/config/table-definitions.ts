@@ -102,9 +102,11 @@ export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
     createLabel: "Create Query",
     emptyLabel: "No queries yet for this incident.",
     columns: [
-      { key: "name", label: "Name", sortKey: "name", title: true, editable: true },
+      { key: "id", label: "ID", sortKey: "id" },
+      { key: "name", label: "Query Name", sortKey: "name", title: true, editable: true },
       { key: "language", label: "Language", sortKey: "language", editable: true },
       { key: "ownerDisplayName", label: "Owner", sortKey: "ownerDisplayName" },
+      { key: "description", label: "Description", sortKey: "description" },
       { key: "updatedAt", label: "Updated", sortKey: "updatedAt", format: (v) => formatDateTime(v as string) },
     ],
   },

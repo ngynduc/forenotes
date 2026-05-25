@@ -164,3 +164,48 @@ export async function uploadTaskNoteImage(
     filename,
   };
 }
+
+export async function readTaskNoteImage(
+  database: Database,
+  user: AuthenticatedUser,
+  taskId: string,
+  storedFilename: string
+) {
+  if (!isSafeStoredImageFilename(storedFilename)) {
+    throw new AppError(404, "Image not found");
+  }
+
+  const task = await database.query<{ incident_id: string }>("select incident_id from tasks where id = $1", [taskId]);
+  if (task.rowCount === 0) {
+    throw new AppError(404, "Image not found");
+  }
+
+  await requireTaskAccess(database, user, task.rows[0].incident_id, taskId);
+
+  try {
+    const data = await readFile(path.join(taskUploadDir(taskId), storedFilename));
+    return {
+      data,
+      contentType: contentTypeForStoredFilename(storedFilename)
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new AppError(404, "Image not found");
+    }
+    throw error;
+  }
+}
+
+function isSafeStoredImageFilename(value: string) {
+  return /^[0-9a-f-]{36}\.(gif|jpg|png|webp)$/i.test(value);
+}
+
+function contentTypeForStoredFilename(value: string) {
+  const extension = path.extname(value).slice(1).toLowerCase();
+  for (const [contentType, mappedExtension] of Object.entries(IMAGE_EXTENSIONS)) {
+    if (mappedExtension === extension) {
+      return contentType;
+    }
+  }
+  return "application/octet-stream";
+}

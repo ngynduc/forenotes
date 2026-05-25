@@ -180,6 +180,12 @@ export interface UploadedTaskNoteImage {
   filename: string;
 }
 
+export interface UploadedReportImage {
+  id: string;
+  url: string;
+  filename: string;
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -1137,6 +1143,25 @@ class ApiClient {
       throw new Error(msg);
     }
     return res.json() as Promise<UploadedTaskNoteImage>;
+  };
+
+  uploadReportImage = async (incidentId: string, file: File) => {
+    const res = await fetch(`${BASE}/incidents/${incidentId}/report-images`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        ...this.headers(),
+        "Content-Type": file.type,
+        "x-filename": file.name || "image",
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      const msg = payload?.error ?? `POST /incidents/${incidentId}/report-images failed`;
+      throw new Error(msg);
+    }
+    return res.json() as Promise<UploadedReportImage>;
   };
 
   listQueries = async (incidentId: string) => {

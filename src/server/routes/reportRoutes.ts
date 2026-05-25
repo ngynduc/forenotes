@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { raw, Router } from "express";
 import type { ReportContext } from "../../shared/reportTypes.js";
 import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
@@ -22,11 +22,13 @@ import {
   listReports,
   listReportTemplates,
   previewPdfTemplate,
+  REPORT_IMAGE_CONTENT_TYPES,
   saveLlmSettings,
   testLlmSettings,
   updateReport,
   updatePdfTemplate,
-  updateReportTemplate
+  updateReportTemplate,
+  uploadReportImage
 } from "../services/reportService.js";
 import {
   createReportSchema,
@@ -232,6 +234,25 @@ export function createReportRoutes(database: Database) {
           generatedContext: payload.generatedContext as unknown as ReportContext
         })
       });
+    })
+  );
+
+  router.post(
+    "/incidents/:incidentId/report-images",
+    raw({ type: REPORT_IMAGE_CONTENT_TYPES, limit: "10mb" }),
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const body = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
+      const contentType = typeof request.headers["content-type"] === "string"
+        ? request.headers["content-type"].split(";")[0]
+        : "";
+      const uploaded = await uploadReportImage(database, user, incidentId, {
+        data: body,
+        contentType,
+        filename: typeof request.headers["x-filename"] === "string" ? request.headers["x-filename"] : undefined,
+      });
+      response.status(201).json(uploaded);
     })
   );
 

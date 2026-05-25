@@ -10,10 +10,13 @@ import { createAuditLogRoutes } from "./auditLogRoutes.js";
 import { createDashboardRoutes } from "./dashboardRoutes.js";
 import { createUserRoutes } from "./userRoutes.js";
 import { createReportRoutes } from "./reportRoutes.js";
+import { createUploadRoutes } from "./uploadRoutes.js";
 
 export function createRoutes(database: Database) {
   const router = Router();
   router.use("/api/auth", createAuthRoutes(database));
+  router.use("/api/uploads", createUploadRoutes(database));
+  router.use("/uploads", createUploadRoutes(database));
   router.use("/api/users", createUserRoutes(database));
   router.use("/api/cases", createCaseRoutes(database));
   router.use("/api/incidents", createIncidentRoutes(database));

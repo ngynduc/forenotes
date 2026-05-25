@@ -112,7 +112,7 @@ export async function getAuthenticatedUser(request: Request, database: Database)
   }
 
   const userId = request.header("x-user-id");
-  if (!userId) {
+  if (!userId || !isHeaderAuthAllowed()) {
     throw new AppError(401, "Authentication required");
   }
 
@@ -283,4 +283,14 @@ function parseCookies(header?: string) {
     cookies[rawName] = decodeURIComponent(rawValue.join("="));
   }
   return cookies;
+}
+
+function isHeaderAuthAllowed() {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+    return true;
+  }
+  return env.FORENOTES_ALLOW_HEADER_AUTH;
 }

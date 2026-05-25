@@ -43,12 +43,13 @@ export function TimezonePicker({ value, options, onChange, className, compactOnS
         type="button"
         className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-left text-xs text-[var(--color-text)]"
         aria-expanded={open}
+        aria-label={`Timezone: ${formatTimezoneLabel(value)}`}
         onClick={() => setOpen((current) => !current)}
       >
         {compactOnSmall ? (
           <>
-            <span className="block truncate sm:hidden">{formatCompactTimezoneLabel(value)}</span>
-            <span className="hidden truncate sm:block">{formatTimezoneLabel(value)}</span>
+            <span aria-hidden="true" className="block truncate sm:hidden">{formatCompactTimezoneLabel(value)}</span>
+            <span aria-hidden="true" className="hidden truncate sm:block">{formatTimezoneLabel(value)}</span>
           </>
         ) : (
           <span className="block truncate">{formatTimezoneLabel(value)}</span>

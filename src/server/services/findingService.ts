@@ -101,6 +101,7 @@ export async function createFinding(database: Database, user: AuthenticatedUser,
   await requireIncidentMembership(database, user.id, input.incidentId);
 
   const ownerUserId = input.ownerUserId ?? user.id;
+  await requireIncidentMembership(database, ownerUserId, input.incidentId);
   const findingId = randomUUID();
   await database.query(
     `

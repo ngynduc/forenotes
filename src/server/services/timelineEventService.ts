@@ -134,6 +134,7 @@ export async function createTimelineEvent(database: Database, user: Authenticate
   }
 
   const ownerUserId = input.ownerUserId ?? user.id;
+  await requireIncidentMembership(database, ownerUserId, input.incidentId);
   const timelineEventId = randomUUID();
   await database.query(
     `
@@ -167,6 +168,22 @@ export async function createTimelineEvent(database: Database, user: Authenticate
       ownerUserId
     }
   });
+
+  const memberResult = await database.query<{ user_id: string }>(
+    "select user_id from incident_members where incident_id = $1 and user_id <> $2",
+    [input.incidentId, user.id]
+  );
+  for (const row of memberResult.rows) {
+    await createNotification(database, {
+      recipientUserId: row.user_id,
+      incidentId: input.incidentId,
+      actorUserId: user.id,
+      eventType: "timeline.created",
+      title: `Timeline event created: ${input.title}`,
+      entityType: "timeline_event",
+      entityId: timelineEventId
+    });
+  }
 
   const result = await database.query("select * from timeline_events where id = $1", [timelineEventId]);
   return result.rows[0];

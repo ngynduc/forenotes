@@ -138,6 +138,22 @@ describe("Forenotes API", () => {
     expect(response.body.permissions).toContain("audit:read");
   });
 
+  it("ignores x-user-id header authentication in production mode", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    const response = await request(app).get("/api/auth/me").set("x-user-id", commanderId);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
+
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it("logs in with username and password and hydrates /me from the session cookie", async () => {
     const leadId = randomUUID();
     await insertUser(pool, {
@@ -661,6 +677,40 @@ describe("Forenotes API", () => {
     expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
   });
 
+  it("creates notifications for other incident members when a timeline event is created", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Timeline Notify Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Timeline Notify Incident", status: "open", severity: "medium" });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({ title: "Initial compromise", eventTime: "2026-05-22T10:00:00.000Z" });
+
+    expect(timelineResponse.status).toBe(201);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { event_type: string }) => notification.event_type === "timeline.created"
+      )
+    ).toBe(true);
+  });
+
   it("returns permission-scoped dashboard metrics and recent activity", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
@@ -757,7 +807,7 @@ describe("Forenotes API", () => {
     expect(response.body.summary.metrics.openIncidents).toBe(1);
     expect(response.body.summary.metrics.unresolvedFindings).toBe(1);
     expect(response.body.summary.metrics.overdueTasks).toBe(1);
-    expect(response.body.summary.metrics.unreadNotifications).toBe(1);
+    expect(response.body.summary.metrics.unreadNotifications).toBe(2);
     expect(response.body.summary.sla.staleIncidents).toBe(1);
     expect(response.body.summary.sla.agingFindings).toBe(1);
     expect(response.body.summary.breakdowns.incidentSeverity).toEqual([
@@ -1011,6 +1061,54 @@ describe("Forenotes API", () => {
 
     expect(timelinePatchResponse.status).toBe(400);
     expect(timelinePatchResponse.body.error).toBe("Timeline event owner cannot be changed");
+  });
+
+  it("rejects non-member owners and non-owner query edits", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Owner Guard Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Owner Guard Incident", status: "open", severity: "medium" });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    for (const [path, body] of [
+      [`/api/incidents/${incidentId}/findings`, { title: "Bad owner finding", status: "draft", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/timeline-events`, { title: "Bad owner timeline", eventTime: "2026-05-22T10:00:00.000Z", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/tasks`, { title: "Bad owner task", status: "todo", priority: "medium", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/queries`, { name: "Bad owner query", language: "spl", queryBody: "index=main", ownerUserId: analystTwoId }]
+    ] as const) {
+      const response = await request(app).post(path).set("x-user-id", commanderId).send(body);
+      expect(response.status).toBe(404);
+    }
+
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({ name: "Owned query", language: "spl", queryBody: "index=main" });
+    expect(queryResponse.status).toBe(201);
+    const queryId = queryResponse.body.query.id as string;
+
+    const forbiddenEdit = await request(app)
+      .patch(`/api/incidents/${incidentId}/queries/${queryId}`)
+      .set("x-user-id", analystTwoId)
+      .send({ description: "takeover" });
+    expect(forbiddenEdit.status).toBe(403);
+
+    const elevatedEdit = await request(app)
+      .patch(`/api/incidents/${incidentId}/queries/${queryId}`)
+      .set("x-user-id", commanderId)
+      .send({ description: "reviewed" });
+    expect(elevatedEdit.status).toBe(200);
+    expect(elevatedEdit.body.query.description).toBe("reviewed");
   });
 
   it("creates task assignment notifications and blocks cross-incident task links", async () => {
@@ -1949,5 +2047,55 @@ describe("Forenotes API", () => {
     expect(uploadResponse.status).toBe(201);
     expect(uploadResponse.body.filename).toBe("paste.png");
     expect(uploadResponse.body.url).toMatch(new RegExp(`^/api/uploads/task-notes/${taskId}/.+\\.png$`));
+
+    const unauthenticatedImageResponse = await request(app).get(uploadResponse.body.url);
+    expect(unauthenticatedImageResponse.status).toBe(401);
+
+    const authorizedImageResponse = await request(app)
+      .get(uploadResponse.body.url)
+      .set("x-user-id", commanderId);
+    expect(authorizedImageResponse.status).toBe(200);
+    expect(authorizedImageResponse.headers["content-type"]).toContain("image/png");
+  });
+
+  it("uploads report markdown images and gates report image reads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Report Images Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Report Images Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const uploadResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/report-images`)
+      .set("x-user-id", commanderId)
+      .set("content-type", "image/png")
+      .set("x-filename", "report-paste.png")
+      .send(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    expect(uploadResponse.status).toBe(201);
+    expect(uploadResponse.body.filename).toBe("report-paste.png");
+    expect(uploadResponse.body.url).toMatch(new RegExp(`^/api/uploads/reports/${incidentId}/.+\\.png$`));
+
+    const unauthenticatedImageResponse = await request(app).get(uploadResponse.body.url);
+    expect(unauthenticatedImageResponse.status).toBe(401);
+
+    const authorizedImageResponse = await request(app)
+      .get(uploadResponse.body.url)
+      .set("x-user-id", commanderId);
+    expect(authorizedImageResponse.status).toBe(200);
+    expect(authorizedImageResponse.headers["content-type"]).toContain("image/png");
   });
 });

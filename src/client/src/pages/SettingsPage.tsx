@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, LogOut, Save, Trash2, Wifi } from "lucide-react";
+import { CheckCircle2, LogOut, Plus, Save, Trash2, Wifi } from "lucide-react";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -28,6 +28,15 @@ function messageFromError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+type LlmHeaderFormRow = {
+  name: string;
+  value: string;
+};
+
+function emptyHeaderRow(): LlmHeaderFormRow {
+  return { name: "", value: "" };
+}
+
 export default function SettingsPage() {
   const { data } = useCurrentUser();
   const { timezone, setTimezone, options: timezoneOptions } = useTimezone();
@@ -42,8 +51,10 @@ export default function SettingsPage() {
   const [llmForm, setLlmForm] = useState({
     provider: "openai",
     model: "gpt-4o-mini",
+    baseUrl: "",
     systemPrompt: "",
     apiKey: "",
+    customHeaders: [emptyHeaderRow()] as LlmHeaderFormRow[],
   });
   const selectedProvider = LLM_PROVIDER_OPTIONS.find((option) => option.value === llmForm.provider) ?? LLM_PROVIDER_OPTIONS.at(-1)!;
   const providerSelectValue = LLM_PROVIDER_OPTIONS.some((option) => option.value === llmForm.provider) ? llmForm.provider : "custom";
@@ -57,6 +68,7 @@ export default function SettingsPage() {
         ...value,
         provider: llmStatus.provider || value.provider,
         model: llmStatus.model,
+        baseUrl: "",
         systemPrompt: llmStatus.systemPrompt || ""
       }));
     }
@@ -64,9 +76,24 @@ export default function SettingsPage() {
 
   function saveProviderSettings() {
     setLlmMessage(null);
-    saveLlmSettings.mutate(llmForm, {
+    const customHeaders = llmForm.customHeaders
+      .map((header) => ({ name: header.name.trim(), value: header.value }))
+      .filter((header) => header.name || header.value);
+    saveLlmSettings.mutate({
+      provider: llmForm.provider,
+      model: llmForm.model,
+      baseUrl: llmForm.baseUrl.trim(),
+      systemPrompt: llmForm.systemPrompt,
+      apiKey: llmForm.apiKey,
+      customHeaders,
+    }, {
       onSuccess: () => {
-        setLlmForm((value) => ({ ...value, apiKey: "" }));
+        setLlmForm((value) => ({
+          ...value,
+          baseUrl: "",
+          apiKey: "",
+          customHeaders: [emptyHeaderRow()],
+        }));
         setLlmMessage("LLM settings saved. API key is stored server-side and remains hidden.");
       },
       onError: (error) => setLlmMessage(messageFromError(error, "Unable to save LLM settings.")),
@@ -94,8 +121,10 @@ export default function SettingsPage() {
         setLlmForm({
           provider: "openai",
           model: "gpt-4o-mini",
+          baseUrl: "",
           systemPrompt: "",
           apiKey: "",
+          customHeaders: [emptyHeaderRow()],
         });
         setLlmMessage("User LLM settings removed. Reports will use .env fallback if configured.");
       },
@@ -112,6 +141,28 @@ export default function SettingsPage() {
       },
       onError: (error) => setPasswordMessage(messageFromError(error, "Unable to change password.")),
     });
+  }
+
+  function updateCustomHeader(index: number, key: keyof LlmHeaderFormRow, nextValue: string) {
+    setLlmForm((value) => ({
+      ...value,
+      customHeaders: value.customHeaders.map((header, headerIndex) =>
+        headerIndex === index ? { ...header, [key]: nextValue } : header
+      ),
+    }));
+  }
+
+  function addCustomHeader() {
+    setLlmForm((value) => ({ ...value, customHeaders: [...value.customHeaders, emptyHeaderRow()] }));
+  }
+
+  function removeCustomHeader(index: number) {
+    setLlmForm((value) => ({
+      ...value,
+      customHeaders: value.customHeaders.length === 1
+        ? [emptyHeaderRow()]
+        : value.customHeaders.filter((_, headerIndex) => headerIndex !== index),
+    }));
   }
 
   return (
@@ -209,6 +260,10 @@ export default function SettingsPage() {
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                 System prompt: {llmStatus.systemPromptConfigured ? "customized" : "default service prompt"}.
               </p>
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                API base: {llmStatus.endpointConfigured ? "configured" : "provider default or LiteLLM default"}.
+                Custom headers: {llmStatus.customHeadersConfigured ? llmStatus.customHeaders.map((header) => header.name).join(", ") : "none"}.
+              </p>
             </div>
           ) : (
             <div className="rounded border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">
@@ -268,6 +323,14 @@ export default function SettingsPage() {
               />
             </label>
             <label className="space-y-1 text-sm font-medium md:col-span-2">
+              API Base URL
+              <Input
+                value={llmForm.baseUrl}
+                onChange={(event) => setLlmForm((value) => ({ ...value, baseUrl: event.target.value }))}
+                placeholder="Optional override. Leave blank to use provider or LiteLLM defaults."
+              />
+            </label>
+            <label className="space-y-1 text-sm font-medium md:col-span-2">
               System Prompt
               <textarea
                 value={llmForm.systemPrompt}
@@ -276,6 +339,37 @@ export default function SettingsPage() {
                 className="min-h-40 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm"
               />
             </label>
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Custom Headers</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">Optional headers forwarded to LiteLLM for this user configuration.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addCustomHeader}>
+                  <Plus className="h-4 w-4" />
+                  Add header
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {llmForm.customHeaders.map((header, index) => (
+                  <div key={`llm-header-${index}`} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <Input
+                      value={header.name}
+                      onChange={(event) => updateCustomHeader(index, "name", event.target.value)}
+                      placeholder="Header name"
+                    />
+                    <Input
+                      value={header.value}
+                      onChange={(event) => updateCustomHeader(index, "value", event.target.value)}
+                      placeholder="Header value"
+                    />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeCustomHeader(index)} aria-label={`Remove header ${index + 1}`}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <p className="text-xs text-[var(--color-text-muted)]">

@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { MarkdownEditor } from "@/components/notes/MarkdownEditor";
+import { api } from "@/lib/api";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   useCreateReport,
@@ -338,6 +339,10 @@ export default function ReportsPage() {
     );
   }
 
+  function uploadReportImage(file: File) {
+    return api.uploadReportImage(incidentId, file);
+  }
+
   function runExportPdf() {
     if (!exportTarget) return;
     setExportError(null);
@@ -556,12 +561,13 @@ export default function ReportsPage() {
                       </Select>
                       <Button type="button" onClick={saveTemplate} disabled={createTemplate.isPending || updateTemplate.isPending}>
                         <Save className="h-4 w-4" />
-                        Save
+                        Save template
                       </Button>
                     </div>
                     <MarkdownEditor
                       value={templateDraft.content}
                       onChange={(content) => setTemplateDraft({ ...templateDraft, content })}
+                      onUploadImage={uploadReportImage}
                       helperText="Placeholders are preserved for report rendering."
                     />
                   </section>
@@ -582,6 +588,7 @@ export default function ReportsPage() {
                     <MarkdownEditor
                       value={preview.markdown}
                       onChange={(markdown) => setPreview({ ...preview, markdown })}
+                      onUploadImage={uploadReportImage}
                       helperText="Preview edits are saved only when you save the report."
                     />
                   </section>
@@ -599,6 +606,7 @@ export default function ReportsPage() {
                     <MarkdownEditor
                       value={reportDraft.markdown}
                       onChange={(markdown) => setReportDraft({ ...reportDraft, markdown })}
+                      onUploadImage={uploadReportImage}
                       helperText="Saved report content can be exported as PDF."
                     />
                   </section>

@@ -19,6 +19,7 @@ interface Node {
 const NODE_COUNT = 60;
 const MAX_DIST = 150;
 const NODE_SPEED = 0.3;
+const SHOW_DEMO_CREDENTIALS = import.meta.env.VITE_FORENOTES_DEMO_MODE === "1";
 
 function ParticleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -172,9 +173,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </Button>
         </form>
 
-        <p className="mt-5 rounded-[14px] bg-[#f7f9f7] px-3 py-2 text-xs text-[#66716d]">
-          Development seed users include <span className="font-mono text-[#40514d]">lead / lead123</span>.
-        </p>
+        {SHOW_DEMO_CREDENTIALS && (
+          <p className="mt-5 rounded-[14px] bg-[#f7f9f7] px-3 py-2 text-xs text-[#66716d]">
+            Demo users include <span className="font-mono text-[#40514d]">lead / lead123</span>.
+          </p>
+        )}
       </section>
     </main>
   );

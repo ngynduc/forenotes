@@ -42,6 +42,9 @@ export async function createQuery(database: Database, user: AuthenticatedUser, i
   await requirePermission(database, user, "query:create");
   await requireIncidentMembership(database, user.id, input.incidentId);
 
+  const ownerUserId = input.ownerUserId ?? user.id;
+  await requireIncidentMembership(database, ownerUserId, input.incidentId);
+
   const queryId = randomUUID();
   await database.query(
     `
@@ -56,7 +59,7 @@ export async function createQuery(database: Database, user: AuthenticatedUser, i
       input.language,
       input.description ?? null,
       input.queryBody,
-      input.ownerUserId ?? null,
+      ownerUserId,
       user.id
     ]
   );
@@ -87,6 +90,18 @@ export async function updateQuery(
   const existing = await database.query("select * from queries where id = $1 and incident_id = $2", [queryId, incidentId]);
   if (existing.rowCount === 0) {
     throw new AppError(404, "Query not found");
+  }
+
+  const existingOwnerId = existing.rows[0].owner_user_id ? String(existing.rows[0].owner_user_id) : null;
+  const elevatedEditor = isElevatedQueryEditor(user);
+  if (!elevatedEditor && existingOwnerId !== user.id) {
+    throw new AppError(403, "Only the query owner or a case lead can edit this query.");
+  }
+  if (input.ownerUserId !== undefined) {
+    await requireIncidentMembership(database, input.ownerUserId, incidentId);
+    if (!elevatedEditor && input.ownerUserId !== existingOwnerId) {
+      throw new AppError(403, "Only a case lead can reassign query ownership.");
+    }
   }
 
   const next = {
@@ -139,4 +154,8 @@ export async function deleteQuery(database: Database, user: AuthenticatedUser, i
     entityId: queryId,
     beforeJson: existing.rows[0]
   });
+}
+
+function isElevatedQueryEditor(user: AuthenticatedUser) {
+  return user.globalRole === "admin" || user.globalRole === "commander" || user.globalRole === "response_lead";
 }

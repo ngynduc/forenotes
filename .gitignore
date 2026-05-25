@@ -12,6 +12,8 @@ data/uploads/
 .env
 .env.*
 !.env.example
+!.env.production.example
+!.env.demo.example
 
 # Logs
 *.log
