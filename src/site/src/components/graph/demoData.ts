@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge } from "./demoTypes";
+import type { GraphNode, GraphEdge } from "./demoTypes.js";
 
 export const DEMO_NODES: GraphNode[] = [
   { id: "case-1", type: "case", entityId: "c1", label: "APT29 Investigation" },
