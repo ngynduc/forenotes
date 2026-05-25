@@ -1804,6 +1804,14 @@ describe("Forenotes API", () => {
         })
       ])
     );
+    expect(investigationGraphResponse.body.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "user",
+          entityId: analystTwoId
+        })
+      ])
+    );
     expect(investigationGraphResponse.body.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ source: `finding:${findingId}`, target: `user:${analystId}`, type: "assigned_to", derived: true }),

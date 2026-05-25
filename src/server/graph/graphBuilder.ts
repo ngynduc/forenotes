@@ -126,6 +126,18 @@ function applyDepthFilter(nodes: IncidentGraphNode[], edges: IncidentGraphEdge[]
   };
 }
 
+function removeIsolatedNodes(nodes: IncidentGraphNode[], edges: IncidentGraphEdge[]) {
+  if (edges.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const linkedNodeIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+  return {
+    nodes: nodes.filter((node) => linkedNodeIds.has(node.id)),
+    edges
+  };
+}
+
 export async function buildIncidentGraph(
   database: Database,
   user: AuthenticatedUser,
@@ -732,6 +744,10 @@ export async function buildIncidentGraph(
 
   const survivingIds = new Set(filteredNodes.map((node) => node.id));
   filteredEdges = filteredEdges.filter((edge) => survivingIds.has(edge.source) && survivingIds.has(edge.target));
+
+  const linkedGraph = removeIsolatedNodes(filteredNodes, filteredEdges);
+  filteredNodes = linkedGraph.nodes;
+  filteredEdges = linkedGraph.edges;
 
   const countByType = (type: GraphNodeType) => filteredNodes.filter((node) => node.type === type).length;
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { TagManagement } from "@/components/entity-modal/TagManagement";
 import { useAttackTags, useCustomTags } from "@/hooks/use-entities";
 import { api, type AttackTagItem, type TagItem } from "@/lib/api";
@@ -144,21 +144,77 @@ function TagAttachControl<T extends { id: string; name: string }>({
   onAttach: () => void;
   getLabel?: (tag: T) => string;
 }) {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = useMemo(
+    () =>
+      normalizedQuery
+        ? options.filter((tag) => getLabel(tag).toLowerCase().includes(normalizedQuery))
+        : options,
+    [getLabel, normalizedQuery, options]
+  );
+  const visibleOptions = filteredOptions.slice(0, 8);
+  const hasNoAvailableTags = options.length === 0;
+  const showDropdown = isOpen && !hasNoAvailableTags;
+
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-[var(--color-text-muted)]">{label}</label>
-      <div className="flex gap-2">
-        <Select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-          <option value="">{options.length === 0 ? "No tags available" : placeholder}</option>
-          {options.map((tag) => (
-            <option key={tag.id} value={tag.id}>
-              {getLabel(tag)}
-            </option>
-          ))}
-        </Select>
-        <Button type="button" variant="outline" disabled={disabled || !value} onClick={onAttach} title={`Add ${label}`}>
-          <Plus className="h-4 w-4" />
-        </Button>
+      <div className="relative">
+        <div className="flex gap-2">
+          <Input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              onChange("");
+              setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            onBlur={() => setIsOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setIsOpen(false);
+              }
+            }}
+            placeholder={hasNoAvailableTags ? "No tags available" : `${placeholder} by name or ID`}
+            disabled={disabled && hasNoAvailableTags}
+          />
+          <Button type="button" variant="outline" disabled={disabled || !value} onClick={onAttach} title={`Add ${label}`}>
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {showDropdown && (
+          <div
+            className="absolute left-0 right-11 top-10 z-50 max-h-48 overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg"
+            onMouseDown={(event) => event.preventDefault()}
+          >
+            {visibleOptions.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-[var(--color-text-muted)]">No matching tags</p>
+            ) : (
+              visibleOptions.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="block w-full truncate px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
+                  onClick={() => {
+                    onChange(tag.id);
+                    setQuery(getLabel(tag));
+                    setIsOpen(false);
+                  }}
+                >
+                  {getLabel(tag)}
+                </button>
+              ))
+            )}
+            {filteredOptions.length > visibleOptions.length && (
+              <div className="border-t border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-muted)]">
+                {filteredOptions.length - visibleOptions.length} more. Keep typing.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
