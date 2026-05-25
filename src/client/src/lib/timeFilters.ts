@@ -233,11 +233,45 @@ export function toTimeFilterRequest(filter: TimeFilterState): TimeFilterRequest 
     return null;
   }
 
+  const timezone = normalized.timezone || DEFAULT_TIMEZONE;
+  const start = toUtcIsoBound(normalized.earliest, timezone);
+  const end = toUtcIsoBound(normalized.latest, timezone);
+
   return {
     field: normalized.field,
-    start: normalized.earliest || undefined,
-    end: normalized.latest || undefined,
+    start,
+    end,
   };
+}
+
+function toUtcIsoBound(value: string, timezone: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const millis = parseRequestTimeExpression(value, timezone);
+  return millis == null
+    ? undefined
+    : DateTime.fromMillis(millis, { zone: "utc" }).toISO({ suppressMilliseconds: false }) ?? undefined;
+}
+
+function parseRequestTimeExpression(value: string, timezone: string): number | null {
+  const raw = value.trim();
+  if (raw === "now") {
+    return DateTime.now().setZone(normalizeTimezone(timezone)).startOf("minute").toUTC().toMillis();
+  }
+
+  const relativeToNowMatch = raw.match(/^([+-]?\d+)(s|m|h|d|w|mon|y)$/i);
+  if (relativeToNowMatch) {
+    const [, amount, unit] = relativeToNowMatch;
+    return addDateOffset(
+      DateTime.now().setZone(normalizeTimezone(timezone)).startOf("minute"),
+      Number.parseInt(amount, 10),
+      unit.toLowerCase()
+    ).toUTC().toMillis();
+  }
+
+  return parseTimeExpression(value, timezone);
 }
 
 interface NumericBounds {
