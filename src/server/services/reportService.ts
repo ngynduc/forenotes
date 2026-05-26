@@ -105,6 +105,7 @@ interface LlmProviderConfig {
   model: string;
   systemPrompt: string;
   apiKey: string;
+  apiKeyDecryptionFailed?: boolean;
   customHeaders: Record<string, string>;
   source: "user" | "env";
   endpointConfigured: boolean;
@@ -765,9 +766,13 @@ export async function saveLlmSettings(
   input: { provider: string; baseUrl?: string; model: string; systemPrompt?: string; apiKey?: string; customHeaders?: CustomHeaderInput[] }
 ) {
   await requirePermission(database, user, "llm_settings:manage");
-  const existing = await readLlmSettings(database, user.id);
+  const existing = await readLlmSettings(database, user.id, { tolerateInvalidApiKey: true });
   const provider = normalizeLlmProvider(input.provider, input.model);
-  const apiKey = input.apiKey?.trim() ? input.apiKey : (existing?.apiKey ?? "");
+  const hasNewApiKey = Boolean(input.apiKey?.trim());
+  if (!hasNewApiKey && existing?.apiKeyDecryptionFailed) {
+    throw new AppError(400, "Stored LLM API key could not be decrypted. Re-enter the API key in Settings.");
+  }
+  const apiKey = hasNewApiKey ? input.apiKey! : (existing?.apiKey ?? "");
   const baseUrl = input.baseUrl?.trim()
     ? normalizeLlmBaseUrl(provider, input.baseUrl)
     : (existing?.baseUrl ?? null);
@@ -799,7 +804,7 @@ export async function saveLlmSettings(
 
 export async function getMaskedLlmSettings(database: Database, user: AuthenticatedUser) {
   await requirePermission(database, user, "llm_settings:manage");
-  return llmStatusFromConfig(await resolveLlmConfig(database, user.id));
+  return llmStatusFromConfig(await resolveLlmConfig(database, user.id, { tolerateInvalidApiKey: true }));
 }
 
 export async function deleteLlmSettings(database: Database, user: AuthenticatedUser) {
@@ -1438,7 +1443,7 @@ function maskApiKey(value: string) {
   return value.length <= 8 ? "****" : `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-async function readLlmSettings(database: Database, userId: string) {
+async function readLlmSettings(database: Database, userId: string, options: { tolerateInvalidApiKey?: boolean } = {}) {
   const result = await database.query("select * from llm_settings where user_id = $1", [userId]);
   if (result.rowCount === 0) {
     return null;
@@ -1447,13 +1452,15 @@ async function readLlmSettings(database: Database, userId: string) {
   const model = String(row.model);
   const provider = normalizeLlmProvider(row.provider_name ? String(row.provider_name) : null, model);
   // validateLlmProvider(provider);
+  const decryptedApiKey = decryptLlmApiKey(String(row.encrypted_api_key), options);
   return {
     provider,
     baseUrl: normalizeLlmBaseUrl(provider, row.base_url ? String(row.base_url) : null),
     serviceUrl: resolveLiteLlmServiceUrl(),
     model,
     systemPrompt: row.system_prompt ? String(row.system_prompt) : "",
-    apiKey: decryptSecret(String(row.encrypted_api_key)),
+    apiKey: decryptedApiKey.value,
+    apiKeyDecryptionFailed: decryptedApiKey.failed,
     customHeaders: normalizeStoredHeaders(row.custom_headers_json),
     source: "user" as const,
     endpointConfigured: Boolean(row.base_url),
@@ -1477,8 +1484,12 @@ async function generateLlmMarkdown(database: Database, user: AuthenticatedUser, 
   }
 }
 
-async function resolveLlmConfig(database: Database, userId: string): Promise<LlmProviderConfig | null> {
-  const userSettings = await readLlmSettings(database, userId);
+async function resolveLlmConfig(
+  database: Database,
+  userId: string,
+  options: { tolerateInvalidApiKey?: boolean } = {}
+): Promise<LlmProviderConfig | null> {
+  const userSettings = await readLlmSettings(database, userId, options);
   if (userSettings) {
     return userSettings;
   }
@@ -1531,10 +1542,32 @@ function llmStatusFromConfig(config: LlmProviderConfig | null): LlmSettingsStatu
     systemPrompt: config.systemPrompt,
     systemPromptConfigured: Boolean(config.systemPrompt.trim()),
     endpointConfigured: config.endpointConfigured,
-    apiKeyConfigured: Boolean(config.apiKey),
+    apiKeyConfigured: Boolean(config.apiKey || (config.source === "user" && config.apiKeyMask)),
     customHeadersConfigured: Object.keys(config.customHeaders).length > 0,
     customHeaders: Object.keys(config.customHeaders).sort().map((name) => ({ name, configured: true }))
   };
+}
+
+function decryptLlmApiKey(encrypted: string, options: { tolerateInvalidApiKey?: boolean }) {
+  try {
+    if (!isEncryptedSecretShape(encrypted)) {
+      throw new Error("Invalid encrypted secret.");
+    }
+    return { value: decryptSecret(encrypted), failed: false };
+  } catch {
+    if (options.tolerateInvalidApiKey) {
+      return { value: "", failed: true };
+    }
+    throw new AppError(400, "Stored LLM API key could not be decrypted. Re-enter the API key in Settings.");
+  }
+}
+
+function isEncryptedSecretShape(encrypted: string) {
+  const [ivRaw, tagRaw, payloadRaw, extra] = encrypted.split(".");
+  if (extra !== undefined || ivRaw === undefined || tagRaw === undefined || payloadRaw === undefined) {
+    return false;
+  }
+  return Buffer.from(ivRaw, "base64").length === 12 && Buffer.from(tagRaw, "base64").length === 16;
 }
 
 function toLiteLlmServiceConfig(config: LlmProviderConfig): LiteLlmServiceConfig {

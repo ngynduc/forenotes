@@ -420,6 +420,46 @@ describe("report service", () => {
     });
   });
 
+  it("lets users recover LLM settings when the stored API key cannot be decrypted", async () => {
+    await database.query(
+      `
+        insert into llm_settings (user_id, provider_name, base_url, model, system_prompt, encrypted_api_key, api_key_mask, custom_headers_json)
+        values ($1, 'openai', 'https://api.example.test', 'gpt-test', 'Keep it short.', 'not.decryptable', 'sk-b...oken', '{}'::jsonb)
+      `,
+      [userId]
+    );
+
+    const masked = await getMaskedLlmSettings(database, user(userId));
+    expect(masked).toMatchObject({
+      configured: true,
+      provider: "openai",
+      model: "gpt-test",
+      systemPrompt: "Keep it short.",
+      apiKeyConfigured: true
+    });
+
+    await expect(
+      testLlmSettings(database, user(userId))
+    ).rejects.toThrow("Stored LLM API key could not be decrypted");
+
+    await expect(
+      saveLlmSettings(database, user(userId), {
+        provider: "openai",
+        model: "gpt-test",
+        apiKey: "",
+        customHeaders: []
+      })
+    ).rejects.toThrow("Stored LLM API key could not be decrypted");
+
+    const saved = await saveLlmSettings(database, user(userId), {
+      provider: "openai",
+      model: "gpt-test",
+      apiKey: "sk-new-test-secret",
+      customHeaders: []
+    });
+    expect(saved.apiKeyConfigured).toBe(true);
+  });
+
   it("requires an explicit LLM secret key for production API key encryption", async () => {
     const previousNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
