@@ -48,8 +48,8 @@ export function TimezonePicker({ value, options, onChange, className, compactOnS
       >
         {compactOnSmall ? (
           <>
-            <span aria-hidden="true" className="block truncate sm:hidden">{formatCompactTimezoneLabel(value)}</span>
-            <span aria-hidden="true" className="hidden truncate sm:block">{formatTimezoneLabel(value)}</span>
+            <span aria-hidden="true" className="block truncate 2xl:hidden">{formatCompactTimezoneLabel(value)}</span>
+            <span aria-hidden="true" className="hidden truncate 2xl:block">{formatTimezoneLabel(value)}</span>
           </>
         ) : (
           <span className="block truncate">{formatTimezoneLabel(value)}</span>

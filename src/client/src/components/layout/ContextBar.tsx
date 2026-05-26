@@ -67,7 +67,7 @@ export function ContextBar() {
           onChange={setTimezone}
           options={timezoneOptions}
           compactOnSmall
-          className="w-20 sm:w-64"
+          className="w-20 2xl:w-64"
         />
       </ContextField>
     </div>
