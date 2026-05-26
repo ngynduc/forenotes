@@ -53,6 +53,7 @@ export function RelationshipGraph() {
         id: ln.id,
         type: "entity",
         position: { x: ln.x, y: ln.y },
+        style: { width: ln.width, minHeight: ln.height },
         data: { ...gn, label: gn.label },
       };
     });

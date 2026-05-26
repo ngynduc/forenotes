@@ -27,7 +27,7 @@ export function EntityNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "min-w-[140px] rounded-[var(--radius-sm)] border-2 bg-[var(--color-surface)] p-2 shadow-sm transition-[opacity,box-shadow,border-color,transform] duration-150",
+        "w-full min-w-0 rounded-[var(--radius-sm)] border-2 bg-[var(--color-surface)] p-2.5 shadow-sm transition-[opacity,box-shadow,border-color,transform] duration-150",
         severityClass || "border-[var(--color-border)]",
         isSelected && "ring-2 ring-[var(--color-primary)] shadow-md",
         !isSelected && isConnected && "border-[var(--color-primary)] shadow-md",
@@ -37,10 +37,12 @@ export function EntityNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} className="!bg-[var(--color-primary)]" />
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
-        <span className="truncate text-xs font-semibold">{node.label}</span>
+        <span className="min-w-0 text-xs font-semibold leading-snug [overflow-wrap:anywhere]">{node.label}</span>
       </div>
       {node.subtitle && (
-        <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">{node.subtitle}</p>
+        <p className="mt-1 pl-6 text-[10px] leading-snug text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
+          {node.subtitle}
+        </p>
       )}
       {node.status && (
         <Badge variant="secondary" className="mt-1 text-[10px]">

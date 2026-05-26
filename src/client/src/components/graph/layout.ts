@@ -23,11 +23,11 @@ const LANE_ORDER: Record<string, number> = {
   mitre_technique: 10,
 };
 
-const LANE_HEIGHT = 120;
-const NODE_WIDTH = 160;
-const NODE_HEIGHT = 60;
-const LANE_GAP = 20;
-const NODE_GAP = 40;
+const LANE_HEIGHT = 140;
+const NODE_WIDTH = 240;
+const NODE_HEIGHT = 84;
+const LANE_GAP = 36;
+const NODE_GAP = 88;
 
 export function layoutNodes(nodes: GraphNode[]): LayoutNode[] {
   const lanes = new Map<number, GraphNode[]>();
@@ -43,7 +43,7 @@ export function layoutNodes(nodes: GraphNode[]): LayoutNode[] {
 
   sortedLanes.forEach(([, laneNodes], laneIndex) => {
     const y = laneIndex * (LANE_HEIGHT + LANE_GAP);
-    const totalWidth = laneNodes.length * (NODE_WIDTH + NODE_GAP);
+    const totalWidth = laneNodes.length * NODE_WIDTH + Math.max(0, laneNodes.length - 1) * NODE_GAP;
     const startX = -totalWidth / 2;
 
     laneNodes.forEach((node, nodeIndex) => {
