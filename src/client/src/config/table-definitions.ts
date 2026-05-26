@@ -21,6 +21,53 @@ export interface TableDefinition {
   columns: ColumnDef[];
 }
 
+function formatAttachedTags(_value: unknown, row: Record<string, unknown>) {
+  const customTags = Array.isArray(row.customTags) ? row.customTags : [];
+  const attackTags = Array.isArray(row.attackTags) ? row.attackTags : [];
+  const tags = [
+    ...customTags.map((tag) => {
+      const item = tag as { name?: unknown; color?: unknown };
+      return {
+        label: String(item.name ?? ""),
+        color: String(item.color ?? "#0f766e"),
+      };
+    }),
+    ...attackTags.map((tag) => {
+      const item = tag as { attackId?: unknown; name?: unknown };
+      const attackId = String(item.attackId ?? "");
+      const name = String(item.name ?? "");
+      return {
+        label: [attackId, name].filter(Boolean).join(" "),
+        color: "#1d4ed8",
+      };
+    }),
+  ].filter((tag) => tag.label);
+
+  if (tags.length === 0) {
+    return "—";
+  }
+
+  return React.createElement(
+    "div",
+    { className: "flex max-w-[18rem] flex-wrap gap-1" },
+    tags.map((tag) =>
+      React.createElement(
+        "span",
+        {
+          key: tag.label,
+          className: "inline-flex max-w-full items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2 py-0.5 text-xs text-[var(--color-text)]",
+          title: tag.label,
+        },
+        React.createElement("span", {
+          className: "h-2 w-2 shrink-0 rounded-full",
+          style: { backgroundColor: tag.color },
+        }),
+        React.createElement("span", { className: "truncate" }, tag.label)
+      )
+    )
+  );
+}
+
 export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
   cases: {
     entityType: "case",
@@ -62,6 +109,7 @@ export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
       { key: "severity", label: "Severity", sortKey: "severity", editable: true, badge: "priority" },
       { key: "confidence", label: "Confidence", sortKey: "confidence", editable: true },
       { key: "ownerDisplayName", label: "Owner", sortKey: "ownerDisplayName" },
+      { key: "tags", label: "Tags", sortKey: "tags", format: formatAttachedTags },
       { key: "createdAt", label: "Created", sortKey: "createdAt", format: (v) => formatDateTime(v as string) },
       { key: "updatedAt", label: "Updated", sortKey: "updatedAt", format: (v) => formatDateTime(v as string) },
     ],
@@ -77,6 +125,7 @@ export const TABLE_DEFINITIONS: Record<string, TableDefinition> = {
       { key: "title", label: "Event", sortKey: "title", title: true, editable: true },
       { key: "source", label: "Source", sortKey: "source", editable: true },
       { key: "ownerDisplayName", label: "Owner", sortKey: "ownerDisplayName" },
+      { key: "tags", label: "Tags", sortKey: "tags", format: formatAttachedTags },
       { key: "updatedAt", label: "Updated", sortKey: "updatedAt", format: (v) => formatDateTime(v as string) },
     ],
   },
