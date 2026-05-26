@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, LogOut, Plus, Save, Trash2, Wifi } from "lucide-react";
+import { CheckCircle2, KeyRound, LogOut, Plus, Save, ShieldCheck, Trash2, Wifi, XCircle } from "lucide-react";
 import { TimezonePicker } from "@/components/timezone/TimezonePicker";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -10,7 +10,9 @@ import {
   useTestLlmSettings,
 } from "@/hooks/use-entities";
 import { useChangePassword, useCurrentUser, useLogout } from "@/hooks/use-auth";
+import { useActivateLicense, useDeactivateLicense, useLicenseStatus } from "@/hooks/use-license";
 import { useTimezone } from "@/providers/TimezoneProvider";
+import type { FeatureKey, LicenseStatusResponse } from "@shared/license";
 
 const LLM_PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI", modelExample: "gpt-4o-mini" },
@@ -33,8 +35,22 @@ type LlmHeaderFormRow = {
   value: string;
 };
 
+type SettingsTab = "general" | "license";
+
 function emptyHeaderRow(): LlmHeaderFormRow {
   return { name: "", value: "" };
+}
+
+function labelFromKey(value: string) {
+  return value
+    .split("_")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatLicenseDate(value?: string) {
+  if (!value) return "Never";
+  return new Date(value).toLocaleDateString();
 }
 
 export default function SettingsPage() {
@@ -46,6 +62,9 @@ export default function SettingsPage() {
   const testLlmSettings = useTestLlmSettings();
   const changePassword = useChangePassword();
   const logout = useLogout();
+  const licenseStatus = useLicenseStatus();
+  const activateLicense = useActivateLicense();
+  const deactivateLicense = useDeactivateLicense();
   const user = data?.user;
   const llmStatus = llmSettings.data;
   const [llmForm, setLlmForm] = useState({
@@ -61,6 +80,9 @@ export default function SettingsPage() {
   const [llmMessage, setLlmMessage] = useState<string | null>(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [licenseKey, setLicenseKey] = useState("");
+  const [licenseMessage, setLicenseMessage] = useState<string | null>(null);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
 
   useEffect(() => {
     if (llmStatus?.model) {
@@ -143,6 +165,25 @@ export default function SettingsPage() {
     });
   }
 
+  function submitLicenseActivation() {
+    setLicenseMessage(null);
+    activateLicense.mutate(licenseKey.trim(), {
+      onSuccess: (status) => {
+        setLicenseKey("");
+        setLicenseMessage(`Activated ${labelFromKey(status.tier)} license for ${status.customerName}.`);
+      },
+      onError: (error) => setLicenseMessage(messageFromError(error, "Unable to activate license.")),
+    });
+  }
+
+  function submitLicenseDeactivation() {
+    setLicenseMessage(null);
+    deactivateLicense.mutate(undefined, {
+      onSuccess: () => setLicenseMessage("License deactivated. Forenotes is running as Individual Free."),
+      onError: (error) => setLicenseMessage(messageFromError(error, "Unable to deactivate license.")),
+    });
+  }
+
   function updateCustomHeader(index: number, key: keyof LlmHeaderFormRow, nextValue: string) {
     setLlmForm((value) => ({
       ...value,
@@ -172,7 +213,29 @@ export default function SettingsPage() {
         <p className="text-sm text-[var(--color-text-muted)]">Configure your session and user-owned provider settings.</p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+      <div role="tablist" aria-label="Settings sections" className="flex flex-wrap gap-2 border-b border-[var(--color-border)]">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={settingsTab === "general"}
+          onClick={() => setSettingsTab("general")}
+          className={`border-b-2 px-3 py-2 text-sm font-medium ${settingsTab === "general" ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-text-muted)]"}`}
+        >
+          General
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={settingsTab === "license"}
+          onClick={() => setSettingsTab("license")}
+          className={`border-b-2 px-3 py-2 text-sm font-medium ${settingsTab === "license" ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-text-muted)]"}`}
+        >
+          License
+        </button>
+      </div>
+
+      {settingsTab === "general" ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
         <section className="space-y-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div>
             <h3 className="text-sm font-semibold">User Session</h3>
@@ -412,6 +475,130 @@ export default function SettingsPage() {
           </div>
         </section>
       </div>
+      ) : (
+        <LicenseSettingsPanel
+          status={licenseStatus.data}
+          isLoading={licenseStatus.isLoading}
+          licenseKey={licenseKey}
+          licenseMessage={licenseMessage}
+          onLicenseKeyChange={setLicenseKey}
+          onActivate={submitLicenseActivation}
+          onDeactivate={submitLicenseDeactivation}
+          activating={activateLicense.isPending}
+          deactivating={deactivateLicense.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+interface LicenseSettingsPanelProps {
+  status?: LicenseStatusResponse;
+  isLoading: boolean;
+  licenseKey: string;
+  licenseMessage: string | null;
+  activating: boolean;
+  deactivating: boolean;
+  onLicenseKeyChange: (value: string) => void;
+  onActivate: () => void;
+  onDeactivate: () => void;
+}
+
+function LicenseSettingsPanel({
+  status,
+  isLoading,
+  licenseKey,
+  licenseMessage,
+  activating,
+  deactivating,
+  onLicenseKeyChange,
+  onActivate,
+  onDeactivate,
+}: LicenseSettingsPanelProps) {
+  const features = status?.features ?? [];
+  const statusLabel = status ? labelFromKey(status.status) : "Loading";
+  const premiumFeatureLabels = features.map((feature: FeatureKey) => labelFromKey(feature));
+
+  return (
+    <section className="space-y-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">License</h3>
+          <p className="text-xs text-[var(--color-text-muted)]">Offline signed license status and activation.</p>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
+          {status?.status === "invalid" || status?.status === "expired" ? <XCircle className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+          {statusLabel}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Loading license...</p>
+      ) : status ? (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <LicenseMetric label="Tier" value={labelFromKey(status.tier)} />
+          <LicenseMetric label="Customer" value={status.customerName} />
+          <LicenseMetric label="Expiration" value={formatLicenseDate(status.expiresAt)} />
+          <LicenseMetric label="Seats Used" value={`${status.usedSeats} / ${status.seats}`} />
+        </div>
+      ) : null}
+
+      {status?.message ? (
+        <p className="rounded border border-[var(--color-danger-soft)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
+          {status.message}
+        </p>
+      ) : null}
+
+      <div className="rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3">
+        <p className="mb-2 text-xs font-semibold uppercase text-[var(--color-text-muted)]">Enabled Features</p>
+        {premiumFeatureLabels.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {premiumFeatureLabels.map((feature) => (
+              <span key={feature} className="rounded-[var(--radius-sm)] bg-[var(--color-primary-soft)] px-2 py-1 text-xs font-medium text-[var(--color-primary-strong)]">
+                {feature}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--color-text-muted)]">No premium features enabled.</p>
+        )}
+      </div>
+
+      <label className="space-y-1 text-sm font-medium">
+        License key
+        <textarea
+          value={licenseKey}
+          onChange={(event) => onLicenseKeyChange(event.target.value)}
+          placeholder="FNLIC-v1.payload.signature"
+          className="min-h-28 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 font-mono text-sm"
+        />
+      </label>
+
+      {licenseMessage ? (
+        <p className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+          {licenseMessage}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={onActivate} disabled={!licenseKey.trim() || activating}>
+          <KeyRound className="h-4 w-4" />
+          {activating ? "Activating..." : "Activate license"}
+        </Button>
+        <Button type="button" variant="outline" onClick={onDeactivate} disabled={deactivating || status?.source !== "database"}>
+          <Trash2 className="h-4 w-4" />
+          {deactivating ? "Deactivating..." : "Deactivate"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function LicenseMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2">
+      <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-medium">{value}</p>
     </div>
   );
 }

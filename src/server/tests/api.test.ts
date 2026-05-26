@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +9,10 @@ import { createApp } from "../app.js";
 import { runMigrations } from "../db/setup.js";
 import { hashPassword } from "../services/authService.js";
 import { createNotification, subscribeToNotificationEvents } from "../services/notificationService.js";
+import { TIER_FEATURES, type LicenseTier, type SignedLicensePayload } from "../../shared/license.js";
+
+const TEST_LICENSE_KEYS = generateKeyPairSync("ed25519");
+const TEST_PUBLIC_KEY_PEM = TEST_LICENSE_KEYS.publicKey.export({ type: "spki", format: "pem" }).toString();
 
 async function createTestApp() {
   const db = newDb();
@@ -78,6 +82,41 @@ async function addIncidentMember(
   );
 }
 
+function issueTestLicense(input: Partial<SignedLicensePayload> = {}) {
+  const tier: LicenseTier = input.tier ?? "teams";
+  const payload: SignedLicensePayload = {
+    licenseId: input.licenseId ?? `lic_${randomUUID()}`,
+    customerName: input.customerName ?? "API Test Team",
+    tier,
+    seats: input.seats ?? 500,
+    issuedAt: input.issuedAt ?? "2026-01-01T00:00:00.000Z",
+    expiresAt: input.expiresAt ?? "2027-01-01T00:00:00.000Z",
+    features: input.features ?? TIER_FEATURES[tier],
+    deploymentId: input.deploymentId
+  };
+  const payloadJson = JSON.stringify(payload);
+  return `FNLIC-v1.${Buffer.from(payloadJson, "utf8").toString("base64url")}.${sign(null, Buffer.from(payloadJson, "utf8"), TEST_LICENSE_KEYS.privateKey).toString("base64url")}`;
+}
+
+async function installTestLicense(pool: { query: (text: string, params?: unknown[]) => Promise<unknown> }) {
+  const licenseKey = issueTestLicense();
+  const payload = JSON.parse(Buffer.from(licenseKey.split(".")[1], "base64url").toString("utf8")) as SignedLicensePayload;
+  await pool.query(
+    `
+      insert into app_license (id, license_key, license_payload, tier, status, expires_at, activated_at, updated_at)
+      values ('active', $1, $2, $3, 'active', $4, now(), now())
+      on conflict (id) do update set
+        license_key = excluded.license_key,
+        license_payload = excluded.license_payload,
+        tier = excluded.tier,
+        status = excluded.status,
+        expires_at = excluded.expires_at,
+        updated_at = now()
+    `,
+    [licenseKey, JSON.stringify(payload), payload.tier, payload.expiresAt]
+  );
+}
+
 describe("Forenotes API", () => {
   let app: ReturnType<typeof createApp>;
   let pool: Awaited<ReturnType<typeof createTestApp>>["pool"];
@@ -89,6 +128,7 @@ describe("Forenotes API", () => {
   beforeEach(async () => {
     dataDir = mkdtempSync(path.join(tmpdir(), "forenotes-test-"));
     process.env.FORENOTES_DATA_DIR = dataDir;
+    process.env.FORENOTES_TEST_LICENSE_PUBLIC_KEY = TEST_PUBLIC_KEY_PEM;
     const setup = await createTestApp();
     app = setup.app;
     pool = setup.pool;
@@ -116,10 +156,13 @@ describe("Forenotes API", () => {
       displayName: "Analyst Two",
       globalRole: "analyst"
     });
+
+    await installTestLicense(pool);
   });
 
   afterEach(() => {
     delete process.env.FORENOTES_DATA_DIR;
+    delete process.env.FORENOTES_TEST_LICENSE_PUBLIC_KEY;
     rmSync(dataDir, { recursive: true, force: true });
   });
 

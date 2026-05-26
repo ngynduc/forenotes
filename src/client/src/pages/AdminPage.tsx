@@ -3,8 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
+import { LockedFeature } from "@/components/shared/LockedFeature";
 import { Input } from "@/components/ui/Input";
 import { useUsers } from "@/hooks/use-entities";
+import { useLicense } from "@/hooks/use-license";
 import { api } from "@/lib/api";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
@@ -19,6 +21,7 @@ export default function AdminPage() {
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const license = useLicense();
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
   const rows = (data?.users ?? []) as unknown as Record<string, unknown>[];
   const resetPassword = useMutation({
@@ -32,6 +35,20 @@ export default function AdminPage() {
     },
     onError: (error) => setResetMessage(error instanceof Error ? error.message : "Unable to reset password."),
   });
+
+  if (license.isLoading) {
+    return <p className="text-sm text-[var(--color-text-muted)]">Loading license...</p>;
+  }
+
+  if (!license.hasFeature("multi_user")) {
+    return (
+      <LockedFeature
+        feature="multi_user"
+        title="Multiple users require Forenotes Teams"
+        description="Upgrade to Teams to create users, assign case members, and manage collaboration."
+      />
+    );
+  }
 
   return (
     <div>

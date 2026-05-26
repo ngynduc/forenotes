@@ -15,7 +15,8 @@
     "start": "node dist/server/index.js",
     "test": "vitest run",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "db:migrate": "tsx src/server/db/migrate.ts"
+    "db:migrate": "tsx src/server/db/migrate.ts",
+    "license": "tsx scripts/forenotes-license.ts"
   },
   "dependencies": {
     "argon2": "^0.44.0",

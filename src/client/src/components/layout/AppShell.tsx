@@ -2,7 +2,9 @@ import { Outlet, NavLink } from "react-router";
 import { useUIStore } from "@/stores/ui-store";
 import { useScopeStore } from "@/stores/scope-store";
 import { useNotificationStream, useNotifications } from "@/hooks/use-entities";
+import { useLicense } from "@/hooks/use-license";
 import { cn } from "@/lib/utils";
+import type { FeatureKey } from "@shared/license";
 import {
   LayoutDashboard,
   Briefcase,
@@ -19,23 +21,24 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  type LucideIcon,
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; feature?: FeatureKey }> = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/cases", label: "Cases", icon: Briefcase },
   { to: "/findings", label: "Findings", icon: Search },
   { to: "/timeline", label: "Timeline", icon: Clock },
   { to: "/reports", label: "Reports", icon: FileText },
-  { to: "/tasks", label: "Tasks", icon: CheckSquare },
+  { to: "/tasks", label: "Tasks", icon: CheckSquare, feature: "tasks" },
   { to: "/entities", label: "Entities", icon: Boxes },
   { to: "/queries", label: "Queries", icon: Code2 },
-  { to: "/graph", label: "Graph", icon: Network },
+  { to: "/graph", label: "Graph", icon: Network, feature: "graph" },
   { to: "/tags", label: "Tags", icon: Tags },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/admin", label: "Admin", icon: Shield },
+  { to: "/admin", label: "Admin", icon: Shield, feature: "multi_user" },
 ];
 
 export function AppShell() {
@@ -44,8 +47,10 @@ export function AppShell() {
   const flash = useUIStore((s) => s.flash);
   useNotificationStream();
   const { data: notificationsData } = useNotifications();
+  const license = useLicense();
   const unreadNotifications = notificationsData?.notifications.filter((notification) => notification.unseen).length ?? 0;
   const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.feature || license.hasFeature(item.feature));
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
@@ -66,7 +71,7 @@ export function AppShell() {
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

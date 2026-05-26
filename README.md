@@ -60,6 +60,27 @@ npm run build
 
 `npm run db:seed` runs migrations and seeds demo users, cases, incidents, findings, timeline events, tasks, queries, notes, and reports into the configured database. Do not run it against production.
 
+## Offline Licenses
+
+Forenotes starts as Individual Free when no license is installed. Activate paid tiers from Settings -> License, or mount a signed license key file and set:
+
+```bash
+FORENOTES_LICENSE_FILE=/data/license.key
+```
+
+Issue internal offline keys with an Ed25519 private key:
+
+```bash
+FORENOTES_LICENSE_PRIVATE_KEY_FILE=./private-key.pem \
+  npm run license -- issue \
+  --customer "Acme Security" \
+  --tier teams \
+  --seats 10 \
+  --expires 2027-05-26
+```
+
+The app verifies `FNLIC-v1.payload.signature` keys locally with the bundled public key in `src/server/license/publicKey.ts`. Replace that public key for production distributions and keep the private key out of the app runtime.
+
 ## Security Notes
 
 - Protected APIs require the `forenotes_session` cookie. `x-user-id` header auth is ignored in production.
