@@ -13,7 +13,7 @@ export function TechniqueCard({ technique, onClick }: TechniqueCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        "w-full rounded px-2 py-1.5 text-left text-xs transition-colors",
+        "group w-full rounded px-2 py-1.5 text-left text-xs transition-colors",
         hasEvidence
           ? "bg-[var(--color-primary-soft)] hover:bg-[var(--color-primary)] hover:text-white"
           : "bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]"
@@ -30,7 +30,14 @@ export function TechniqueCard({ technique, onClick }: TechniqueCardProps) {
           </span>
         )}
       </div>
-      <p className="truncate text-[10px] text-[var(--color-text-muted)]">{technique.name}</p>
+      <p
+        className={cn(
+          "truncate text-[10px] text-[var(--color-text-muted)] transition-colors",
+          hasEvidence ? "group-hover:text-white" : ""
+        )}
+      >
+        {technique.name}
+      </p>
     </button>
   );
 }
