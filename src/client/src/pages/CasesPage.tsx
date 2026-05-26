@@ -344,11 +344,11 @@ export default function CasesPage() {
                     <h4 className="text-lg font-semibold">Case Members</h4>
                     <p className="text-sm text-[var(--color-text-muted)]">Manage case access. Incidents inherit these members automatically.</p>
                   </div>
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="text-xs font-medium text-[var(--color-text-muted)]">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex min-w-48 flex-col gap-1 text-xs font-medium text-[var(--color-text-muted)]">
                       User
                       <select
-                        className="mt-1 h-9 min-w-48 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
+                        className="h-9 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
                         value={memberUserId}
                         onChange={(event) => setMemberUserId(event.target.value)}
                         disabled={addCaseMember.isPending || usersQuery.isLoading}
@@ -361,10 +361,10 @@ export default function CasesPage() {
                         ))}
                       </select>
                     </label>
-                    <label className="text-xs font-medium text-[var(--color-text-muted)]">
+                    <label className="flex min-w-36 flex-col gap-1 text-xs font-medium text-[var(--color-text-muted)]">
                       Role
                       <select
-                        className="mt-1 h-9 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
+                        className="h-9 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
                         value={memberRole}
                         onChange={(event) => setMemberRole(event.target.value as (typeof CASE_ROLES)[number])}
                         disabled={addCaseMember.isPending}
