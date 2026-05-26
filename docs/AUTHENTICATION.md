@@ -22,9 +22,10 @@ Authorization uses a three-tier Role-Based Access Control system.
 
 | Role | Description | Access Level |
 |------|-------------|-------------|
+| `admin` | System administration | All permissions |
 | `commander` | Full system access | All permissions |
-| `response_lead` | Full operational access | All permissions |
 | `analyst` | Investigation contributor | Limited permissions |
+| `viewer` | Read-only investigation access | Read permissions |
 
 ### Case Roles
 
@@ -32,7 +33,9 @@ Assigned per case via `case_members`:
 
 | Role | Description |
 |------|-------------|
-| `case_lead` | Leads the case investigation |
+| `commander` | Leads the case investigation |
+| `analyst` | Contributes to the case investigation |
+| `viewer` | Reviews case records |
 
 ### Incident Roles
 
@@ -40,7 +43,9 @@ Assigned per incident via `incident_members`:
 
 | Role | Description |
 |------|-------------|
-| `incident_lead` | Leads the incident response |
+| `commander` | Leads the incident response |
+| `analyst` | Contributes to the incident response |
+| `viewer` | Reviews incident records |
 
 ## Permission System
 
@@ -141,40 +146,15 @@ Request
 
 ## Role-Permission Matrix
 
-| Permission | Commander | Response Lead | Analyst |
-|-----------|:---------:|:-------------:|:-------:|
-| case:create | Y | Y | - |
-| case:update | Y | Y | - |
-| case:member_manage | Y | Y | - |
-| incident:create | Y | Y | - |
-| incident:update | Y | Y | - |
-| incident:member_manage | Y | Y | - |
-| finding:create | Y | Y | Y |
-| finding:update | Y | Y | Y |
-| finding:delete | Y | Y | Y |
-| finding:evidence_link | Y | Y | Y |
-| finding:evidence_unlink | Y | Y | Y |
-| timeline:create | Y | Y | Y |
-| timeline:update | Y | Y | Y |
-| timeline:delete | Y | Y | Y |
-| indicator:create | Y | Y | Y |
-| indicator:update | Y | Y | Y |
-| indicator:delete | Y | Y | Y |
-| task:create | Y | Y | Y |
-| task:update | Y | Y | Y |
-| task:assign | Y | Y | - |
-| task:link | Y | Y | Y |
-| query:create | Y | Y | Y |
-| query:update | Y | Y | Y |
-| query:delete | Y | Y | Y |
-| tag:custom_create | Y | Y | Y |
-| tag:custom_update | Y | Y | Y |
-| entity_link:read | Y | Y | Y |
-| entity_link:create | Y | Y | - |
-| entity_link:delete | Y | Y | - |
-| graph:read | Y | Y | Y |
-| mitre_matrix:read | Y | Y | Y |
-| notification:read | Y | Y | Y |
-| audit:read | Y | Y | Y |
+| Permission Group | Admin | Commander | Analyst | Viewer |
+|-----------|:-----:|:---------:|:-------:|:------:|
+| Administration and membership | Y | Y | - | - |
+| Create/update investigation records | Y | Y | Y | - |
+| Delete investigation records | Y | Y | - | - |
+| Reports | Y | Y | Y | Read/export |
+| Graph and MITRE reads | Y | Y | Y | Y |
+| Entity links | Y | Y | Read/create | Read |
+| Notifications | Y | Y | Y | Y |
+| Audit and user management | Y | Y | - | - |
 
 **Note:** Task assignees can update their own task's progress without needing `task:assign` permission. The `task:assign` permission is only required to change the owner or assignee of a task.

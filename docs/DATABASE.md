@@ -56,7 +56,7 @@ Stores all application users.
 | id | uuid | PK, default gen_random_uuid() | User identifier |
 | email | text | UNIQUE, NOT NULL | User email |
 | display_name | text | NOT NULL | Display name |
-| global_role | text | NOT NULL | One of: commander, response_lead, analyst |
+| global_role | text | NOT NULL | One of: admin, commander, analyst, viewer |
 | status | text | NOT NULL, default 'active' | User status (active/inactive) |
 | password_hash | text | | Hashed password |
 | created_at | timestamptz | default now() | Creation timestamp |
@@ -268,7 +268,7 @@ User-defined tags scoped to a case.
 |--------|------|-------------|
 | case_id | uuid | FK → cases |
 | user_id | uuid | FK → users |
-| case_role | text | Role in case (e.g., case_lead) |
+| case_role | text | Role in case (commander, analyst, viewer) |
 | added_by_user_id | uuid | Who added them |
 | added_at | timestamptz | When added |
 
@@ -280,7 +280,7 @@ User-defined tags scoped to a case.
 |--------|------|-------------|
 | incident_id | uuid | FK → incidents |
 | user_id | uuid | FK → users |
-| incident_role | text | Role in incident (e.g., incident_lead) |
+| incident_role | text | Role in incident (commander, analyst, viewer) |
 | added_by_user_id | uuid | Who added them |
 | added_at | timestamptz | When added |
 

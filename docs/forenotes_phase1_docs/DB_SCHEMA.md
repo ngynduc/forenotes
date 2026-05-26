@@ -368,7 +368,7 @@ Stores application users.
 | id | uuid | yes | Primary key |
 | email | text | yes | Unique |
 | display_name | text | yes | User-visible name |
-| global_role | text | yes | `commander`, `response_lead`, `analyst` |
+| global_role | text | yes | `admin`, `commander`, `analyst`, `viewer` |
 | status | text | yes | `active`, `disabled` |
 | password_hash | text | no | Required only for local auth |
 | created_at | timestamptz | yes | Default now |
@@ -455,7 +455,7 @@ Users assigned to a case.
 |---|---:|---:|---|
 | case_id | uuid | yes | FK to cases.id |
 | user_id | uuid | yes | FK to users.id |
-| case_role | text | yes | Example: `case_lead`, `member` |
+| case_role | text | yes | Example: `commander`, `analyst`, `viewer` |
 | added_by_user_id | uuid | yes | FK to users.id |
 | added_at | timestamptz | yes | Default now |
 
@@ -487,7 +487,7 @@ Users assigned to an incident.
 |---|---:|---:|---|
 | incident_id | uuid | yes | FK to incidents.id |
 | user_id | uuid | yes | FK to users.id |
-| incident_role | text | yes | Example: `incident_lead`, `analyst` |
+| incident_role | text | yes | Example: `commander`, `analyst`, `viewer` |
 | added_by_user_id | uuid | yes | FK to users.id |
 | added_at | timestamptz | yes | Default now |
 
@@ -844,4 +844,3 @@ CREATE INDEX idx_audit_logs_incident_id ON audit_logs(incident_id, created_at DE
 - Task assignment requires task assignment permission.
 - Notification records are visible only to the recipient.
 - Global search results must include case and incident context.
-

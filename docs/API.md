@@ -793,7 +793,7 @@ POST /users
 {
   "email": "string (required)",
   "displayName": "string (required)",
-  "globalRole": "commander | response_lead | analyst (required)",
+  "globalRole": "admin | commander | analyst | viewer (required)",
   "password": "string"
 }
 ```

@@ -591,8 +591,8 @@ mitre_matrix:read
 Suggested behavior:
 
 * All incident members can read graph/matrix.
-* Analysts and response leads can create manual links.
-* Link creator, response lead, or commander can delete links.
+* Analysts and commanders can create manual links.
+* Link creator, admin, or commander can delete links.
 * Derived links cannot be deleted directly.
 
 ## Agent-Browser Testing Criteria
@@ -713,4 +713,3 @@ feat: add incident graph and MITRE matrix plan
 ```
 
 ```
-

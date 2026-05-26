@@ -344,7 +344,7 @@ Example:
 ```text
 Case: Client A Investigation
 Incident: Test 1
-Role: Response Lead
+Role: Commander
 ````
 
 This helps prevent accidental cross-incident work.
@@ -774,7 +774,7 @@ Expected output:
 
 ## Scenario 4 — Task Kanban Workflow
 
-As a Response Lead:
+As a Commander:
 
 1. Open Tasks
 2. Create task

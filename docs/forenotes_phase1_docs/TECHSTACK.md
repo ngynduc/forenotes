@@ -95,9 +95,10 @@ Recommended role layers:
 
 ```txt
 Global role
+  Admin
   Commander
-  Response Lead
   Analyst
+  Viewer
 
 Case role
   Case owner / case member role
@@ -184,4 +185,3 @@ Example required browser outputs:
 - Unseen notification count changes after a notification is created and read.
 - MITRE ATT&CK tags are globally available.
 - Custom tags are only available inside the case where they were created.
-

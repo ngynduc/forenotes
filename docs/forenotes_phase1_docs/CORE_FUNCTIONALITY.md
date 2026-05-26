@@ -27,9 +27,10 @@ Recommended global roles:
 
 | Role | Purpose |
 |---|---|
+| Admin | System administration and user management |
 | Commander | Overall case and user management authority |
-| Response Lead | Leads case/incident response work |
 | Analyst | Performs investigation work inside assigned cases/incidents |
+| Viewer | Reviews assigned cases/incidents |
 
 Server-side permissions must decide what each role can do. The UI may hide actions, but API checks are mandatory.
 
@@ -523,7 +524,7 @@ Expected browser output:
 
 Expected browser output:
 
-- Response Lead assigns a task to an Analyst.
+- Commander assigns a task to an Analyst.
 - Analyst sees unseen notification count increase.
 - Analyst opens notification list.
 - Notification references the assigned task.
@@ -550,4 +551,3 @@ Phase 1 is done when:
 - Search results include scope context.
 - Critical workflows have unit, API integration, and browser tests.
 - Browser test output matches expected visible behavior.
-

@@ -6,7 +6,7 @@ Cases are top-level containers for investigations. Each case represents an engag
 
 - **Create cases** with client name, date range, and summary
 - **Case membership** controls who can access case data
-- **Case roles** (e.g., `case_lead`) define responsibilities
+- **Case roles** (`commander`, `analyst`, `viewer`) define responsibilities
 - **Status tracking:** open, closed
 - **Multiple incidents** per case
 
@@ -16,7 +16,7 @@ Incidents are discrete security events being investigated within a case.
 
 - **Severity levels:** low, medium, high, critical
 - **Status workflow:** open → contained → closed
-- **Incident membership** with roles (e.g., `incident_lead`)
+- **Incident membership** with inherited case roles
 - All investigation artifacts are scoped to an incident
 
 ## Findings
