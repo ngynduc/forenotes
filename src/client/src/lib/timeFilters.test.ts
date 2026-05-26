@@ -28,7 +28,7 @@ describe("toTimeFilterRequest", () => {
     });
   });
 
-  it("serializes relative expressions as UTC ISO bounds", () => {
+  it("serializes relative day expressions as full UTC ISO day bounds", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-25T12:00:42.321Z"));
 
@@ -42,8 +42,27 @@ describe("toTimeFilterRequest", () => {
 
     expect(toTimeFilterRequest(filter)).toEqual({
       field: "updatedAt",
-      start: "2026-05-23T12:00:00.000Z",
-      end: "2026-05-25T12:00:00.000Z",
+      start: "2026-05-23T00:00:00.000Z",
+      end: "2026-05-25T23:59:59.999Z",
+    });
+  });
+
+  it("serializes relative day expressions using the selected timezone day bounds", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-26T10:30:42.321Z"));
+
+    const filter = normalizeTimeFilterState({
+      ...createTimeFilterState("eventTime", "Asia/Ho_Chi_Minh"),
+      mode: "relative",
+      activeSection: "relative",
+      relativeValue: "4",
+      relativeUnit: "days",
+    });
+
+    expect(toTimeFilterRequest(filter)).toEqual({
+      field: "eventTime",
+      start: "2026-05-21T17:00:00.000Z",
+      end: "2026-05-26T16:59:59.999Z",
     });
   });
 

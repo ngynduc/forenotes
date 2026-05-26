@@ -162,11 +162,18 @@ export function normalizeTimeFilterState(
     case "relative": {
       const amount = Number.parseInt(filter.relativeValue, 10);
       const suffix = relativeUnitToExpression(filter.relativeUnit);
-      const earliest = Number.isFinite(amount) && amount > 0 ? `-${amount}${suffix}` : "";
+      const isValidAmount = Number.isFinite(amount) && amount > 0;
+      const isCalendarRange = isValidAmount && isCalendarRelativeUnit(suffix);
+      const earliest = isCalendarRange
+        ? dateRelativeToIso(-amount, suffix, "start", normalizedTimezone)
+        : isValidAmount
+          ? `-${amount}${suffix}`
+          : "";
+      const latest = isCalendarRange ? dateRelativeToIso(0, suffix, "end", normalizedTimezone) : "now";
       return {
         ...baseState,
         earliest,
-        latest: "now",
+        latest,
         displayValue: earliest ? `Last ${amount} ${formatRelativeUnitLabel(amount, filter.relativeUnit)}` : "Relative range",
       };
     }
@@ -486,6 +493,13 @@ function dateTimePartsToIso(date: string, time: string, timezone: string): strin
   return dateTimePartsToDate(date, time, timezone)?.toUTC().toISO({ suppressMilliseconds: false }) ?? "";
 }
 
+function dateRelativeToIso(amount: number, unit: string, boundary: "start" | "end", timezone: string): string {
+  const zone = normalizeTimezone(timezone);
+  const shifted = addDateOffset(DateTime.now().setZone(zone), amount, unit);
+  const snapped = boundary === "start" ? shifted.startOf("day") : shifted.endOf("day");
+  return snapped.toUTC().toISO({ suppressMilliseconds: false }) ?? "";
+}
+
 function dateTimePartsToDate(date: string, time: string, timezone: string): DateTime | null {
   if (!date) {
     return null;
@@ -535,6 +549,10 @@ function addDateOffset(base: DateTime, amount: number, unit: string): DateTime {
     default:
       return base;
   }
+}
+
+function isCalendarRelativeUnit(unit: string): boolean {
+  return unit === "d" || unit === "w" || unit === "mon" || unit === "y";
 }
 
 function snapDate(date: DateTime, unit: string): DateTime {
