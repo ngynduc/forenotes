@@ -133,128 +133,130 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="grid max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:w-full">
+        <DialogHeader className="border-b border-[var(--color-border)] px-4 py-4 sm:px-6">
           <DialogTitle>{mode === "create" ? definition.createTitle : definition.editTitle}</DialogTitle>
           <DialogDescription>
             {mode === "edit" ? `Edit ${definition.label.toLowerCase()} details.` : `Create a new ${definition.label.toLowerCase()}.`}
           </DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <div className="rounded bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
-            {error}
-          </div>
-        )}
+        <div className="overflow-y-auto px-4 py-4 sm:px-6">
+          {error && (
+            <div className="mb-4 rounded bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
+              {error}
+            </div>
+          )}
 
-        <div className="grid grid-cols-2 gap-3">
-          {fields.map((field) => (
-            <div key={field.name} className={field.span === 2 ? "col-span-2" : ""}>
-              <label className="mb-1 block text-sm font-medium text-[var(--color-text-muted)]">
-                {field.label}
-                {field.required && <span className="text-[var(--color-danger)]"> *</span>}
-              </label>
-              {field.type === "textarea" ? (
-                <textarea
-                  className="flex w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
-                  rows={3}
-                  value={String(form[field.name] ?? "")}
-                  onChange={(e) => updateField(field.name, e.target.value)}
-                  autoFocus={field.autofocus}
-                />
-              ) : field.type === "select" || field.type === "user-select" || field.type === "member-select" ? (
-                <Select
-                  value={String(form[field.name] ?? "")}
-                  onChange={(e) => updateField(field.name, e.target.value)}
-                >
-                  {getSelectOptions(field.type, field.options, userOptions, memberOptions).map((opt) => (
-                    <option key={opt.value || "__empty__"} value={opt.value}>
-                      {opt.label || "—"}
-                    </option>
-                  ))}
-                </Select>
-              ) : field.type === "color" ? (
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    value={String(form[field.name] ?? "#0f766e")}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {fields.map((field) => (
+              <div key={field.name} className={field.span === 2 ? "sm:col-span-2" : ""}>
+                <label className="mb-1 block text-sm font-medium text-[var(--color-text-muted)]">
+                  {field.label}
+                  {field.required && <span className="text-[var(--color-danger)]"> *</span>}
+                </label>
+                {field.type === "textarea" ? (
+                  <textarea
+                    className="flex w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]"
+                    rows={3}
+                    value={String(form[field.name] ?? "")}
                     onChange={(e) => updateField(field.name, e.target.value)}
                     autoFocus={field.autofocus}
-                    className="h-10 w-16 cursor-pointer p-1"
                   />
-                  <span className="text-sm text-[var(--color-text-muted)]">{String(form[field.name] ?? "#0f766e").toUpperCase()}</span>
-                </div>
-              ) : field.type === "code" ? (
-                <div className="space-y-1">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      style={{
-                        padding: "2px 8px",
-                        fontSize: "12px",
-                        border: "1px solid #888",
-                        borderRadius: "4px",
-                        background: "#fff",
-                        color: "#333",
-                        cursor: "pointer",
-                      }}
-                      title="Copy to clipboard"
-                      onClick={() => {
-                        navigator.clipboard.writeText(String(form[field.name] ?? "")).then(() => {
-                          const btn = document.activeElement as HTMLButtonElement;
-                          const orig = btn.textContent;
-                          btn.textContent = "Copied!";
-                          setTimeout(() => { btn.textContent = orig; }, 1500);
-                        });
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </div>
-                  <div className="cm-editor-wrapper">
-                    <CodeMirror
-                      value={String(form[field.name] ?? "")}
-                      onChange={(val) => updateField(field.name, val)}
-                      height="260px"
-                      extensions={[]}
-                      basicSetup={{
-                        lineNumbers: true,
-                        foldGutter: true,
-                        highlightActiveLine: true,
-                        bracketMatching: true,
-                      }}
-                      placeholder={field.placeholder}
+                ) : field.type === "select" || field.type === "user-select" || field.type === "member-select" ? (
+                  <Select
+                    value={String(form[field.name] ?? "")}
+                    onChange={(e) => updateField(field.name, e.target.value)}
+                  >
+                    {getSelectOptions(field.type, field.options, userOptions, memberOptions).map((opt) => (
+                      <option key={opt.value || "__empty__"} value={opt.value}>
+                        {opt.label || "—"}
+                      </option>
+                    ))}
+                  </Select>
+                ) : field.type === "color" ? (
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="color"
+                      value={String(form[field.name] ?? "#0f766e")}
+                      onChange={(e) => updateField(field.name, e.target.value)}
+                      autoFocus={field.autofocus}
+                      className="h-10 w-16 cursor-pointer p-1"
                     />
+                    <span className="text-sm text-[var(--color-text-muted)]">{String(form[field.name] ?? "#0f766e").toUpperCase()}</span>
                   </div>
-                </div>
-              ) : (
-                <Input
-                  type={field.type}
-                  value={String(form[field.name] ?? "")}
-                  onChange={(e) => updateField(field.name, e.target.value)}
-                  placeholder={field.placeholder}
-                  autoFocus={field.autofocus}
+                ) : field.type === "code" ? (
+                  <div className="space-y-1">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        style={{
+                          padding: "2px 8px",
+                          fontSize: "12px",
+                          border: "1px solid #888",
+                          borderRadius: "4px",
+                          background: "#fff",
+                          color: "#333",
+                          cursor: "pointer",
+                        }}
+                        title="Copy to clipboard"
+                        onClick={() => {
+                          navigator.clipboard.writeText(String(form[field.name] ?? "")).then(() => {
+                            const btn = document.activeElement as HTMLButtonElement;
+                            const orig = btn.textContent;
+                            btn.textContent = "Copied!";
+                            setTimeout(() => { btn.textContent = orig; }, 1500);
+                          });
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <div className="cm-editor-wrapper">
+                      <CodeMirror
+                        value={String(form[field.name] ?? "")}
+                        onChange={(val) => updateField(field.name, val)}
+                        height="260px"
+                        extensions={[]}
+                        basicSetup={{
+                          lineNumbers: true,
+                          foldGutter: true,
+                          highlightActiveLine: true,
+                          bracketMatching: true,
+                        }}
+                        placeholder={field.placeholder}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <Input
+                    type={field.type}
+                    value={String(form[field.name] ?? "")}
+                    onChange={(e) => updateField(field.name, e.target.value)}
+                    placeholder={field.placeholder}
+                    autoFocus={field.autofocus}
+                  />
+                )}
+              </div>
+            ))}
+            {definition.entityLinkSourceType && (
+              <>
+                <EntityTagsSection
+                  sourceType={definition.entityLinkSourceType}
+                  sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+                  initialCustomTags={Array.isArray(item?.customTags) ? (item.customTags as TagItem[]) : undefined}
+                  initialAttackTags={Array.isArray(item?.attackTags) ? (item.attackTags as AttackTagItem[]) : undefined}
                 />
-              )}
-            </div>
-          ))}
-          {definition.entityLinkSourceType && (
-            <>
-              <EntityTagsSection
-                sourceType={definition.entityLinkSourceType}
-                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
-                initialCustomTags={Array.isArray(item?.customTags) ? (item.customTags as TagItem[]) : undefined}
-                initialAttackTags={Array.isArray(item?.attackTags) ? (item.attackTags as AttackTagItem[]) : undefined}
-              />
-              <EntityLinksSection
-                sourceType={definition.entityLinkSourceType}
-                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
-              />
-            </>
-          )}
+                <EntityLinksSection
+                  sourceType={definition.entityLinkSourceType}
+                  sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+                />
+              </>
+            )}
+          </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="border-t border-[var(--color-border)] px-4 py-4 sm:px-6">
           {mode === "edit" && definition.delete && (
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
               Delete
