@@ -270,6 +270,7 @@ export const createSystemSchema = z.object({
   hostname: z.string().min(1),
   ipAddress: z.string().optional(),
   os: z.string().optional(),
+  status: z.string().optional(),
   owner: z.string().optional(),
   notes: z.string().optional()
 });

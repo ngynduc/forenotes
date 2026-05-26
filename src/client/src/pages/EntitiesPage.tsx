@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
@@ -21,6 +22,7 @@ export default function EntitiesPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
   const activeTab = useUIStore((s) => s.entityTab) as TabKey;
   const setEntityTab = useUIStore((s) => s.setEntityTab);
+  const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
   const definitions = getEntityDefinitions(() => useScopeStore.getState());
@@ -48,6 +50,30 @@ export default function EntitiesPage() {
   const tab = TABS.find((t) => t.key === activeTab) ?? TABS[0];
   const currentData = dataMap[tab.key];
   const rows = ((currentData?.data as any)?.[keyMap[tab.key]] ?? []) as Record<string, unknown>[];
+
+  function handleEntitySaved(savedItem?: Record<string, unknown> | null) {
+    if (!savedItem || !incidentId) {
+      return;
+    }
+
+    const collectionKey = keyMap[tab.key];
+    const normalizedItem = normalizeEntityRow(tab.key, savedItem);
+
+    queryClient.setQueryData<Record<string, Record<string, unknown>[]>>(
+      ["incidents", incidentId, collectionKey],
+      (current) => {
+        const existingRows = current?.[collectionKey] ?? [];
+        const savedId = String(normalizedItem.id ?? "");
+        const rowIndex = existingRows.findIndex((row) => String(row.id ?? "") === savedId);
+        const nextRows =
+          rowIndex === -1
+            ? [...existingRows, normalizedItem]
+            : existingRows.map((row, index) => (index === rowIndex ? { ...row, ...normalizedItem } : row));
+
+        return { ...(current ?? {}), [collectionKey]: nextRows };
+      }
+    );
+  }
 
   return (
     <div>
@@ -98,7 +124,51 @@ export default function EntitiesPage() {
         definition={definitions[tab.entityKey]}
         item={editItem}
         mode={editItem ? "edit" : "create"}
+        onSuccess={handleEntitySaved}
       />
     </div>
   );
+}
+
+function normalizeEntityRow(tabKey: TabKey, item: Record<string, unknown>) {
+  if (tabKey === "systems") {
+    return {
+      id: item.id,
+      hostname: item.hostname,
+      ipAddress: item.ipAddress ?? item.ip_address,
+      os: item.os,
+      status: item.status,
+      owner: item.owner,
+      notes: item.notes,
+      updatedAt: item.updatedAt ?? item.updated_at,
+    };
+  }
+
+  if (tabKey === "indicators") {
+    return {
+      id: item.id,
+      indicatorType: item.indicatorType ?? item.indicator_type,
+      value: item.value,
+      description: item.description,
+      confidence: item.confidence,
+      source: item.source,
+      firstSeenAt: item.firstSeenAt ?? item.first_seen_at,
+      lastSeenAt: item.lastSeenAt ?? item.last_seen_at,
+      updatedAt: item.updatedAt ?? item.updated_at,
+    };
+  }
+
+  if (tabKey === "accounts") {
+    return {
+      id: item.id,
+      username: item.username,
+      domain: item.domain,
+      status: item.status,
+      owner: item.owner,
+      notes: item.notes,
+      updatedAt: item.updatedAt ?? item.updated_at,
+    };
+  }
+
+  return item;
 }

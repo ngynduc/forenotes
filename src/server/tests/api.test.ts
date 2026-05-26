@@ -2004,19 +2004,23 @@ describe("Forenotes API", () => {
       .set("x-user-id", analystId)
       .send({
         hostname: "host-01",
-        os: "Windows"
+        os: "Windows",
+        status: "online"
       });
     expect(systemResponse.status).toBe(201);
+    expect(systemResponse.body.system.status).toBe("online");
     const systemId = systemResponse.body.system.id as string;
 
     const patchSystemResponse = await request(app)
       .patch(`/api/incidents/${incidentId}/systems/${systemId}`)
       .set("x-user-id", analystId)
       .send({
+        status: "compromised",
         owner: "SOC",
         notes: "critical asset"
       });
     expect(patchSystemResponse.status).toBe(200);
+    expect(patchSystemResponse.body.system.status).toBe("compromised");
     expect(patchSystemResponse.body.system.owner).toBe("SOC");
 
     const deleteSystemResponse = await request(app)

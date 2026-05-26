@@ -10,6 +10,7 @@ interface CreateSystemInput {
   hostname: string;
   ipAddress?: string;
   os?: string;
+  status?: string;
   owner?: string;
   notes?: string;
 }
@@ -18,6 +19,7 @@ interface UpdateSystemInput {
   hostname?: string;
   ipAddress?: string;
   os?: string;
+  status?: string;
   owner?: string;
   notes?: string;
 }
@@ -35,8 +37,8 @@ export async function createSystem(database: Database, user: AuthenticatedUser, 
   const systemId = randomUUID();
   await database.query(
     `
-      insert into systems (id, incident_id, hostname, ip_address, os, owner, notes, created_by_user_id)
-      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      insert into systems (id, incident_id, hostname, ip_address, os, status, owner, notes, created_by_user_id)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `,
     [
       systemId,
@@ -44,6 +46,7 @@ export async function createSystem(database: Database, user: AuthenticatedUser, 
       input.hostname,
       input.ipAddress ?? null,
       input.os ?? null,
+      input.status ?? null,
       input.owner ?? null,
       input.notes ?? null,
       user.id
@@ -83,16 +86,17 @@ export async function updateSystem(
     hostname: input.hostname ?? existing.rows[0].hostname,
     ip_address: input.ipAddress ?? existing.rows[0].ip_address,
     os: input.os ?? existing.rows[0].os,
+    status: input.status ?? existing.rows[0].status,
     owner: input.owner ?? existing.rows[0].owner,
     notes: input.notes ?? existing.rows[0].notes
   };
   await database.query(
     `
       update systems
-      set hostname = $3, ip_address = $4, os = $5, owner = $6, notes = $7, updated_at = now()
+      set hostname = $3, ip_address = $4, os = $5, status = $6, owner = $7, notes = $8, updated_at = now()
       where id = $1 and incident_id = $2
     `,
-    [systemId, incidentId, next.hostname, next.ip_address, next.os, next.owner, next.notes]
+    [systemId, incidentId, next.hostname, next.ip_address, next.os, next.status, next.owner, next.notes]
   );
 
   await createAuditLog(database, {
