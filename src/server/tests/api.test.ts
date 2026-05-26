@@ -194,8 +194,8 @@ describe("Forenotes API", () => {
       id: leadId,
       username: "lead",
       email: "lead@example.com",
-      displayName: "Response Lead",
-      globalRole: "response_lead",
+      displayName: "Lead",
+      globalRole: "commander",
       passwordHash: await hashPassword("lead123")
     });
 
@@ -211,8 +211,8 @@ describe("Forenotes API", () => {
     expect(loginResponse.body.user).toMatchObject({
       id: leadId,
       username: "lead",
-      displayName: "Response Lead",
-      globalRole: "response_lead"
+      displayName: "Lead",
+      globalRole: "commander"
     });
     expect(loginResponse.body.user.passwordHash).toBeUndefined();
 
@@ -255,8 +255,8 @@ describe("Forenotes API", () => {
       id: randomUUID(),
       username: "lead",
       email: "lead-login-fail@example.com",
-      displayName: "Response Lead",
-      globalRole: "response_lead",
+      displayName: "Lead",
+      globalRole: "commander",
       passwordHash: await hashPassword("lead123")
     });
 
@@ -1660,8 +1660,8 @@ describe("Forenotes API", () => {
     await insertUser(pool, {
       id: responseLeadId,
       email: "lead@example.com",
-      displayName: "Response Lead",
-      globalRole: "response_lead"
+      displayName: "Lead",
+      globalRole: "commander"
     });
 
     const caseResponse = await request(app)

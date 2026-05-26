@@ -1,7 +1,7 @@
-export const GLOBAL_ROLES = ["admin", "commander", "response_lead", "analyst", "viewer"] as const;
+export const GLOBAL_ROLES = ["admin", "commander", "analyst", "viewer"] as const;
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
 
-export const CASE_MEMBER_ROLES = ["case_lead", "response_lead", "analyst", "viewer"] as const;
+export const CASE_MEMBER_ROLES = ["commander", "analyst", "viewer"] as const;
 export type CaseMemberRole = (typeof CASE_MEMBER_ROLES)[number];
 
 export const CASE_STATUSES = ["open", "closed"] as const;

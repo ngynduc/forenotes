@@ -157,5 +157,5 @@ export async function deleteQuery(database: Database, user: AuthenticatedUser, i
 }
 
 function isElevatedQueryEditor(user: AuthenticatedUser) {
-  return user.globalRole === "admin" || user.globalRole === "commander" || user.globalRole === "response_lead";
+  return user.globalRole === "admin" || user.globalRole === "commander";
 }

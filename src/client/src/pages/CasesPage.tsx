@@ -17,7 +17,7 @@ const CASE_TABS = [
   { key: "details", label: "Case Details" },
   { key: "members", label: "Members" },
 ] as const;
-const CASE_ROLES = ["case_lead", "response_lead", "analyst", "viewer"] as const;
+const CASE_ROLES = ["commander", "analyst", "viewer"] as const;
 
 type CaseTabKey = (typeof CASE_TABS)[number]["key"];
 

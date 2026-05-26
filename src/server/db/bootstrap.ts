@@ -24,8 +24,8 @@ const DEVELOPMENT_USERS: Array<{
   {
     username: "lead",
     email: "lead@example.com",
-    displayName: "Response Lead",
-    globalRole: "response_lead",
+    displayName: "Lead",
+    globalRole: "commander",
     password: "lead123"
   },
   {

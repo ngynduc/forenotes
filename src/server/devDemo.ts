@@ -263,7 +263,7 @@ const demoUsers: Record<
   {
     email: string;
     displayName: string;
-    globalRole: "commander" | "response_lead" | "analyst";
+    globalRole: "commander" | "analyst";
     caseRole: CaseMemberRole;
     incidentRole: string;
   }
@@ -272,22 +272,22 @@ const demoUsers: Record<
     email: "commander@example.com",
     displayName: "Demo Commander",
     globalRole: "commander",
-    caseRole: "case_lead",
-    incidentRole: "incident_commander"
+    caseRole: "commander",
+    incidentRole: "commander"
   },
   lead: {
     email: "lead@example.com",
-    displayName: "Demo Response Lead",
-    globalRole: "response_lead",
-    caseRole: "response_lead",
-    incidentRole: "investigation_lead"
+    displayName: "Demo Lead",
+    globalRole: "commander",
+    caseRole: "commander",
+    incidentRole: "commander"
   },
   analyst: {
     email: "analyst@example.com",
     displayName: "Demo Analyst",
     globalRole: "analyst",
     caseRole: "analyst",
-    incidentRole: "triage_analyst"
+    incidentRole: "analyst"
   }
 };
 

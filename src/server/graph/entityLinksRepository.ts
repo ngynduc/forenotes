@@ -90,7 +90,7 @@ async function resolveIncidentScopedEntity(
 }
 
 function getEntityLinkDeletePermission(user: AuthenticatedUser): PermissionKey | null {
-  if (user.globalRole === "commander" || user.globalRole === "response_lead") {
+  if (user.globalRole === "admin" || user.globalRole === "commander") {
     return "entity_link:delete";
   }
 
@@ -182,7 +182,7 @@ export async function deleteEntityLink(database: Database, user: AuthenticatedUs
   if (existing.rows[0].created_by_user_id !== user.id) {
     const permission = getEntityLinkDeletePermission(user);
     if (!permission) {
-      throw new AppError(403, "Only the link creator, response lead, or commander can delete this link");
+      throw new AppError(403, "Only the link creator, admin, or commander can delete this link");
     }
     await requirePermission(database, user, permission);
   }

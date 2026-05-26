@@ -24,8 +24,7 @@ interface AddIncidentMemberInput {
 }
 
 const INCIDENT_ROLE_BY_CASE_ROLE: Record<CaseMemberRole, string> = {
-  case_lead: "incident_lead",
-  response_lead: "investigation_lead",
+  commander: "commander",
   analyst: "analyst",
   viewer: "viewer"
 };
@@ -111,8 +110,8 @@ export async function updateCaseMemberRole(
   if (existing.rowCount === 0) {
     throw new AppError(404, "Case member not found");
   }
-  if (existing.rows[0].case_role === "case_lead" && caseRole !== "case_lead") {
-    await ensureNotLastCaseLead(database, caseId);
+  if (existing.rows[0].case_role === "commander" && caseRole !== "commander") {
+    await ensureNotLastCaseCommander(database, caseId);
   }
 
   await database.query("update case_members set case_role = $3 where case_id = $1 and user_id = $2", [
@@ -141,8 +140,8 @@ export async function removeCaseMember(database: Database, user: AuthenticatedUs
   if (existing.rowCount === 0) {
     throw new AppError(404, "Case member not found");
   }
-  if (existing.rows[0].case_role === "case_lead") {
-    await ensureNotLastCaseLead(database, caseId);
+  if (existing.rows[0].case_role === "commander") {
+    await ensureNotLastCaseCommander(database, caseId);
   }
 
   await database.query("delete from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
@@ -177,8 +176,7 @@ export async function syncCaseMembersToIncident(
       insert into incident_members (incident_id, user_id, incident_role, added_by_user_id)
       select $2, user_id,
         case
-          when case_role = 'case_lead' then 'incident_lead'
-          when case_role = 'response_lead' then 'investigation_lead'
+          when case_role = 'commander' then 'commander'
           when case_role = 'viewer' then 'viewer'
           else 'analyst'
         end,
@@ -309,12 +307,12 @@ async function syncCaseMemberToIncidents(
   );
 }
 
-async function ensureNotLastCaseLead(database: Database, caseId: string) {
+async function ensureNotLastCaseCommander(database: Database, caseId: string) {
   const leadCount = await database.query<{ count: string }>(
-    "select count(*)::int as count from case_members where case_id = $1 and case_role = 'case_lead'",
+    "select count(*)::int as count from case_members where case_id = $1 and case_role = 'commander'",
     [caseId]
   );
   if (Number(leadCount.rows[0]?.count ?? 0) <= 1) {
-    throw new AppError(409, "Cannot remove or demote the last case lead");
+    throw new AppError(409, "Cannot remove or demote the last case commander");
   }
 }

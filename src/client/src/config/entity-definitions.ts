@@ -64,8 +64,8 @@ export const OPTION_SETS = {
   indicatorType: ["host", "ip", "domain", "url", "email", "file_hash", "registry", "mutex", "process", "user_agent", "other"],
   accountStatus: ["active", "disabled", "compromised", "locked"],
   systemStatus: ["online", "offline", "compromised", "unknown"],
-  globalRole: ["admin", "commander", "response_lead", "analyst", "viewer"],
-  caseRole: ["case_lead", "response_lead", "analyst", "viewer"],
+  globalRole: ["admin", "commander", "analyst", "viewer"],
+  caseRole: ["commander", "analyst", "viewer"],
   evidenceType: ["timeline_event", "indicator", "system", "account", "query"],
 } as const;
 

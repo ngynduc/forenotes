@@ -80,7 +80,7 @@ export async function createCase(database: Database, user: AuthenticatedUser, in
       values ($1, $2, $3, $4)
       on conflict do nothing
     `,
-    [caseId, user.id, "case_lead", user.id]
+    [caseId, user.id, "commander", user.id]
   );
 
   for (const member of initialMembers) {

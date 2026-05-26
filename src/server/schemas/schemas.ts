@@ -20,7 +20,21 @@ import {
 
 export const uuidSchema = z.string().uuid();
 const caseMemberRoleSchema = z.preprocess(
-  (value) => (value === "member" ? "analyst" : value),
+  (value) => {
+    if (value === "member") {
+      return "analyst";
+    }
+    if (
+      value === "case_lead" ||
+      value === "response_lead" ||
+      value === "incident_lead" ||
+      value === "incident_commander" ||
+      value === "investigation_lead"
+    ) {
+      return "commander";
+    }
+    return value;
+  },
   z.enum(CASE_MEMBER_ROLES)
 );
 export const utcIsoDatetimeSchema = z
