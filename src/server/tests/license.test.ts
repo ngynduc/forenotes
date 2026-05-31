@@ -54,6 +54,18 @@ async function getAdminId(database: Database) {
   return result.rows[0].id;
 }
 
+async function insertUser(database: Database, input: { id?: string; role: string; username: string; email: string; displayName: string }) {
+  const id = input.id ?? randomUUID();
+  await database.query(
+    `
+      insert into users (id, username, email, display_name, global_role, status)
+      values ($1, $2, $3, $4, $5, 'active')
+    `,
+    [id, input.username, input.email, input.displayName, input.role]
+  );
+  return id;
+}
+
 async function seedIncident(database: Database, adminId: string) {
   const caseId = randomUUID();
   const incidentId = randomUUID();
@@ -111,8 +123,10 @@ describe("licensing", () => {
       tier: "individual",
       status: "active",
       seats: 1,
-      features: []
+      features: [],
+      source: "free"
     });
+    expect(response.body.deploymentId).toEqual(expect.any(String));
   });
 
   it("rejects invalid and tampered license keys", async () => {
@@ -153,8 +167,10 @@ describe("licensing", () => {
     expect(activateResponse.body).toMatchObject({
       tier: "pro",
       status: "active",
+      source: "database",
       features: ["graph"]
     });
+    expect(activateResponse.body.deploymentId).toEqual(expect.any(String));
 
     const restartedApp = createApp(pool);
     const statusResponse = await request(restartedApp).get("/api/license/status").set("x-user-id", adminId);
@@ -162,6 +178,58 @@ describe("licensing", () => {
     expect(statusResponse.status).toBe(200);
     expect(statusResponse.body.tier).toBe("pro");
     expect(statusResponse.body.features).toEqual(["graph"]);
+  });
+
+  it("requires user management permission to activate and deactivate licenses while status remains readable", async () => {
+    const commanderId = await insertUser(pool, {
+      username: "license-commander",
+      email: "license-commander@example.com",
+      displayName: "License Commander",
+      role: "commander"
+    });
+    const analystId = await insertUser(pool, {
+      username: "license-analyst",
+      email: "license-analyst@example.com",
+      displayName: "License Analyst",
+      role: "analyst"
+    });
+    const viewerId = await insertUser(pool, {
+      username: "license-viewer",
+      email: "license-viewer@example.com",
+      displayName: "License Viewer",
+      role: "viewer"
+    });
+    const licenseKey = issueLicense({ tier: "pro" });
+
+    for (const userId of [commanderId, analystId, viewerId]) {
+      const statusResponse = await request(app).get("/api/license/status").set("x-user-id", userId);
+      expect(statusResponse.status).toBe(200);
+
+      const activateResponse = await request(app)
+        .post("/api/license/activate")
+        .set("x-user-id", userId)
+        .send({ licenseKey });
+      expect(activateResponse.status).toBe(403);
+      expect(activateResponse.body.error).toBe("Missing permission: user:manage");
+    }
+
+    const adminActivateResponse = await request(app)
+      .post("/api/license/activate")
+      .set("x-user-id", adminId)
+      .send({ licenseKey });
+    expect(adminActivateResponse.status).toBe(200);
+
+    for (const userId of [commanderId, analystId, viewerId]) {
+      const deactivateResponse = await request(app)
+        .post("/api/license/deactivate")
+        .set("x-user-id", userId);
+      expect(deactivateResponse.status).toBe(403);
+      expect(deactivateResponse.body.error).toBe("Missing permission: user:manage");
+    }
+
+    const adminDeactivateResponse = await request(app).post("/api/license/deactivate").set("x-user-id", adminId);
+    expect(adminDeactivateResponse.status).toBe(200);
+    expect(adminDeactivateResponse.body.source).toBe("free");
   });
 
   it("blocks direct premium API calls without the required feature", async () => {
@@ -178,6 +246,12 @@ describe("licensing", () => {
 
   it("allows Graph on Pro but blocks Teams-only features", async () => {
     const { incidentId } = await seedIncident(pool, adminId);
+    const analystId = await insertUser(pool, {
+      username: "pro-collab",
+      email: "pro-collab@example.com",
+      displayName: "Pro Collaborator",
+      role: "analyst"
+    });
     await request(app).post("/api/license/activate").set("x-user-id", adminId).send({
       licenseKey: issueLicense({ tier: "pro" })
     });
@@ -189,12 +263,59 @@ describe("licensing", () => {
       displayName: "New User",
       globalRole: "analyst"
     });
+    const caseResponse = await request(app).post("/api/cases").set("x-user-id", adminId).send({
+      caseName: "Pro Collaboration Block",
+      status: "open",
+      members: [{ userId: analystId, caseRole: "analyst" }]
+    });
 
     expect(graphResponse.status).toBe(200);
     expect(taskResponse.status).toBe(403);
     expect(taskResponse.body.error).toBe("FEATURE_NOT_LICENSED");
     expect(userResponse.status).toBe(403);
     expect(userResponse.body.error).toBe("FEATURE_NOT_LICENSED");
+    expect(caseResponse.status).toBe(403);
+    expect(caseResponse.body.error).toBe("FEATURE_NOT_LICENSED");
+    expect(caseResponse.body.details.feature).toBe("case_collaboration");
+  });
+
+  it("allows Teams collaboration and task workflows", async () => {
+    const analystId = await insertUser(pool, {
+      username: "teams-collab",
+      email: "teams-collab@example.com",
+      displayName: "Teams Collaborator",
+      role: "analyst"
+    });
+    await request(app).post("/api/license/activate").set("x-user-id", adminId).send({
+      licenseKey: issueLicense({ tier: "teams", seats: 10 })
+    });
+
+    const caseResponse = await request(app).post("/api/cases").set("x-user-id", adminId).send({
+      caseName: "Teams Collaboration",
+      status: "open",
+      members: [{ userId: analystId, caseRole: "analyst" }]
+    });
+    expect(caseResponse.status).toBe(201);
+    const caseId = caseResponse.body.case.id;
+
+    const incidentResponse = await request(app).post(`/api/cases/${caseId}/incidents`).set("x-user-id", adminId).send({
+      name: "Teams Incident",
+      status: "open"
+    });
+    expect(incidentResponse.status).toBe(201);
+    const incidentId = incidentResponse.body.incident.id;
+
+    const taskResponse = await request(app).post(`/api/incidents/${incidentId}/tasks`).set("x-user-id", adminId).send({
+      title: "Teams task",
+      status: "todo",
+      priority: "medium"
+    });
+    expect(taskResponse.status).toBe(201);
+
+    const removeResponse = await request(app)
+      .delete(`/api/cases/${caseId}/members/${analystId}`)
+      .set("x-user-id", adminId);
+    expect(removeResponse.status).toBe(204);
   });
 
   it("enforces Teams seat limits on user creation", async () => {
@@ -260,5 +381,26 @@ describe("licensing", () => {
       source: "file",
       features: ["graph"]
     });
+    expect(response.body.deploymentId).toEqual(expect.any(String));
+  });
+
+  it("allows unbound licenses and enforces exact deployment binding when present", async () => {
+    const unboundResponse = await request(app).post("/api/license/activate").set("x-user-id", adminId).send({
+      licenseKey: issueLicense({ tier: "pro" })
+    });
+    expect(unboundResponse.status).toBe(200);
+
+    const deploymentId = unboundResponse.body.deploymentId;
+    const boundResponse = await request(app).post("/api/license/activate").set("x-user-id", adminId).send({
+      licenseKey: issueLicense({ tier: "teams", deploymentId })
+    });
+    expect(boundResponse.status).toBe(200);
+    expect(boundResponse.body.deploymentId).toBe(deploymentId);
+
+    const mismatchResponse = await request(app).post("/api/license/activate").set("x-user-id", adminId).send({
+      licenseKey: issueLicense({ tier: "teams", deploymentId: "different-deployment" })
+    });
+    expect(mismatchResponse.status).toBe(400);
+    expect(mismatchResponse.body.error).toBe("DEPLOYMENT_MISMATCH");
   });
 });

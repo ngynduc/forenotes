@@ -13,7 +13,7 @@ export const PERMISSIONS: PermissionDefinition[] = PERMISSION_KEYS.map((key) => 
 
 export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
   admin: [...PERMISSION_KEYS],
-  commander: [...PERMISSION_KEYS],
+  commander: PERMISSION_KEYS.filter((key) => key !== "user:manage"),
   analyst: [
     "entity_link:read",
     "entity_link:create",

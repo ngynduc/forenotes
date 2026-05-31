@@ -1,8 +1,10 @@
-import { createPublicKey, verify } from "node:crypto";
+import { createPublicKey, randomUUID, verify } from "node:crypto";
 import { promises as fs } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import type { Database } from "../db/types.js";
 import { AppError } from "../errors.js";
+import { getDataDir } from "../storage.js";
 import { FORENOTES_LICENSE_PUBLIC_KEY } from "../license/publicKey.js";
 import {
   FEATURE_KEYS,
@@ -21,6 +23,7 @@ import {
 const LICENSE_PREFIX = "FNLIC-v1";
 const GRACE_PERIOD_DAYS = 14;
 const EXPIRING_SOON_DAYS = 14;
+const DEPLOYMENT_ID_FILE = "deployment-id";
 
 const licensePayloadSchema = z.object({
   licenseId: z.string().trim().min(1),
@@ -82,16 +85,17 @@ export function parseAndVerifyLicenseKey(licenseKey: string, publicKeyPem = read
 
 export async function getLicenseStatus(database: Database): Promise<LicenseStatusResponse> {
   const usedSeats = await countActiveUsers(database);
+  const deploymentId = await getDeploymentId();
   const storedLicense = await readStoredLicense(database);
   if (!storedLicense) {
-    return freeLicenseStatus(usedSeats);
+    return freeLicenseStatus(usedSeats, deploymentId);
   }
 
   try {
-    const context = licenseContextFromKey(storedLicense.licenseKey, storedLicense.source);
-    return licenseStatusFromContext(context, usedSeats);
+    const context = licenseContextFromKey(storedLicense.licenseKey, storedLicense.source, deploymentId);
+    return licenseStatusFromContext(context, usedSeats, deploymentId);
   } catch (error) {
-    if (isInvalidLicenseError(error)) {
+    if (isLicenseStatusError(error)) {
       return {
         customerName: "Invalid license",
         tier: "individual",
@@ -100,6 +104,7 @@ export async function getLicenseStatus(database: Database): Promise<LicenseStatu
         usedSeats,
         features: [],
         source: storedLicense.source,
+        deploymentId,
         message: error.detailsMessage
       };
     }
@@ -108,7 +113,9 @@ export async function getLicenseStatus(database: Database): Promise<LicenseStatu
 }
 
 export async function activateLicense(database: Database, licenseKey: string): Promise<LicenseStatusResponse> {
+  const deploymentId = await getDeploymentId();
   const payload = parseAndVerifyLicenseKey(licenseKey);
+  enforceDeploymentBinding(payload, deploymentId);
   const status = getTemporalStatus(payload);
   await database.query(
     `
@@ -185,8 +192,11 @@ export async function requireSeatAvailable(database: Database): Promise<void> {
   }
 }
 
-export function licenseContextFromKey(licenseKey: string, source: "database" | "file" = "database"): LicenseContext {
+export function licenseContextFromKey(licenseKey: string, source: "database" | "file" = "database", deploymentId?: string): LicenseContext {
   const payload = parseAndVerifyLicenseKey(licenseKey);
+  if (deploymentId) {
+    enforceDeploymentBinding(payload, deploymentId);
+  }
   const status = getTemporalStatus(payload);
   return {
     payload,
@@ -216,7 +226,33 @@ export function getTemporalStatus(payload: SignedLicensePayload, now = new Date(
   return "active";
 }
 
-function licenseStatusFromContext(context: LicenseContext, usedSeats: number): LicenseStatusResponse {
+export async function getDeploymentId(): Promise<string> {
+  const deploymentIdPath = path.join(getDataDir(), DEPLOYMENT_ID_FILE);
+  try {
+    const existing = (await fs.readFile(deploymentIdPath, "utf8")).trim();
+    if (existing) {
+      return existing;
+    }
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  await fs.mkdir(path.dirname(deploymentIdPath), { recursive: true });
+  const generated = randomUUID();
+  try {
+    await fs.writeFile(deploymentIdPath, `${generated}\n`, { flag: "wx" });
+    return generated;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "EEXIST") {
+      return (await fs.readFile(deploymentIdPath, "utf8")).trim();
+    }
+    throw error;
+  }
+}
+
+function licenseStatusFromContext(context: LicenseContext, usedSeats: number, deploymentId: string): LicenseStatusResponse {
   return {
     licenseId: context.payload.licenseId,
     customerName: context.payload.customerName,
@@ -226,11 +262,12 @@ function licenseStatusFromContext(context: LicenseContext, usedSeats: number): L
     usedSeats,
     expiresAt: context.payload.expiresAt,
     features: context.features,
-    source: context.source
+    source: context.source,
+    deploymentId
   };
 }
 
-function freeLicenseStatus(usedSeats: number): LicenseStatusResponse {
+function freeLicenseStatus(usedSeats: number, deploymentId: string): LicenseStatusResponse {
   return {
     customerName: "Individual Free",
     tier: "individual",
@@ -238,7 +275,8 @@ function freeLicenseStatus(usedSeats: number): LicenseStatusResponse {
     seats: 1,
     usedSeats,
     features: [],
-    source: "free"
+    source: "free",
+    deploymentId
   };
 }
 
@@ -325,12 +363,30 @@ function tierLabel(tier: LicenseTier) {
   return tier[0].toUpperCase() + tier.slice(1);
 }
 
+function enforceDeploymentBinding(payload: SignedLicensePayload, deploymentId: string) {
+  if (payload.deploymentId && payload.deploymentId !== deploymentId) {
+    throw licenseStatusError(
+      400,
+      "DEPLOYMENT_MISMATCH",
+      `License is bound to deployment ${payload.deploymentId}, but this deployment is ${deploymentId}.`
+    );
+  }
+}
+
 function invalidLicense(message: string): AppError & { detailsMessage: string } {
-  const error = new AppError(400, "INVALID_LICENSE", { message }) as AppError & { detailsMessage: string };
+  return licenseStatusError(400, "INVALID_LICENSE", message);
+}
+
+function licenseStatusError(statusCode: number, code: "INVALID_LICENSE" | "DEPLOYMENT_MISMATCH", message: string): AppError & { detailsMessage: string } {
+  const error = new AppError(statusCode, code, { message }) as AppError & { detailsMessage: string };
   error.detailsMessage = message;
   return error;
 }
 
-function isInvalidLicenseError(error: unknown): error is AppError & { detailsMessage: string } {
-  return error instanceof AppError && error.message === "INVALID_LICENSE" && "detailsMessage" in error;
+function isLicenseStatusError(error: unknown): error is AppError & { detailsMessage: string } {
+  return error instanceof AppError && (error.message === "INVALID_LICENSE" || error.message === "DEPLOYMENT_MISMATCH") && "detailsMessage" in error;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }

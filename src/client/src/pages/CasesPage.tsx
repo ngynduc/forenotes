@@ -9,6 +9,7 @@ import { useIncidents } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
+import { useLicense } from "@/hooks/use-license";
 
 const tableDef = TABLE_DEFINITIONS.cases;
 const incidentTableDef = TABLE_DEFINITIONS.incidents;
@@ -29,6 +30,7 @@ export default function CasesPage() {
   const incidentsQuery = useIncidents();
   const membersQuery = useCaseMembers(selectedCaseId || undefined);
   const usersQuery = useUsers();
+  const license = useLicense();
   const addCaseMember = useAddCaseMember(selectedCaseId || undefined);
   const updateCaseMember = useUpdateCaseMember(selectedCaseId || undefined);
   const removeCaseMember = useRemoveCaseMember(selectedCaseId || undefined);
@@ -47,6 +49,7 @@ export default function CasesPage() {
   const users = usersQuery.data?.users ?? [];
   const memberIds = new Set(members.map((member) => String(member.userId ?? "")));
   const availableUsers = users.filter((user) => !memberIds.has(user.id));
+  const collaborationEnabled = license.hasFeature("case_collaboration");
   const selectedCase = cases.find((entry) => String(entry.id ?? "") === selectedCaseId) ?? null;
   const caseTargetId = searchParams.get("caseId");
   const incidentTargetId = searchParams.get("incidentId");
@@ -119,6 +122,10 @@ export default function CasesPage() {
   }
 
   function handleAddMember() {
+    if (!collaborationEnabled) {
+      setMemberMessage("Case collaboration requires Forenotes Teams.");
+      return;
+    }
     if (!memberUserId) {
       setMemberMessage("Select a user to add.");
       return;
@@ -343,6 +350,9 @@ export default function CasesPage() {
                   <div>
                     <h4 className="text-lg font-semibold">Case Members</h4>
                     <p className="text-sm text-[var(--color-text-muted)]">Manage case access. Incidents inherit these members automatically.</p>
+                    {!collaborationEnabled ? (
+                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">Adding, removing, and changing collaborators requires Forenotes Teams.</p>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="flex min-w-48 flex-col gap-1 text-xs font-medium text-[var(--color-text-muted)]">
@@ -351,7 +361,7 @@ export default function CasesPage() {
                         className="h-9 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
                         value={memberUserId}
                         onChange={(event) => setMemberUserId(event.target.value)}
-                        disabled={addCaseMember.isPending || usersQuery.isLoading}
+                        disabled={!collaborationEnabled || addCaseMember.isPending || usersQuery.isLoading}
                       >
                         <option value="">Select user</option>
                         {availableUsers.map((user) => (
@@ -367,7 +377,7 @@ export default function CasesPage() {
                         className="h-9 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
                         value={memberRole}
                         onChange={(event) => setMemberRole(event.target.value as (typeof CASE_ROLES)[number])}
-                        disabled={addCaseMember.isPending}
+                        disabled={!collaborationEnabled || addCaseMember.isPending}
                       >
                         {CASE_ROLES.map((role) => (
                           <option key={role} value={role}>
@@ -376,7 +386,7 @@ export default function CasesPage() {
                         ))}
                       </select>
                     </label>
-                    <Button size="sm" onClick={handleAddMember} disabled={addCaseMember.isPending || !selectedCaseId}>
+                    <Button size="sm" onClick={handleAddMember} disabled={!collaborationEnabled || addCaseMember.isPending || !selectedCaseId}>
                       Add
                     </Button>
                   </div>
@@ -412,7 +422,7 @@ export default function CasesPage() {
                                 }
                               )
                             }
-                            disabled={updateCaseMember.isPending}
+                            disabled={!collaborationEnabled || updateCaseMember.isPending}
                           >
                             {CASE_ROLES.map((role) => (
                               <option key={role} value={role}>
@@ -429,7 +439,7 @@ export default function CasesPage() {
                                   setMemberMessage(error instanceof Error ? error.message : "Unable to remove member."),
                               })
                             }
-                            disabled={removeCaseMember.isPending}
+                            disabled={!collaborationEnabled || removeCaseMember.isPending}
                           >
                             Remove
                           </Button>

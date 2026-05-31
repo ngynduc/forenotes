@@ -518,6 +518,8 @@ function LicenseSettingsPanel({
   const features = status?.features ?? [];
   const statusLabel = status ? labelFromKey(status.status) : "Loading";
   const premiumFeatureLabels = features.map((feature: FeatureKey) => labelFromKey(feature));
+  const sourceLabel = status ? labelFromKey(status.source) : "Loading";
+  const fileBacked = status?.source === "file";
 
   return (
     <section className="space-y-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -537,10 +539,19 @@ function LicenseSettingsPanel({
       ) : status ? (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <LicenseMetric label="Tier" value={labelFromKey(status.tier)} />
+          <LicenseMetric label="Status" value={statusLabel} />
+          <LicenseMetric label="Source" value={sourceLabel} />
           <LicenseMetric label="Customer" value={status.customerName} />
           <LicenseMetric label="Expiration" value={formatLicenseDate(status.expiresAt)} />
           <LicenseMetric label="Seats Used" value={`${status.usedSeats} / ${status.seats}`} />
+          <LicenseMetric label="Deployment ID" value={status.deploymentId} />
         </div>
+      ) : null}
+
+      {fileBacked ? (
+        <p className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+          This license is mounted from `FORENOTES_LICENSE_FILE`. Replace or remove that file on the server to change it; database deactivation is disabled.
+        </p>
       ) : null}
 
       {status?.message ? (
@@ -585,7 +596,7 @@ function LicenseSettingsPanel({
           <KeyRound className="h-4 w-4" />
           {activating ? "Activating..." : "Activate license"}
         </Button>
-        <Button type="button" variant="outline" onClick={onDeactivate} disabled={deactivating || status?.source !== "database"}>
+        <Button type="button" variant="outline" onClick={onDeactivate} disabled={deactivating || status?.source !== "database"} title={fileBacked ? "File-backed licenses are controlled by FORENOTES_LICENSE_FILE." : undefined}>
           <Trash2 className="h-4 w-4" />
           {deactivating ? "Deactivating..." : "Deactivate"}
         </Button>

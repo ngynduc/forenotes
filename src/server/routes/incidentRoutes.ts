@@ -99,7 +99,7 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/members",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "multi_user");
+      await requireFeature(database, "case_collaboration");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const payload = addIncidentMemberSchema.parse(request.body);
       await addIncidentMember(database, user, { incidentId, ...payload });
@@ -111,7 +111,7 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/members/:memberUserId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "multi_user");
+      await requireFeature(database, "case_collaboration");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
       await removeIncidentMember(database, user, incidentId, memberUserId);

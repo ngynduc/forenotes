@@ -147,11 +147,11 @@ export async function removeCaseMember(database: Database, user: AuthenticatedUs
   await database.query("delete from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
   await database.query(
     `
-      delete from incident_members im
-      using incidents i
-      where im.incident_id = i.id
-        and i.case_id = $1
-        and im.user_id = $2
+      delete from incident_members
+      where user_id = $2
+        and incident_id in (
+          select id from incidents where case_id = $1
+        )
     `,
     [caseId, memberUserId]
   );

@@ -45,7 +45,7 @@ export default function AdminPage() {
       <LockedFeature
         feature="multi_user"
         title="Multiple users require Forenotes Teams"
-        description="Upgrade to Teams to create users, assign case members, and manage collaboration."
+        description="Upgrade to Teams to create users and manage licensed seats."
       />
     );
   }

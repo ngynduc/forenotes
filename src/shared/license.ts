@@ -51,6 +51,7 @@ export interface LicenseStatusResponse {
   expiresAt?: string;
   features: FeatureKey[];
   source: "free" | "database" | "file";
+  deploymentId: string;
   message?: string;
 }
 
