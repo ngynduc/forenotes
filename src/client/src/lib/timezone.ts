@@ -120,6 +120,71 @@ export function formatUtcDateTime(
   return parsed.setZone(normalizeTimezone(timezone)).toFormat("yyyy-LL-dd HH:mm");
 }
 
+export function formatDateTimeForTimezone(
+  value: string | null | undefined,
+  timezone: string = getCurrentTimezone()
+): string {
+  const parsed = parseUtc(value);
+  if (!parsed) {
+    return "—";
+  }
+
+  const zoned = parsed.setZone(normalizeTimezone(timezone));
+  const zoneLabel = zoned.offsetNameShort || zoned.toFormat("ZZ");
+  return `${zoned.toFormat("LLL d, yyyy HH:mm")} ${zoneLabel}`;
+}
+
+export function formatRelativeTime(value: string | null | undefined): string {
+  const parsed = parseUtc(value);
+  if (!parsed) {
+    return "";
+  }
+
+  const diffSeconds = Math.round(parsed.diffNow("seconds").seconds);
+  const absSeconds = Math.abs(diffSeconds);
+  const suffix = diffSeconds < 0 ? "ago" : "from now";
+
+  if (absSeconds < 45) {
+    return diffSeconds < 0 ? "just now" : "in moments";
+  }
+
+  const units: Array<[Intl.RelativeTimeFormatUnit, number, string]> = [
+    ["year", 365 * 24 * 60 * 60, "y"],
+    ["month", 30 * 24 * 60 * 60, "mo"],
+    ["day", 24 * 60 * 60, "d"],
+    ["hour", 60 * 60, "h"],
+    ["minute", 60, "m"],
+  ];
+  const [, secondsPerUnit, label] = units.find(([, seconds]) => absSeconds >= seconds) ?? ["minute", 60, "m"];
+  const amount = Math.max(1, Math.round(absSeconds / secondsPerUnit));
+  return diffSeconds < 0 ? `${amount}${label} ${suffix}` : `in ${amount}${label}`;
+}
+
+export type DueStatus = "none" | "overdue" | "due_soon" | "upcoming";
+
+export function formatDueStatus(
+  value: string | null | undefined,
+  timezone: string = getCurrentTimezone()
+): { status: DueStatus; label: string } {
+  const parsed = parseUtc(value);
+  if (!parsed) {
+    return { status: "none", label: "No due date" };
+  }
+
+  const zone = normalizeTimezone(timezone);
+  const due = parsed.setZone(zone);
+  const now = DateTime.now().setZone(zone);
+  if (due < now) {
+    return { status: "overdue", label: "Overdue" };
+  }
+
+  if (due <= now.plus({ hours: 72 })) {
+    return { status: "due_soon", label: due <= now.plus({ hours: 24 }) ? "Due next 24h" : "Due next 72h" };
+  }
+
+  return { status: "upcoming", label: "Upcoming" };
+}
+
 export function formatUtcTimestampForTitle(value: string | null | undefined): string {
   const parsed = parseUtc(value);
   if (!parsed) {

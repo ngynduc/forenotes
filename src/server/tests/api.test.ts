@@ -98,8 +98,8 @@ function issueTestLicense(input: Partial<SignedLicensePayload> = {}) {
   return `FNLIC-v1.${Buffer.from(payloadJson, "utf8").toString("base64url")}.${sign(null, Buffer.from(payloadJson, "utf8"), TEST_LICENSE_KEYS.privateKey).toString("base64url")}`;
 }
 
-async function installTestLicense(pool: { query: (text: string, params?: unknown[]) => Promise<unknown> }) {
-  const licenseKey = issueTestLicense();
+async function installTestLicense(pool: { query: (text: string, params?: unknown[]) => Promise<unknown> }, tier: LicenseTier = "teams") {
+  const licenseKey = issueTestLicense({ tier });
   const payload = JSON.parse(Buffer.from(licenseKey.split(".")[1], "base64url").toString("utf8")) as SignedLicensePayload;
   await pool.query(
     `
@@ -833,6 +833,7 @@ describe("Forenotes API", () => {
         title: "Contain affected host",
         status: "todo",
         priority: "critical",
+        assigneeUserId: analystId,
         dueAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
       });
     const taskId = taskResponse.body.task.id as string;
@@ -887,18 +888,230 @@ describe("Forenotes API", () => {
     expect(response.body.summary.metrics.openIncidents).toBe(1);
     expect(response.body.summary.metrics.unresolvedFindings).toBe(1);
     expect(response.body.summary.metrics.overdueTasks).toBe(1);
-    expect(response.body.summary.metrics.unreadNotifications).toBe(2);
+    expect(response.body.summary.metrics.unreadNotifications).toBe(3);
     expect(response.body.summary.sla.staleIncidents).toBe(1);
     expect(response.body.summary.sla.agingFindings).toBe(1);
+    expect(response.body.summary.unread.taskUpdates).toBe(1);
     expect(response.body.summary.breakdowns.incidentSeverity).toEqual([
       { value: "critical", count: 1 }
     ]);
     expect(response.body.summary.breakdowns.taskStatus).toEqual([
       { value: "todo", count: 1 }
     ]);
-    expect(response.body.summary.recentActivity.some((entry: { title: string }) => entry.title === "Hidden finding")).toBe(false);
-    expect(response.body.summary.recentActivity.some((entry: { title: string }) => entry.title === "Contain affected host")).toBe(true);
-    expect(response.body.summary.activity).toHaveLength(7);
+    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Hidden finding")).toBe(false);
+    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Contain affected host")).toBe(true);
+  expect(response.body.summary.activity).toHaveLength(7);
+    expect(response.body.charts.taskStatusDistribution).toEqual([
+      { label: "todo", value: 1 }
+    ]);
+    expect(response.body.charts.slaRiskBreakdown).toEqual(
+      expect.arrayContaining([
+        { label: "Overdue", value: 1 },
+        { label: "Due Soon", value: 0 }
+      ])
+    );
+  });
+
+  it("returns empty dashboard data for users without case membership", async () => {
+    const response = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", analystId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.metrics.totalCases).toBe(0);
+    expect(response.body.summary.metrics.openTasks).toBe(0);
+    expect(response.body.summary.recentActivity).toEqual([]);
+    expect(response.body.summary.highPriorityTasks).toEqual([]);
+  });
+
+  it("blocks dashboard APIs for Individual and Pro licenses", async () => {
+    await installTestLicense(pool, "pro");
+
+    const response = await request(app)
+      .get("/api/dashboard")
+      .set("x-user-id", commanderId);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Dashboard is available on Teams and Enterprise plans.");
+  });
+
+  it("returns dashboard chart data for Teams and Enterprise licenses", async () => {
+    await installTestLicense(pool, "enterprise");
+
+    const response = await request(app)
+      .get("/api/dashboard/charts")
+      .set("x-user-id", commanderId);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        taskStatusDistribution: expect.any(Array),
+        slaRiskBreakdown: expect.any(Array),
+        workloadByAssignee: expect.any(Array),
+        activityTrend: expect.any(Array),
+        unreadBreakdown: expect.any(Array),
+        caseIncidentHealth: expect.any(Array)
+      })
+    );
+  });
+
+  it("scopes dashboard summary, SLA, and workload by role", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Scoped Dashboard Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Scoped Dashboard Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Analyst overdue task",
+        status: "todo",
+        priority: "critical",
+        assigneeUserId: analystId,
+        dueAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+      });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Other analyst overdue task",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystTwoId,
+        dueAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+      });
+
+    const analystSummary = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", analystId);
+    const commanderSummary = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", commanderId);
+
+    expect(analystSummary.status).toBe(200);
+    expect(commanderSummary.status).toBe(200);
+    expect(analystSummary.body.summary.scope).toBe("self");
+    expect(commanderSummary.body.summary.scope).toBe("team");
+    expect(analystSummary.body.summary.metrics.overdueTasks).toBe(1);
+    expect(commanderSummary.body.summary.metrics.overdueTasks).toBe(2);
+
+    const analystSla = await request(app)
+      .get("/api/dashboard/sla")
+      .set("x-user-id", analystId);
+    const commanderSla = await request(app)
+      .get("/api/dashboard/sla")
+      .set("x-user-id", commanderId);
+
+    expect(analystSla.body.overdueTasks.map((task: { title: string }) => task.title)).toEqual(["Analyst overdue task"]);
+    expect(commanderSla.body.overdueTasks.map((task: { title: string }) => task.title).sort()).toEqual([
+      "Analyst overdue task",
+      "Other analyst overdue task"
+    ]);
+
+    const analystWorkload = await request(app)
+      .get("/api/dashboard/workload")
+      .set("x-user-id", analystId);
+    const commanderWorkload = await request(app)
+      .get("/api/dashboard/workload")
+      .set("x-user-id", commanderId);
+
+    expect(analystWorkload.body.scope).toBe("self");
+    expect(analystWorkload.body.workload).toEqual([
+      expect.objectContaining({
+        assignee: expect.objectContaining({ id: analystId, name: "Analyst" }),
+        taskCount: 1,
+        overdueCount: 1
+      })
+    ]);
+    expect(commanderWorkload.body.scope).toBe("team");
+    expect(commanderWorkload.body.workload.map((row: { assignee: { name: string } }) => row.assignee.name).sort()).toEqual([
+      "Analyst",
+      "Analyst Two"
+    ]);
+  });
+
+  it("returns paginated dashboard table payloads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Paginated Dashboard Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Paginated Dashboard Incident", status: "open", severity: "high" });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    for (let index = 0; index < 12; index += 1) {
+      await request(app)
+        .post(`/api/incidents/${incidentId}/tasks`)
+        .set("x-user-id", commanderId)
+        .send({
+          title: `Overdue task ${index}`,
+          status: "todo",
+          priority: "high",
+          assigneeUserId: analystId,
+          dueAt: new Date(Date.now() - (index + 1) * 60 * 60 * 1000).toISOString()
+        });
+    }
+
+    const slaPage = await request(app)
+      .get("/api/dashboard/sla?section=overdue&page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(slaPage.status).toBe(200);
+    expect(slaPage.body.items).toHaveLength(10);
+    expect(slaPage.body.page).toBe(1);
+    expect(slaPage.body.pageSize).toBe(10);
+    expect(slaPage.body.total).toBe(12);
+
+    const secondSlaPage = await request(app)
+      .get("/api/dashboard/sla?section=overdue&page=2&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(secondSlaPage.body.items).toHaveLength(2);
+
+    const casesPage = await request(app)
+      .get("/api/dashboard/cases?page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(casesPage.body).toEqual(
+      expect.objectContaining({
+        items: expect.any(Array),
+        page: 1,
+        pageSize: 10,
+        total: expect.any(Number)
+      })
+    );
+
+    const incidentsPage = await request(app)
+      .get("/api/dashboard/incidents?page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(incidentsPage.body).toEqual(
+      expect.objectContaining({
+        items: expect.any(Array),
+        page: 1,
+        pageSize: 10,
+        total: expect.any(Number)
+      })
+    );
   });
 
   it("defaults finding and timeline owner to actor on create", async () => {

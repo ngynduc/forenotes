@@ -34,6 +34,7 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <LazyPage Component={DashboardPage} /> },
+      { path: "dashboard", element: <LazyPage Component={DashboardPage} /> },
       { path: "cases", element: <LazyPage Component={CasesPage} /> },
       { path: "findings", element: <LazyPage Component={FindingsPage} /> },
       { path: "timeline", element: <LazyPage Component={TimelinePage} /> },

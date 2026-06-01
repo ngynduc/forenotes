@@ -1318,6 +1318,24 @@ class ApiClient {
   getDashboard = () =>
     this.request<import("@shared/graph-types").DashboardResponse>("/dashboard");
 
+  getDashboardSummary = () =>
+    this.request<{ summary: import("@shared/graph-types").DashboardSummary }>("/dashboard/summary");
+
+  getDashboardCharts = () =>
+    this.request<import("@shared/graph-types").DashboardCharts>("/dashboard/charts");
+
+  getDashboardSla = () =>
+    this.request<import("@shared/graph-types").DashboardSlaResponse>("/dashboard/sla");
+
+  getDashboardActivity = () =>
+    this.request<import("@shared/graph-types").DashboardActivityResponse>("/dashboard/activity");
+
+  getDashboardWorkload = () =>
+    this.request<import("@shared/graph-types").DashboardWorkloadResponse>("/dashboard/workload");
+
+  getDashboardCases = () =>
+    this.request<import("@shared/graph-types").DashboardCasesResponse>("/dashboard/cases");
+
   listNotifications = async () => {
     const payload = await this.request<{ notifications: RawNotificationItem[] }>("/notifications");
     return { notifications: payload.notifications.map(normalizeNotification) };

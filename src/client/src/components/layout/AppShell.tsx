@@ -25,8 +25,8 @@ import {
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
 
-const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; feature?: FeatureKey }> = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; feature?: FeatureKey; teamsOnly?: boolean }> = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, teamsOnly: true },
   { to: "/cases", label: "Cases", icon: Briefcase },
   { to: "/findings", label: "Findings", icon: Search },
   { to: "/timeline", label: "Timeline", icon: Clock },
@@ -50,7 +50,8 @@ export function AppShell() {
   const license = useLicense();
   const unreadNotifications = notificationsData?.notifications.filter((notification) => notification.unseen).length ?? 0;
   const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
-  const visibleNavItems = NAV_ITEMS.filter((item) => !item.feature || license.hasFeature(item.feature));
+  const canAccessDashboard = license.data?.tier === "teams" || license.data?.tier === "enterprise";
+  const visibleNavItems = NAV_ITEMS.filter((item) => (!item.feature || license.hasFeature(item.feature)) && (!item.teamsOnly || canAccessDashboard));
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">

@@ -149,6 +149,7 @@ function randomId() {
 function printUsage() {
   console.log(`Usage:
   npm run license -- issue --customer "Acme Security" --tier teams --seats 10 --expires 2027-05-26
+  npm run license -- issue --customer "Acme Security" --tier teams --seats 10 --expires 2027-05-26 --deploymentId <deployment-id>
   npm run license -- decode FNLIC-v1.payload.signature
 
 Environment:

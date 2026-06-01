@@ -129,17 +129,29 @@ export interface DashboardMetrics {
   criticalIncidents: number;
   unresolvedFindings: number;
   totalTasks: number;
+  openTasks: number;
   overdueTasks: number;
   dueSoonTasks: number;
   unreadNotifications: number;
 }
 
 export interface DashboardSla {
+  attention: number;
   overdueTasks: number;
   dueSoonTasks: number;
+  next24h: number;
+  next72h: number;
+  blockedTasks: number;
   staleIncidents: number;
   agingFindings: number;
   unreadNotifications: number;
+}
+
+export interface DashboardUnread {
+  total: number;
+  mentions: number;
+  caseUpdates: number;
+  taskUpdates: number;
 }
 
 export interface DashboardBreakdown {
@@ -154,29 +166,164 @@ export interface DashboardActivity {
   timeline: number;
 }
 
+export interface DashboardEntityRef {
+  id: string;
+  name: string;
+}
+
+export interface DashboardLinkedEntity extends DashboardEntityRef {
+  type: string;
+}
+
+export interface DashboardTaskItem {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueAt: string | null;
+  updatedAt: string | null;
+  assignee: DashboardEntityRef | null;
+  case: DashboardEntityRef;
+  incident: DashboardEntityRef;
+  linkedEntity?: DashboardLinkedEntity;
+}
+
+export interface DashboardFindingItem {
+  id: string;
+  title: string;
+  status: string;
+  severity: string | null;
+  updatedAt: string | null;
+  case: DashboardEntityRef;
+  incident: DashboardEntityRef;
+}
+
+export interface DashboardIncidentHealth {
+  id: string;
+  name: string;
+  status: string;
+  severity: string | null;
+  case: DashboardEntityRef;
+  openFindings: number;
+  openTasks: number;
+  lastActivityAt: string | null;
+  slaRiskCount: number;
+}
+
+export interface DashboardCaseHealth {
+  id: string;
+  name: string;
+  status: string;
+  activeIncidents: number;
+  openFindings: number;
+  openTasks: number;
+  lastActivityAt: string | null;
+  slaRiskCount: number;
+}
+
 export interface DashboardRecentActivity {
   id: string;
-  kind: "case" | "incident" | "finding" | "task" | "timeline";
-  caseId?: string;
-  incidentId?: string;
-  title: string;
-  detail: string;
+  actor: DashboardEntityRef | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  entityTitle: string;
+  case: DashboardEntityRef | null;
+  incident: DashboardEntityRef | null;
+  summary?: string | null;
   timestamp: string | null;
 }
 
-export interface DashboardResponse {
-  summary: {
-    metrics: DashboardMetrics;
-    sla: DashboardSla;
-    breakdowns: {
-      caseStatus: DashboardBreakdown[];
-      incidentSeverity: DashboardBreakdown[];
-      findingStatus: DashboardBreakdown[];
-      taskStatus: DashboardBreakdown[];
-    };
-    activity: DashboardActivity[];
-    recentActivity: DashboardRecentActivity[];
+export interface DashboardUnreadUpdate {
+  id: string;
+  title: string;
+  eventType: string;
+  entityType: string | null;
+  entityId: string | null;
+  body: string | null;
+  timestamp: string | null;
+}
+
+export interface DashboardWorkloadItem {
+  assignee: DashboardEntityRef;
+  taskCount: number;
+  overdueCount: number;
+  dueSoonCount: number;
+  completedCount: number;
+}
+
+export interface DashboardLabeledValue {
+  label: string;
+  value: number;
+}
+
+export interface DashboardWorkloadChartItem {
+  assignee: string;
+  openTasks: number;
+  overdue: number;
+  dueSoon: number;
+}
+
+export interface DashboardCharts {
+  taskStatusDistribution: DashboardLabeledValue[];
+  slaRiskBreakdown: DashboardLabeledValue[];
+  workloadByAssignee: DashboardWorkloadChartItem[];
+  activityTrend: DashboardLabeledValue[];
+  unreadBreakdown: DashboardLabeledValue[];
+  caseIncidentHealth: DashboardLabeledValue[];
+}
+
+export interface DashboardSummary {
+  scope: "team" | "self";
+  metrics: DashboardMetrics;
+  sla: DashboardSla;
+  unread: DashboardUnread;
+  activeCases: number;
+  activeIncidents: number;
+  openTasks: number;
+  openFindings: number;
+  breakdowns: {
+    caseStatus: DashboardBreakdown[];
+    incidentSeverity: DashboardBreakdown[];
+    findingStatus: DashboardBreakdown[];
+    taskStatus: DashboardBreakdown[];
   };
+  activity: DashboardActivity[];
+  recentActivity: DashboardRecentActivity[];
+  highPriorityTasks: DashboardTaskItem[];
+  recentFindings: DashboardFindingItem[];
+  activeIncidentSnapshot: DashboardIncidentHealth[];
+  unreadUpdates: DashboardUnreadUpdate[];
+}
+
+export interface DashboardSlaResponse {
+  summary: DashboardSla;
+  overdueTasks: DashboardTaskItem[];
+  dueSoonTasks: DashboardTaskItem[];
+  attentionItems: DashboardTaskItem[];
+}
+
+export interface DashboardActivityResponse {
+  activity: DashboardRecentActivity[];
+}
+
+export interface DashboardWorkloadResponse {
+  scope: "team" | "self";
+  workload: DashboardWorkloadItem[];
+}
+
+export interface DashboardCasesResponse {
+  cases: DashboardCaseHealth[];
+  incidents: DashboardIncidentHealth[];
+}
+
+export interface DashboardResponse {
+  summary: DashboardSummary;
+  charts: DashboardCharts;
+  sla: DashboardSlaResponse;
+  activity: DashboardActivityResponse;
+  workload: DashboardWorkloadResponse;
+  cases: DashboardCasesResponse;
 }
 
 export interface SearchResult {

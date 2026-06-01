@@ -263,3 +263,140 @@ No npm dependency needed. Fallback: vendor `marked.min.js` into `src/client/stat
 - All API calls work with cookie auth → existing RBAC unchanged
 - Logout → session destroyed → redirected to login
 - Invalid/expired session → 401 → redirected to login
+
+---
+
+## Follow-up: Dashboard Refinement
+
+The dashboard rebuild is functional, but the UX needs a refinement pass focused on pagination, a chart-first overview, and plan gating.
+
+### Goal
+
+- Make Overview a compact commander view built around charts, trends, and summary metrics.
+- Move detailed lists and tables into their own dashboard tabs.
+- Add pagination to all long dashboard tables.
+- Gate dashboard access to Teams and Enterprise licenses only.
+
+### Scope
+
+| Area | Required change |
+|------|-----------------|
+| Overview | Keep top metric cards, then replace dense lists with chart cards for task status, SLA risk, workload by assignee, activity trend, case/incident health, and unread breakdown. |
+| SLA Watch | Paginate Overdue Tasks, Due Soon Tasks, and Attention Items. |
+| Activity | Paginate the activity table/feed. |
+| Workload | Paginate table-style workload details if present. |
+| Cases / Incidents | Paginate cases and incidents independently. |
+| Licensing | Hide Dashboard navigation for Individual/Pro, block direct route access, and enforce 403 responses on dashboard APIs. |
+| API | Prefer server-side pagination and add or extend chart data APIs. |
+| Table UX | Improve density, truncation, sticky headers for scroll containers, pagination footers, and responsive behavior. |
+
+### Pagination Contract
+
+Use a reusable pagination component such as `DashboardTablePagination`.
+
+```ts
+type DashboardTablePaginationProps = {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+};
+```
+
+- Default page size: `10`
+- Allowed page sizes: `10`, `25`, `50`
+- Footer should show current range, total, previous/next controls, and page count.
+- Prefer response shape:
+
+```ts
+{
+  items: [],
+  page: 1,
+  pageSize: 10,
+  total: 56
+}
+```
+
+Recommended endpoints:
+
+```txt
+GET /api/dashboard/sla?section=overdue&page=1&pageSize=10
+GET /api/dashboard/activity?page=1&pageSize=10
+GET /api/dashboard/cases?page=1&pageSize=10
+GET /api/dashboard/incidents?page=1&pageSize=10
+```
+
+### Chart Data
+
+Add a chart summary endpoint or extend the existing dashboard summary endpoint. Recommended:
+
+```txt
+GET /api/dashboard/charts
+```
+
+Chart data must respect RBAC, license tier, selected scope, and selected date range/timezone if implemented.
+
+Include data for:
+
+- Task status distribution
+- SLA risk breakdown
+- Workload by assignee
+- Activity trend by day
+- Case / incident health
+- Unread breakdown
+
+### License Rules
+
+Dashboard is available only for:
+
+- Teams
+- Enterprise
+
+Dashboard is blocked for:
+
+- Individual Free
+- Pro
+
+Server-side APIs must return:
+
+```json
+{
+  "error": "Dashboard is available on Teams and Enterprise plans."
+}
+```
+
+with HTTP `403` for ineligible tiers. Do not rely on frontend-only gating.
+
+### Acceptance Criteria
+
+1. Individual and Pro users do not see Dashboard navigation, cannot access `/dashboard` directly, and receive no dashboard API data.
+2. Teams and Enterprise users can open Dashboard and see metric cards plus the chart grid.
+3. Overview contains chart cards instead of long task, finding, activity, case, or incident lists.
+4. SLA Watch tables show at most 10 rows by default, with working pagination and page-size changes.
+5. Cases and incidents have independent pagination controls.
+6. Analyst scoping still limits dashboard charts and tables to analyst-accessible data.
+
+### Testing
+
+Add or update tests for:
+
+- Dashboard route hidden and direct route blocked for Individual/Pro.
+- Dashboard API returns `403` for Individual/Pro.
+- Dashboard route available for Teams/Enterprise.
+- Chart endpoint respects RBAC.
+- Paginated endpoints return `items`, `page`, `pageSize`, and `total`.
+- SLA pagination works.
+- Cases/incidents pagination works independently.
+- Overview renders chart cards.
+- Empty chart data renders useful empty states.
+
+Run:
+
+```bash
+npm run lint
+npm run test
+npm run build
+```
+
+Also run agent-browser workflows for license gating, Teams/Enterprise access, chart overview, SLA pagination, Cases/Incidents pagination, and Analyst scoping. Capture screenshots or notes for the final implementation report.
