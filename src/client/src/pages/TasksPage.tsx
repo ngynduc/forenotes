@@ -11,11 +11,9 @@ import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { useUIStore } from "@/stores/ui-store";
 import { ScopeGate } from "@/components/shared/ScopeGate";
-import { LockedFeature } from "@/components/shared/LockedFeature";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
-import { useLicense } from "@/hooks/use-license";
 
 const tableDef = TABLE_DEFINITIONS.tasks;
 
@@ -36,7 +34,6 @@ export default function TasksPage() {
   const openedItemIdRef = useRef<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesTask, setNotesTask] = useState<TaskItem | null>(null);
-  const license = useLicense();
 
   useEffect(() => {
     if (!itemId) {
@@ -59,19 +56,6 @@ export default function TasksPage() {
     nextParams.delete("itemId");
     setSearchParams(nextParams, { replace: true });
   }, [isLoading, itemId, searchParams, setSearchParams, tasks]);
-
-  if (license.isLoading) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Loading license...</p>;
-  }
-
-  if (!license.hasFeature("tasks")) {
-    return (
-      <LockedFeature
-        feature="tasks"
-        description="Upgrade to Teams to assign work, track investigation tasks, and collaborate across users."
-      />
-    );
-  }
 
   if (!incidentId) {
     return <ScopeGate required="incident" />;

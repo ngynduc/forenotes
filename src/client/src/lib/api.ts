@@ -1,6 +1,5 @@
 import type { TimeFilterRequest } from "@/lib/timeFilters";
 import type { IncidentReport, LlmSettingsStatus, PdfTemplate, ReportContext, ReportTemplate } from "@shared/reportTypes";
-import type { LicenseStatusResponse } from "@shared/license";
 
 const BASE = "/api";
 
@@ -1477,17 +1476,6 @@ class ApiClient {
   testLlmSettings = () =>
     this.request<{ ok: boolean; model?: string; source?: "user" | "env"; error?: string }>("/me/llm-settings/test", "POST");
 
-  getLicenseStatus = () =>
-    this.request<LicenseStatusResponse>("/license/status");
-
-  getLicenseFeatures = () =>
-    this.request<{ features: LicenseStatusResponse["features"] }>("/license/features");
-
-  activateLicense = (licenseKey: string) =>
-    this.request<LicenseStatusResponse>("/license/activate", "POST", { licenseKey });
-
-  deactivateLicense = () =>
-    this.request<LicenseStatusResponse>("/license/deactivate", "POST");
 }
 
 export const api = new ApiClient();

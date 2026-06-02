@@ -11,12 +11,10 @@ import { createDashboardRoutes } from "./dashboardRoutes.js";
 import { createUserRoutes } from "./userRoutes.js";
 import { createReportRoutes } from "./reportRoutes.js";
 import { createUploadRoutes } from "./uploadRoutes.js";
-import { createLicenseRoutes } from "./licenseRoutes.js";
 
 export function createRoutes(database: Database) {
   const router = Router();
   router.use("/api/auth", createAuthRoutes(database));
-  router.use("/api/license", createLicenseRoutes(database));
   router.use("/api/uploads", createUploadRoutes(database));
   router.use("/uploads", createUploadRoutes(database));
   router.use("/api/users", createUserRoutes(database));

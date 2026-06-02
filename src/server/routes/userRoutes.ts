@@ -6,7 +6,6 @@ import { asyncHandler } from "../http.js";
 import { createUser, listUsers } from "../services/userService.js";
 import { hashPassword, requireAuth, resetUserPassword } from "../services/authService.js";
 import { requirePermission } from "../permissions/permissionService.js";
-import { requireFeature, requireSeatAvailable } from "../services/licenseService.js";
 import { resetPasswordSchema } from "../schemas/schemas.js";
 import { getRequiredParam } from "./params.js";
 
@@ -34,8 +33,6 @@ export function createUserRoutes(database: Database) {
     asyncHandler(async (request, response) => {
       const actor = await requireAuth(request, database);
       await requirePermission(database, actor, "user:manage");
-      await requireFeature(database, "multi_user");
-      await requireSeatAvailable(database);
       const payload = createUserSchema.parse(request.body);
       const user = await createUser(database, {
         username: payload.username,

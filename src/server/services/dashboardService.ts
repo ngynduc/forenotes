@@ -19,10 +19,8 @@ import type {
   DashboardWorkloadResponse
 } from "../../shared/graph-types.js";
 import type { Database } from "../db/types.js";
-import { AppError } from "../errors.js";
 import { requirePermission } from "../permissions/permissionService.js";
 import type { AuthenticatedUser } from "./authService.js";
-import { getLicenseStatus } from "./licenseService.js";
 
 const DAY_MILLIS = 24 * 60 * 60 * 1000;
 const DUE_SOON_HORIZON_MILLIS = 72 * 60 * 60 * 1000;
@@ -332,11 +330,6 @@ async function loadDashboardDataset(database: Database, user: AuthenticatedUser)
 }
 
 async function requireDashboardRead(database: Database, user: AuthenticatedUser) {
-  const license = await getLicenseStatus(database);
-  if (license.tier !== "teams" && license.tier !== "enterprise") {
-    throw new AppError(403, "Dashboard is available on Teams and Enterprise plans.");
-  }
-
   await requirePermission(database, user, "notification:read");
 }
 

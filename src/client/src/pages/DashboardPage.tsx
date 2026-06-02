@@ -1,9 +1,8 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Activity, BarChart3, BriefcaseBusiness, Clock3, LayoutGrid, ListChecks, LockKeyhole } from "lucide-react";
+import { Activity, BarChart3, BriefcaseBusiness, Clock3, LayoutGrid, ListChecks } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
-import { useLicenseStatus } from "@/hooks/use-license";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { DashboardSummaryCards } from "@/components/dashboard/DashboardSummaryCards";
 import { SlaWatchTab } from "@/components/dashboard/SlaWatchTab";
@@ -24,19 +23,9 @@ const TABS: Array<{ id: DashboardTab; label: string; icon: LucideIcon }> = [
 ];
 
 export default function DashboardPage() {
-  const license = useLicenseStatus();
-  const canAccessDashboard = license.data?.tier === "teams" || license.data?.tier === "enterprise";
-  const { data, isLoading } = useDashboard(canAccessDashboard);
+  const { data, isLoading } = useDashboard(true);
   const { timezone } = useTimezone();
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-
-  if (license.isLoading) {
-    return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Loading dashboard...</p>;
-  }
-
-  if (!canAccessDashboard) {
-    return <LockedDashboard />;
-  }
 
   if (isLoading) {
     return <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">Loading dashboard...</p>;
@@ -123,30 +112,6 @@ function OverviewTab({ data, timezone, onSelectTab }: { data: DashboardResponse;
         <MetricChart title="Unread Breakdown" items={data.charts.unreadBreakdown} onViewDetails={() => onSelectTab("activity")} />
       </div>
     </div>
-  );
-}
-
-function LockedDashboard() {
-  return (
-    <section className="rounded-[8px] border border-[var(--color-border)] bg-white p-6 shadow-sm">
-      <div className="flex max-w-2xl items-start gap-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
-          <LockKeyhole className="h-5 w-5" />
-        </span>
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--color-text)]">Dashboard is available on Teams and Enterprise.</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            Upgrade to monitor SLA, workload, activity, and case health across your team.
-          </p>
-          <a
-            href="/settings"
-            className="mt-4 inline-flex rounded-[6px] border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm font-medium text-[var(--color-text)] hover:bg-[var(--color-surface-subtle)]"
-          >
-            View license settings
-          </a>
-        </div>
-      </div>
-    </section>
   );
 }
 

@@ -5,7 +5,6 @@ import { getAuthenticatedUser } from "../services/authService.js";
 import { createCase, listCases, updateCase } from "../services/caseService.js";
 import { createIncident, listIncidentsForCase } from "../services/incidentService.js";
 import { addCaseMember, listCaseMembers, removeCaseMember, updateCaseMemberRole } from "../services/membershipService.js";
-import { requireFeature } from "../services/licenseService.js";
 import {
   addCaseMemberSchema,
   createCaseSchema,
@@ -31,10 +30,6 @@ export function createCaseRoutes(database: Database) {
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
       const payload = createCaseSchema.parse(request.body);
-      const additionalMembers = (payload.members ?? []).filter((member) => member.userId !== user.id);
-      if (additionalMembers.length > 0) {
-        await requireFeature(database, "case_collaboration");
-      }
       const createdCase = await createCase(database, user, payload);
       response.status(201).json({ case: createdCase });
     })
@@ -64,7 +59,6 @@ export function createCaseRoutes(database: Database) {
     "/:caseId/members",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "case_collaboration");
       const caseId = getRequiredParam(request.params.caseId, "caseId");
       const payload = addCaseMemberSchema.parse(request.body);
       await addCaseMember(database, user, { caseId, ...payload });
@@ -76,7 +70,6 @@ export function createCaseRoutes(database: Database) {
     "/:caseId/members/:memberUserId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "case_collaboration");
       const caseId = getRequiredParam(request.params.caseId, "caseId");
       const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
       await removeCaseMember(database, user, caseId, memberUserId);
@@ -88,7 +81,6 @@ export function createCaseRoutes(database: Database) {
     "/:caseId/members/:memberUserId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "case_collaboration");
       const caseId = getRequiredParam(request.params.caseId, "caseId");
       const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
       const payload = updateCaseMemberSchema.parse(request.body);

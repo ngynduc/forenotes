@@ -9,7 +9,6 @@ import { useIncidents } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
 import { getEntityDefinitions } from "@/config/entity-definitions";
-import { useLicense } from "@/hooks/use-license";
 
 const tableDef = TABLE_DEFINITIONS.cases;
 const incidentTableDef = TABLE_DEFINITIONS.incidents;
@@ -30,7 +29,6 @@ export default function CasesPage() {
   const incidentsQuery = useIncidents();
   const membersQuery = useCaseMembers(selectedCaseId || undefined);
   const usersQuery = useUsers();
-  const license = useLicense();
   const addCaseMember = useAddCaseMember(selectedCaseId || undefined);
   const updateCaseMember = useUpdateCaseMember(selectedCaseId || undefined);
   const removeCaseMember = useRemoveCaseMember(selectedCaseId || undefined);
@@ -49,7 +47,7 @@ export default function CasesPage() {
   const users = usersQuery.data?.users ?? [];
   const memberIds = new Set(members.map((member) => String(member.userId ?? "")));
   const availableUsers = users.filter((user) => !memberIds.has(user.id));
-  const collaborationEnabled = license.hasFeature("case_collaboration");
+  const collaborationEnabled = true;
   const selectedCase = cases.find((entry) => String(entry.id ?? "") === selectedCaseId) ?? null;
   const caseTargetId = searchParams.get("caseId");
   const incidentTargetId = searchParams.get("incidentId");

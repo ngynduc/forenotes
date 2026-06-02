@@ -4,29 +4,12 @@ import { RelationshipGraph } from "@/components/graph/RelationshipGraph";
 import { GraphToolbar } from "@/components/graph/GraphToolbar";
 import { MitreMatrix } from "@/components/mitre/MitreMatrix";
 import { ScopeGate } from "@/components/shared/ScopeGate";
-import { LockedFeature } from "@/components/shared/LockedFeature";
-import { useLicense } from "@/hooks/use-license";
 import { cn } from "@/lib/utils";
 
 export default function GraphPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
   const graphView = useUIStore((s) => s.graphView);
   const setGraphView = useUIStore((s) => s.setGraphView);
-  const license = useLicense();
-
-  if (license.isLoading) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Loading license...</p>;
-  }
-
-  if (!license.hasFeature("graph")) {
-    return (
-      <LockedFeature
-        feature="graph"
-        description="Upgrade to Pro to use the relationship graph, MITRE matrix, and visual investigation links."
-      />
-    );
-  }
-
   if (!incidentId) {
     return <ScopeGate required="incident" />;
   }

@@ -13,7 +13,6 @@ import { addIncidentMember, listIncidentMembers, removeIncidentMember } from "..
 import { createSystem, deleteSystem, listSystems, updateSystem } from "../services/systemService.js";
 import { createAccount, deleteAccount, listAccounts, updateAccount } from "../services/accountService.js";
 import { updateIncident } from "../services/incidentService.js";
-import { requireFeature } from "../services/licenseService.js";
 import { buildIncidentGraph } from "../graph/graphBuilder.js";
 import { buildMitreMatrix } from "../graph/mitreMatrixBuilder.js";
 import { createEntityLink, deleteEntityLink, listEntityLinks } from "../graph/entityLinksRepository.js";
@@ -99,7 +98,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/members",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "case_collaboration");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const payload = addIncidentMemberSchema.parse(request.body);
       await addIncidentMember(database, user, { incidentId, ...payload });
@@ -111,7 +109,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/members/:memberUserId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "case_collaboration");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
       await removeIncidentMember(database, user, incidentId, memberUserId);
@@ -357,7 +354,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       response.json({ tasks: await listTasks(database, user.id, incidentId) });
     })
@@ -367,7 +363,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const payload = createTaskSchema.parse(request.body);
       const task = await createTask(database, user, { incidentId, ...payload });
@@ -391,7 +386,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks/:taskId/links",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       const payload = createTaskLinkSchema.parse(request.body);
@@ -404,7 +398,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks/:taskId/notes",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       response.json(await readTaskNote(database, user, incidentId, taskId));
@@ -415,7 +408,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks/:taskId/notes",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       const payload = taskNoteSchema.parse(request.body);
@@ -428,7 +420,6 @@ export function createIncidentRoutes(database: Database) {
     raw({ type: NOTE_IMAGE_CONTENT_TYPES, limit: "10mb" }),
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       const body = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
@@ -448,7 +439,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks/:taskId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       const payload = updateTaskSchema.parse(request.body);
@@ -461,7 +451,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/tasks/:taskId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "tasks");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const taskId = getRequiredParam(request.params.taskId, "taskId");
       await deleteTask(database, user, incidentId, taskId);
@@ -516,7 +505,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/entity-links",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "graph");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const entityLinks = await listEntityLinks(database, user, incidentId);
       response.json({ entityLinks });
@@ -527,7 +515,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/entity-links",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "graph");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const payload = createEntityLinkSchema.parse(request.body);
       const entityLink = await createEntityLink(database, user, { incidentId, ...payload });
@@ -539,7 +526,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/entity-links/:linkId",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "graph");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const linkId = getRequiredParam(request.params.linkId, "linkId");
       await deleteEntityLink(database, user, incidentId, linkId);
@@ -551,7 +537,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/graph",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "graph");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const query = graphQuerySchema.parse(request.query);
       const graph = await buildIncidentGraph(database, user, incidentId, {
@@ -571,7 +556,6 @@ export function createIncidentRoutes(database: Database) {
     "/:incidentId/mitre-matrix",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      await requireFeature(database, "graph");
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const query = mitreMatrixQuerySchema.parse(request.query);
       const matrix = await buildMitreMatrix(database, user, incidentId, query);
