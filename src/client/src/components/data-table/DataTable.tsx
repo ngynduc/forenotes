@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -12,6 +12,12 @@ interface DataTableProps {
   onRowClick?: (row: Record<string, unknown>) => void;
   onRowDoubleClick?: (row: Record<string, unknown>, column: ColumnDef) => void;
   renderRowActions?: (row: Record<string, unknown>) => React.ReactNode;
+  renderTopRows?: (columnCount: number) => ReactNode;
+  renderCellContent?: (
+    row: Record<string, unknown>,
+    column: ColumnDef,
+    defaultContent: ReactNode
+  ) => ReactNode;
   selectedRowId?: string | null;
   searchable?: boolean;
   pageSize?: number;
@@ -32,6 +38,8 @@ export function DataTable({
   onRowClick,
   onRowDoubleClick,
   renderRowActions,
+  renderTopRows,
+  renderCellContent,
   selectedRowId,
   searchable = true,
   pageSize = 25,
@@ -63,6 +71,9 @@ export function DataTable({
   const totalPages = Math.max(1, Math.ceil(sorted.length / rowsPerPage));
   const currentPage = Math.min(page, totalPages);
   const paged = sorted.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const columnCount = columns.length + (renderRowActions ? 1 : 0);
+  const topRows = renderTopRows?.(columnCount);
+  const hasTableRows = paged.length > 0 || Boolean(topRows);
 
   useEffect(() => {
     setRowsPerPage(pageSize);
@@ -99,7 +110,7 @@ export function DataTable({
         </div>
       )}
 
-      {paged.length === 0 ? (
+      {!hasTableRows ? (
         <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">{emptyLabel}</p>
       ) : (
         <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
@@ -122,6 +133,7 @@ export function DataTable({
               </tr>
             </thead>
             <tbody>
+              {topRows}
               {paged.map((row, i) => (
                 <tr
                   key={String(row.id ?? i)}
@@ -142,7 +154,7 @@ export function DataTable({
                       )}
                       onDoubleClick={() => col.editable && onRowDoubleClick?.(row, col)}
                     >
-                      {renderCell(col, row)}
+                      {renderCellContent?.(row, col, renderCell(col, row)) ?? renderCell(col, row)}
                     </td>
                   ))}
                   {renderRowActions && (

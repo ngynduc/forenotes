@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { DataTable } from "@/components/data-table/DataTable";
+import { InlineEntityTable, type InlineTableField } from "@/components/data-table/InlineEntityTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { TimeFilterBar } from "@/components/filters/TimeFilterBar";
 import { Button } from "@/components/ui/Button";
-import { useFindings } from "@/hooks/use-entities";
+import { usePermissions } from "@/hooks/use-auth";
+import { useCreateFinding, useFindings, useUpdateFinding } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
 import { ScopeGate } from "@/components/shared/ScopeGate";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
-import { getEntityDefinitions } from "@/config/entity-definitions";
+import { getEntityDefinitions, OPTION_SETS } from "@/config/entity-definitions";
+import type { CreateFindingInput } from "@/lib/api";
 import { buildMemberNameMap, withMemberDisplayNames } from "@/lib/memberDisplay";
 import { createTimeFilterState, normalizeTimeFilterState, toTimeFilterRequest } from "@/lib/timeFilters";
 
@@ -23,11 +25,14 @@ const timeFieldOptions = [
 export default function FindingsPage() {
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
   const { timezone } = useTimezone();
+  const { canAccessEntity } = usePermissions();
   const [timeFilter, setTimeFilter] = useState(() => createTimeFilterState("updatedAt", timezone));
   const appliedFilter = normalizeTimeFilterState(timeFilter, timezone);
   const filterRequest = toTimeFilterRequest(appliedFilter);
   const { data, isLoading } = useFindings(filterRequest);
   const { data: membersData } = useIncidentMembers(incidentId);
+  const createFinding = useCreateFinding();
+  const updateFinding = useUpdateFinding();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
@@ -36,6 +41,15 @@ export default function FindingsPage() {
   const findings = withMemberDisplayNames((data?.findings ?? []) as unknown as Record<string, unknown>[], memberNames);
   const itemId = searchParams.get("itemId");
   const openedItemIdRef = useRef<string | null>(null);
+  const canCreate = canAccessEntity("finding", "create");
+  const canUpdate = canAccessEntity("finding", "update");
+  const inlineFields: InlineTableField[] = [
+    { key: "title", label: "Title", type: "text", required: true, placeholder: "Finding title" },
+    { key: "status", label: "Status", type: "select", required: true, options: [...OPTION_SETS.findingStatus], defaultValue: "draft" },
+    { key: "severity", label: "Severity", type: "select", options: ["", ...OPTION_SETS.findingSeverity], defaultValue: "" },
+    { key: "confidence", label: "Confidence", type: "select", options: ["", ...OPTION_SETS.confidence], defaultValue: "" },
+    { key: "description", label: "Summary", type: "text", placeholder: "Short summary" },
+  ];
 
   useEffect(() => {
     setTimeFilter((current) => normalizeTimeFilterState(current, timezone));
@@ -74,9 +88,9 @@ export default function FindingsPage() {
           <h2 className="text-lg font-semibold">{tableDef.title}</h2>
           <p className="text-sm text-[var(--color-text-muted)]">{tableDef.subtitle}</p>
         </div>
-        {tableDef.createLabel && (
+        {tableDef.createLabel && canCreate && (
           <Button onClick={() => { setEditItem(null); setModalOpen(true); }}>
-            {tableDef.createLabel}
+            Full editor
           </Button>
         )}
       </div>
@@ -92,11 +106,22 @@ export default function FindingsPage() {
             value={appliedFilter}
             onChange={setTimeFilter}
           />
-          <DataTable
+          <InlineEntityTable
             columns={tableDef.columns}
             data={findings}
             emptyLabel={tableDef.emptyLabel}
-            onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
+            fields={inlineFields}
+            canCreate={canCreate}
+            canUpdate={canUpdate}
+            createLabel={tableDef.createLabel ?? "Add row"}
+            createRecord={async (payload) => {
+              const response = await createFinding.mutateAsync(toCreateFindingInput(payload));
+              return response.finding as unknown as Record<string, unknown>;
+            }}
+            updateRecord={async (row, payload) => {
+              await updateFinding.mutateAsync({ findingId: String(row.id ?? ""), data: payload });
+            }}
+            onOpenDetails={(row) => { setEditItem(row); setModalOpen(true); }}
           />
         </>
       )}
@@ -109,4 +134,14 @@ export default function FindingsPage() {
       />
     </div>
   );
+}
+
+function toCreateFindingInput(payload: Record<string, unknown>): CreateFindingInput {
+  return {
+    title: String(payload.title ?? ""),
+    status: String(payload.status ?? "draft"),
+    description: typeof payload.description === "string" ? payload.description : undefined,
+    severity: typeof payload.severity === "string" ? payload.severity : undefined,
+    confidence: typeof payload.confidence === "string" ? payload.confidence : undefined,
+  };
 }
