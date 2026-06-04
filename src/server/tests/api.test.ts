@@ -1,0 +1,2370 @@
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import request from "supertest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { newDb } from "pg-mem";
+import { createApp } from "../app.js";
+import { runMigrations } from "../db/setup.js";
+import { hashPassword } from "../services/authService.js";
+import { createNotification, subscribeToNotificationEvents } from "../services/notificationService.js";
+
+async function createTestApp() {
+  const db = newDb();
+  const adapter = db.adapters.createPg();
+  const pool = new adapter.Pool();
+
+  await runMigrations(pool);
+
+  return {
+    app: createApp(pool),
+    pool
+  };
+}
+
+async function insertUser(
+  pool: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+  input: {
+    id: string;
+    email: string;
+    displayName: string;
+    globalRole: string;
+    username?: string;
+    passwordHash?: string | null;
+    status?: string;
+  }
+) {
+  await pool.query(
+    `
+      insert into users (id, username, email, display_name, global_role, status, password_hash)
+      values ($1, $2, $3, $4, $5, $6, $7)
+    `,
+    [
+      input.id,
+      input.username ?? input.email.split("@")[0],
+      input.email,
+      input.displayName,
+      input.globalRole,
+      input.status ?? "active",
+      input.passwordHash ?? null
+    ]
+  );
+}
+
+async function addCaseMember(pool: { query: (text: string, params?: unknown[]) => Promise<unknown> }, caseId: string, userId: string, addedByUserId: string) {
+  await pool.query(
+    `
+      insert into case_members (case_id, user_id, case_role, added_by_user_id)
+      values ($1, $2, 'member', $3)
+    `,
+    [caseId, userId, addedByUserId]
+  );
+}
+
+async function addIncidentMember(
+  pool: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+  incidentId: string,
+  userId: string,
+  addedByUserId: string
+) {
+  await pool.query(
+    `
+      insert into incident_members (incident_id, user_id, incident_role, added_by_user_id)
+      values ($1, $2, 'analyst', $3)
+      on conflict do nothing
+    `,
+    [incidentId, userId, addedByUserId]
+  );
+}
+
+describe("Forenotes API", () => {
+  let app: ReturnType<typeof createApp>;
+  let pool: Awaited<ReturnType<typeof createTestApp>>["pool"];
+  let adminId: string;
+  let commanderId: string;
+  let analystId: string;
+  let analystTwoId: string;
+  let dataDir: string;
+
+  beforeEach(async () => {
+    dataDir = mkdtempSync(path.join(tmpdir(), "forenotes-test-"));
+    process.env.FORENOTES_DATA_DIR = dataDir;
+    const setup = await createTestApp();
+    app = setup.app;
+    pool = setup.pool;
+    commanderId = randomUUID();
+    analystId = randomUUID();
+    analystTwoId = randomUUID();
+
+    const adminResult = (await pool.query("select id from users where global_role = 'admin' limit 1")) as { rows: Array<{ id: string }> };
+    adminId = adminResult.rows[0].id;
+
+    await insertUser(pool, {
+      id: commanderId,
+      email: "commander@example.com",
+      displayName: "Commander",
+      globalRole: "commander"
+    });
+
+    await insertUser(pool, {
+      id: analystId,
+      email: "analyst@example.com",
+      displayName: "Analyst",
+      globalRole: "analyst"
+    });
+
+    await insertUser(pool, {
+      id: analystTwoId,
+      email: "analyst2@example.com",
+      displayName: "Analyst Two",
+      globalRole: "analyst"
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.FORENOTES_DATA_DIR;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("emits live notification events only to the recipient", async () => {
+    const analystEvents: unknown[] = [];
+    const analystTwoEvents: unknown[] = [];
+    const unsubscribeAnalyst = subscribeToNotificationEvents(analystId, (event) => analystEvents.push(event));
+    const unsubscribeAnalystTwo = subscribeToNotificationEvents(analystTwoId, (event) => analystTwoEvents.push(event));
+
+    try {
+      await createNotification(pool, {
+        recipientUserId: analystId,
+        actorUserId: commanderId,
+        eventType: "task.assigned",
+        title: "Task assigned",
+        body: "Review the suspicious host",
+        entityType: "task",
+        entityId: randomUUID()
+      });
+    } finally {
+      unsubscribeAnalyst();
+      unsubscribeAnalystTwo();
+    }
+
+    expect(analystEvents).toHaveLength(1);
+    expect(analystTwoEvents).toHaveLength(0);
+    expect(analystEvents[0]).toMatchObject({
+      recipientUserId: analystId,
+      notification: {
+        title: "Task assigned",
+        event_type: "task.assigned",
+        unseen: true
+      }
+    });
+  });
+
+  it("requires authentication", async () => {
+    const response = await request(app).get("/api/auth/me");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
+  });
+
+  it("hydrates authenticated user permissions", async () => {
+    const response = await request(app).get("/api/auth/me").set("x-user-id", commanderId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.user.globalRole).toBe("commander");
+    expect(response.body.permissions).toContain("case:create");
+    expect(response.body.permissions).toContain("audit:read");
+  });
+
+  it("ignores x-user-id header authentication in production mode", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    const response = await request(app).get("/api/auth/me").set("x-user-id", commanderId);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
+
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it("logs in with username and password and hydrates /me from the session cookie", async () => {
+    const leadId = randomUUID();
+    await insertUser(pool, {
+      id: leadId,
+      username: "lead",
+      email: "lead@example.com",
+      displayName: "Lead",
+      globalRole: "commander",
+      passwordHash: await hashPassword("lead123")
+    });
+
+    const agent = request.agent(app);
+    const loginResponse = await agent.post("/api/auth/login").send({
+      username: "lead",
+      password: "lead123"
+    });
+
+    expect(loginResponse.status).toBe(200);
+    expect(loginResponse.headers["set-cookie"]?.[0]).toContain("forenotes_session=");
+    expect(loginResponse.headers["set-cookie"]?.[0]).not.toContain("Secure");
+    expect(loginResponse.body.user).toMatchObject({
+      id: leadId,
+      username: "lead",
+      displayName: "Lead",
+      globalRole: "commander"
+    });
+    expect(loginResponse.body.user.passwordHash).toBeUndefined();
+
+    const meResponse = await agent.get("/api/auth/me");
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.user.id).toBe(leadId);
+    expect(meResponse.body.permissions).toContain("finding:create");
+  });
+
+  it("can opt into secure session cookies", async () => {
+    const previous = process.env.SECURE_SESSION_COOKIES;
+    process.env.SECURE_SESSION_COOKIES = "true";
+    vi.resetModules();
+
+    const { setSessionCookie } = await import("../services/authService.js");
+
+    const response = {
+      cookie: vi.fn()
+    } as any;
+
+    setSessionCookie(response, randomUUID(), new Date("2026-05-24T00:00:00.000Z"));
+
+    expect(response.cookie).toHaveBeenCalledWith(
+      "forenotes_session",
+      expect.any(String),
+      expect.objectContaining({ secure: true })
+    );
+
+    if (previous === undefined) {
+      delete process.env.SECURE_SESSION_COOKIES;
+    } else {
+      process.env.SECURE_SESSION_COOKIES = previous;
+    }
+    vi.resetModules();
+  });
+
+  it("rejects login with a wrong password", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "lead",
+      email: "lead-login-fail@example.com",
+      displayName: "Lead",
+      globalRole: "commander",
+      passwordHash: await hashPassword("lead123")
+    });
+
+    const response = await request(app).post("/api/auth/login").send({
+      username: "lead",
+      password: "wrong-password"
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Invalid username or password.");
+  });
+
+  it("rejects disabled users during login", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "disabled",
+      email: "disabled@example.com",
+      displayName: "Disabled User",
+      globalRole: "analyst",
+      status: "disabled",
+      passwordHash: await hashPassword("disabled123")
+    });
+
+    const response = await request(app).post("/api/auth/login").send({
+      username: "disabled",
+      password: "disabled123"
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Your account is disabled.");
+  });
+
+  it("clears the session on logout", async () => {
+    await insertUser(pool, {
+      id: randomUUID(),
+      username: "logout",
+      email: "logout@example.com",
+      displayName: "Logout User",
+      globalRole: "analyst",
+      passwordHash: await hashPassword("logout123")
+    });
+
+    const agent = request.agent(app);
+    expect((await agent.post("/api/auth/login").send({ username: "logout", password: "logout123" })).status).toBe(200);
+
+    const logoutResponse = await agent.post("/api/auth/logout");
+    expect(logoutResponse.status).toBe(204);
+    expect(logoutResponse.headers["set-cookie"]?.[0]).toContain("forenotes_session=");
+
+    const meResponse = await agent.get("/api/auth/me");
+    expect(meResponse.status).toBe(401);
+    expect(meResponse.body.error).toBe("Authentication required");
+  });
+
+  it("rejects unauthenticated protected API requests", async () => {
+    const response = await request(app).get("/api/cases");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("Authentication required");
+  });
+
+  it("restricts user listing to user managers", async () => {
+    const analystResponse = await request(app).get("/api/users").set("x-user-id", analystId);
+    expect(analystResponse.status).toBe(403);
+    expect(analystResponse.body.error).toBe("Missing permission: user:manage");
+
+    const adminResponse = await request(app).get("/api/users").set("x-user-id", adminId);
+    expect(adminResponse.status).toBe(200);
+    expect(adminResponse.body.users.map((user: { id: string }) => user.id)).toContain(adminId);
+  });
+
+  it("creates a case and incident for a permitted user", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case One",
+        clientName: "Acme",
+        status: "open"
+      });
+
+    expect(caseResponse.status).toBe(201);
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident One",
+        status: "open",
+        severity: "high"
+      });
+
+    expect(incidentResponse.status).toBe(201);
+    expect(incidentResponse.body.incident.case_id).toBe(caseId);
+  });
+
+  it("accepts normalized create payloads used by the React entity forms", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "React Case",
+        clientName: "Acme",
+        startDate: "2026-05-20T00:00:00.000Z",
+        endDate: "2026-05-21T00:00:00.000Z",
+        status: "open"
+      });
+
+    expect(caseResponse.status).toBe(201);
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "React Incident",
+        status: "open",
+        severity: "high"
+      });
+
+    expect(incidentResponse.status).toBe(201);
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "triage"
+      });
+
+    expect(customTagResponse.status).toBe(201);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Suspicious child process",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "PowerShell execution",
+        eventTime: "2026-05-20T10:15:00.000Z"
+      });
+
+    expect(timelineResponse.status).toBe(201);
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/indicators`)
+      .set("x-user-id", commanderId)
+      .send({
+        indicatorType: "ip",
+        value: "10.0.0.5",
+        firstSeenAt: "2026-05-20T10:15:00.000Z",
+        lastSeenAt: "2026-05-20T11:15:00.000Z"
+      });
+
+    expect(indicatorResponse.status).toBe(201);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Collect triage artifacts",
+        status: "todo",
+        priority: "medium",
+        ownerUserId: commanderId,
+        dueAt: "2026-05-21T09:00:00.000Z"
+      });
+
+    expect(taskResponse.status).toBe(201);
+
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Process hunt",
+        language: "spl",
+        queryBody: "index=main powershell.exe"
+      });
+
+    expect(queryResponse.status).toBe(201);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", commanderId)
+      .send({
+        hostname: "host-01"
+      });
+
+    expect(systemResponse.status).toBe(201);
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", commanderId)
+      .send({
+        username: "svc-admin"
+      });
+
+    expect(accountResponse.status).toBe(201);
+  });
+
+  it("filters timeline events by UTC ISO ranges without changing stored timestamps", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Filter Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Filter Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Before local day",
+        eventTime: "2026-05-20T16:59:59.999Z"
+      });
+
+    const matchingEventResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Inside local day",
+        eventTime: "2026-05-20T17:00:00.000Z"
+      });
+    const matchingEventId = matchingEventResponse.body.timelineEvent.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "After local day",
+        eventTime: "2026-05-21T17:00:00.000Z"
+      });
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .query({
+        field: "eventTime",
+        start: "2026-05-20T17:00:00.000Z",
+        end: "2026-05-21T16:59:59.999Z"
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.timelineEvents).toHaveLength(1);
+    expect(response.body.timelineEvents[0].id).toBe(matchingEventId);
+    expect(response.body.timelineEvents[0].event_time).toBe("2026-05-20T17:00:00.000Z");
+  });
+
+  it("rejects invalid UTC time ranges for filtered finding reads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Finding Filter Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Finding Filter Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Filtered finding",
+        status: "draft"
+      });
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .query({
+        field: "createdAt",
+        start: "2026-05-21T00:00:00.000Z",
+        end: "2026-05-20T00:00:00.000Z"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("Validation failed");
+  });
+
+  it("rejects unauthorized case creation with an explicit permission error", async () => {
+    const response = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", analystId)
+      .send({
+        caseName: "Analyst Case",
+        clientName: "Acme",
+        status: "open"
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Missing permission: case:create");
+  });
+
+  it("blocks non-member access to incident data", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Private Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Private Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const response = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystTwoId);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("Incident not found");
+  });
+
+  it("blocks cross-incident evidence linking", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Scope Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Incident B",
+        status: "open",
+        severity: "high"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Credential theft",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/indicators`)
+      .set("x-user-id", analystId)
+      .send({
+        indicatorType: "domain",
+        value: "evil.example"
+      });
+    const indicatorId = indicatorResponse.body.indicator.id as string;
+
+    const linkResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/findings/${findingId}/evidence-links`)
+      .set("x-user-id", analystId)
+      .send({
+        evidenceType: "indicator",
+        evidenceId: indicatorId
+      });
+
+    expect(linkResponse.status).toBe(409);
+    expect(linkResponse.body.error).toBe("Cross-incident evidence links are not allowed");
+  });
+
+  it("creates notifications for other incident members when a finding is created", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Notify Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Notify Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Suspicious logon",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+    expect(findingResponse.body.finding.owner_user_id).toBe(commanderId);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(notificationsResponse.body.notifications).toHaveLength(1);
+    expect(notificationsResponse.body.notifications[0].event_type).toBe("finding.created");
+    expect(notificationsResponse.body.notifications[0].body).toBe("Case: Notify Case; Incident: Notify Incident");
+    expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
+  });
+
+  it("creates notifications for other incident members when a timeline event is created", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Timeline Notify Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Timeline Notify Incident", status: "open", severity: "medium" });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({ title: "Initial compromise", eventTime: "2026-05-22T10:00:00.000Z" });
+
+    expect(timelineResponse.status).toBe(201);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "timeline.created" &&
+          notification.body === "Case: Timeline Notify Case; Incident: Timeline Notify Incident"
+      )
+    ).toBe(true);
+  });
+
+  it("returns permission-scoped dashboard metrics and recent activity", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Dashboard Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Dashboard Incident",
+        status: "open",
+        severity: "critical"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Privilege escalation",
+        status: "confirmed",
+        severity: "high"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Contain affected host",
+        status: "todo",
+        priority: "critical",
+        assigneeUserId: analystId,
+        dueAt: new Date(Date.now() - 60 * 60 * 1000).toISOString()
+      });
+    const taskId = taskResponse.body.task.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Initial access confirmed",
+        eventTime: new Date().toISOString(),
+        source: "EDR"
+      });
+
+    await pool.query("update incidents set updated_at = now() - interval '4 days' where id = $1", [incidentId]);
+    await pool.query("update findings set created_at = now() - interval '9 days' where id = $1", [findingId]);
+    await pool.query("update tasks set due_at = now() - interval '2 hours' where id = $1", [taskId]);
+
+    const hiddenCaseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Commander Only",
+        clientName: "Private",
+        status: "open"
+      });
+    const hiddenCaseId = hiddenCaseResponse.body.case.id as string;
+
+    const hiddenIncidentResponse = await request(app)
+      .post(`/api/cases/${hiddenCaseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Hidden Incident",
+        status: "open",
+        severity: "high"
+      });
+    const hiddenIncidentId = hiddenIncidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${hiddenIncidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Hidden finding",
+        status: "confirmed"
+      });
+
+    const response = await request(app)
+      .get("/api/dashboard")
+      .set("x-user-id", analystId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.metrics.totalCases).toBe(1);
+    expect(response.body.summary.metrics.openIncidents).toBe(1);
+    expect(response.body.summary.metrics.unresolvedFindings).toBe(1);
+    expect(response.body.summary.metrics.overdueTasks).toBe(1);
+    expect(response.body.summary.metrics.unreadNotifications).toBe(3);
+    expect(response.body.summary.sla.staleIncidents).toBe(1);
+    expect(response.body.summary.sla.agingFindings).toBe(1);
+    expect(response.body.summary.unread.taskUpdates).toBe(1);
+    expect(response.body.summary.breakdowns.incidentSeverity).toEqual([
+      { value: "critical", count: 1 }
+    ]);
+    expect(response.body.summary.breakdowns.taskStatus).toEqual([
+      { value: "todo", count: 1 }
+    ]);
+    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Hidden finding")).toBe(false);
+    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Contain affected host")).toBe(true);
+  expect(response.body.summary.activity).toHaveLength(7);
+    expect(response.body.charts.taskStatusDistribution).toEqual([
+      { label: "todo", value: 1 }
+    ]);
+    expect(response.body.charts.slaRiskBreakdown).toEqual(
+      expect.arrayContaining([
+        { label: "Overdue", value: 1 },
+        { label: "Due Soon", value: 0 }
+      ])
+    );
+  });
+
+  it("returns empty dashboard data for users without case membership", async () => {
+    const response = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", analystId);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.metrics.totalCases).toBe(0);
+    expect(response.body.summary.metrics.openTasks).toBe(0);
+    expect(response.body.summary.recentActivity).toEqual([]);
+    expect(response.body.summary.highPriorityTasks).toEqual([]);
+  });
+
+  it("returns dashboard chart data", async () => {
+    const response = await request(app)
+      .get("/api/dashboard/charts")
+      .set("x-user-id", commanderId);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        taskStatusDistribution: expect.any(Array),
+        slaRiskBreakdown: expect.any(Array),
+        workloadByAssignee: expect.any(Array),
+        activityTrend: expect.any(Array),
+        unreadBreakdown: expect.any(Array),
+        caseIncidentHealth: expect.any(Array)
+      })
+    );
+  });
+
+  it("scopes dashboard summary, SLA, and workload by role", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Scoped Dashboard Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Scoped Dashboard Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Analyst overdue task",
+        status: "todo",
+        priority: "critical",
+        assigneeUserId: analystId,
+        dueAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+      });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Other analyst overdue task",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystTwoId,
+        dueAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+      });
+
+    const analystSummary = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", analystId);
+    const commanderSummary = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", commanderId);
+
+    expect(analystSummary.status).toBe(200);
+    expect(commanderSummary.status).toBe(200);
+    expect(analystSummary.body.summary.scope).toBe("self");
+    expect(commanderSummary.body.summary.scope).toBe("team");
+    expect(analystSummary.body.summary.metrics.overdueTasks).toBe(1);
+    expect(commanderSummary.body.summary.metrics.overdueTasks).toBe(2);
+
+    const analystSla = await request(app)
+      .get("/api/dashboard/sla")
+      .set("x-user-id", analystId);
+    const commanderSla = await request(app)
+      .get("/api/dashboard/sla")
+      .set("x-user-id", commanderId);
+
+    expect(analystSla.body.overdueTasks.map((task: { title: string }) => task.title)).toEqual(["Analyst overdue task"]);
+    expect(commanderSla.body.overdueTasks.map((task: { title: string }) => task.title).sort()).toEqual([
+      "Analyst overdue task",
+      "Other analyst overdue task"
+    ]);
+
+    const analystWorkload = await request(app)
+      .get("/api/dashboard/workload")
+      .set("x-user-id", analystId);
+    const commanderWorkload = await request(app)
+      .get("/api/dashboard/workload")
+      .set("x-user-id", commanderId);
+
+    expect(analystWorkload.body.scope).toBe("self");
+    expect(analystWorkload.body.workload).toEqual([
+      expect.objectContaining({
+        assignee: expect.objectContaining({ id: analystId, name: "Analyst" }),
+        taskCount: 1,
+        overdueCount: 1
+      })
+    ]);
+    expect(commanderWorkload.body.scope).toBe("team");
+    expect(commanderWorkload.body.workload.map((row: { assignee: { name: string } }) => row.assignee.name).sort()).toEqual([
+      "Analyst",
+      "Analyst Two"
+    ]);
+  });
+
+  it("returns paginated dashboard table payloads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Paginated Dashboard Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Paginated Dashboard Incident", status: "open", severity: "high" });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    for (let index = 0; index < 12; index += 1) {
+      await request(app)
+        .post(`/api/incidents/${incidentId}/tasks`)
+        .set("x-user-id", commanderId)
+        .send({
+          title: `Overdue task ${index}`,
+          status: "todo",
+          priority: "high",
+          assigneeUserId: analystId,
+          dueAt: new Date(Date.now() - (index + 1) * 60 * 60 * 1000).toISOString()
+        });
+    }
+
+    const slaPage = await request(app)
+      .get("/api/dashboard/sla?section=overdue&page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(slaPage.status).toBe(200);
+    expect(slaPage.body.items).toHaveLength(10);
+    expect(slaPage.body.page).toBe(1);
+    expect(slaPage.body.pageSize).toBe(10);
+    expect(slaPage.body.total).toBe(12);
+
+    const secondSlaPage = await request(app)
+      .get("/api/dashboard/sla?section=overdue&page=2&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(secondSlaPage.body.items).toHaveLength(2);
+
+    const casesPage = await request(app)
+      .get("/api/dashboard/cases?page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(casesPage.body).toEqual(
+      expect.objectContaining({
+        items: expect.any(Array),
+        page: 1,
+        pageSize: 10,
+        total: expect.any(Number)
+      })
+    );
+
+    const incidentsPage = await request(app)
+      .get("/api/dashboard/incidents?page=1&pageSize=10")
+      .set("x-user-id", commanderId);
+    expect(incidentsPage.body).toEqual(
+      expect.objectContaining({
+        items: expect.any(Array),
+        page: 1,
+        pageSize: 10,
+        total: expect.any(Number)
+      })
+    );
+  });
+
+  it("defaults finding and timeline owner to actor on create", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Owner Default Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Owner Default Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Default finding owner",
+        status: "draft"
+      });
+
+    expect(findingResponse.status).toBe(201);
+    expect(findingResponse.body.finding.owner_user_id).toBe(analystId);
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Default timeline owner",
+        eventTime: new Date().toISOString()
+      });
+
+    expect(timelineResponse.status).toBe(201);
+    expect(timelineResponse.body.timelineEvent.owner_user_id).toBe(analystId);
+  });
+
+  it("stores timeline system/account relationships and derives graph edges from them", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Link Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Link Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "WIN-042",
+        ipAddress: "10.0.0.42"
+      });
+    const systemId = systemResponse.body.system.id as string;
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", analystId)
+      .send({
+        username: "svc_powershell",
+        domain: "ACME"
+      });
+    const accountId = accountResponse.body.account.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "PowerShell launched",
+        eventTime: "2026-05-18T10:42:00.000Z",
+        systemId,
+        accountId
+      });
+
+    expect(timelineResponse.status).toBe(201);
+    expect(timelineResponse.body.timelineEvent.system_id).toBe(systemId);
+    expect(timelineResponse.body.timelineEvent.account_id).toBe(accountId);
+
+    const graphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?mode=timeline`)
+      .set("x-user-id", analystId);
+
+    expect(graphResponse.status).toBe(200);
+    expect(graphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "observed_on", derived: true, sourceDescription: "Derived from timeline.systemId" }),
+        expect.objectContaining({ type: "used_account", derived: true, sourceDescription: "Derived from timeline.accountId" })
+      ])
+    );
+  });
+
+  it("blocks cross-incident timeline system/account relationships", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Timeline Scope Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Scope Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Timeline Scope Incident B",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "WIN-B",
+        ipAddress: "10.0.0.99"
+      });
+    const systemId = systemResponse.body.system.id as string;
+
+    const crossIncidentCreateResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Cross incident timeline relationship",
+        eventTime: "2026-05-18T10:42:00.000Z",
+        systemId
+      });
+
+    expect(crossIncidentCreateResponse.status).toBe(409);
+    expect(crossIncidentCreateResponse.body.error).toBe("Timeline event system must belong to the same incident");
+  });
+
+  it("blocks owner changes for findings and timeline events", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Owner Immutable Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Owner Immutable Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Immutable finding owner",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const findingPatchResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/findings/${findingId}`)
+      .set("x-user-id", analystId)
+      .send({
+        ownerUserId: analystTwoId
+      });
+
+    expect(findingPatchResponse.status).toBe(400);
+    expect(findingPatchResponse.body.error).toBe("Finding owner cannot be changed");
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Immutable timeline owner",
+        eventTime: new Date().toISOString()
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const timelinePatchResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}`)
+      .set("x-user-id", analystId)
+      .send({
+        ownerUserId: analystTwoId
+      });
+
+    expect(timelinePatchResponse.status).toBe(400);
+    expect(timelinePatchResponse.body.error).toBe("Timeline event owner cannot be changed");
+  });
+
+  it("rejects non-member owners and non-owner query edits", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({ caseName: "Owner Guard Case", status: "open" });
+    const caseId = caseResponse.body.case.id as string;
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({ name: "Owner Guard Incident", status: "open", severity: "medium" });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    for (const [path, body] of [
+      [`/api/incidents/${incidentId}/findings`, { title: "Bad owner finding", status: "draft", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/timeline-events`, { title: "Bad owner timeline", eventTime: "2026-05-22T10:00:00.000Z", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/tasks`, { title: "Bad owner task", status: "todo", priority: "medium", ownerUserId: analystTwoId }],
+      [`/api/incidents/${incidentId}/queries`, { name: "Bad owner query", language: "spl", queryBody: "index=main", ownerUserId: analystTwoId }]
+    ] as const) {
+      const response = await request(app).post(path).set("x-user-id", commanderId).send(body);
+      expect(response.status).toBe(404);
+    }
+
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({ name: "Owned query", language: "spl", queryBody: "index=main" });
+    expect(queryResponse.status).toBe(201);
+    const queryId = queryResponse.body.query.id as string;
+
+    const forbiddenEdit = await request(app)
+      .patch(`/api/incidents/${incidentId}/queries/${queryId}`)
+      .set("x-user-id", analystTwoId)
+      .send({ description: "takeover" });
+    expect(forbiddenEdit.status).toBe(403);
+
+    const elevatedEdit = await request(app)
+      .patch(`/api/incidents/${incidentId}/queries/${queryId}`)
+      .set("x-user-id", commanderId)
+      .send({ description: "reviewed" });
+    expect(elevatedEdit.status).toBe(200);
+    expect(elevatedEdit.body.query.description).toBe("reviewed");
+  });
+
+  it("creates task assignment notifications and blocks cross-incident task links", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Task Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentAResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Task Incident A",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentAId = incidentAResponse.body.incident.id as string;
+
+    const incidentBResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Task Incident B",
+        status: "open",
+        severity: "high"
+      });
+    const incidentBId = incidentBResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentAId, analystId, commanderId);
+    await addIncidentMember(pool, incidentBId, analystId, commanderId);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Collect triage evidence",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystId
+      });
+
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const indicatorResponse = await request(app)
+      .post(`/api/incidents/${incidentBId}/indicators`)
+      .set("x-user-id", analystId)
+      .send({
+        indicatorType: "url",
+        value: "https://bad.example/path"
+      });
+    const indicatorId = indicatorResponse.body.indicator.id as string;
+
+    const linkResponse = await request(app)
+      .post(`/api/incidents/${incidentAId}/tasks/${taskId}/links`)
+      .set("x-user-id", commanderId)
+      .send({
+        entityType: "indicator",
+        entityId: indicatorId
+      });
+
+    expect(linkResponse.status).toBe(409);
+    expect(linkResponse.body.error).toBe("Cross-incident task links are not allowed");
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "task.assigned" &&
+          notification.body === "Case: Task Case; Incident: Task Incident A"
+      )
+    ).toBe(true);
+  });
+
+  it("allows an assigned analyst to update their task but not reassign it", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Assigned Task Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Assigned Task Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Contain host",
+        status: "todo",
+        priority: "high",
+        assigneeUserId: analystId
+      });
+
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const assigneeUpdateResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystId)
+      .send({
+        status: "in_progress",
+        description: "Host isolation started."
+      });
+
+    expect(assigneeUpdateResponse.status).toBe(200);
+    expect(assigneeUpdateResponse.body.task.status).toBe("in_progress");
+    expect(assigneeUpdateResponse.body.task.description).toBe("Host isolation started.");
+
+    const assigneeReassignResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystId)
+      .send({
+        assigneeUserId: analystTwoId
+      });
+
+    expect(assigneeReassignResponse.status).toBe(403);
+    expect(assigneeReassignResponse.body.error).toBe("Missing permission: task:assign");
+
+    const otherAnalystUpdateResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/tasks/${taskId}`)
+      .set("x-user-id", analystTwoId)
+      .send({
+        status: "done"
+      });
+
+    expect(otherAnalystUpdateResponse.status).toBe(403);
+    expect(otherAnalystUpdateResponse.body.error).toBe("Missing permission: task:update");
+  });
+
+  it("keeps custom tags scoped to their case and exposes seeded ATT&CK tags globally", async () => {
+    const caseAResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case A",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseAId = caseAResponse.body.case.id as string;
+
+    const caseBResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Case B",
+        clientName: "Contoso",
+        status: "open"
+      });
+    const caseBId = caseBResponse.body.case.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseAId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Ransomware",
+        color: "#ff0000"
+      });
+
+    expect(customTagResponse.status).toBe(201);
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const updateCustomTagResponse = await request(app)
+      .patch(`/api/cases/${caseAId}/custom-tags/${customTagId}`)
+      .set("x-user-id", commanderId)
+      .send({
+        color: "#cc0000"
+      });
+
+    expect(updateCustomTagResponse.status).toBe(200);
+    expect(updateCustomTagResponse.body.customTag.color).toBe("#cc0000");
+
+    const caseATagsResponse = await request(app)
+      .get(`/api/cases/${caseAId}/custom-tags`)
+      .set("x-user-id", commanderId);
+
+    expect(caseATagsResponse.status).toBe(200);
+    expect(caseATagsResponse.body.customTags).toHaveLength(1);
+    expect(caseATagsResponse.body.customTags[0].name).toBe("Ransomware");
+
+    const caseBTagsResponse = await request(app)
+      .get(`/api/cases/${caseBId}/custom-tags`)
+      .set("x-user-id", commanderId);
+
+    expect(caseBTagsResponse.status).toBe(200);
+    expect(caseBTagsResponse.body.customTags).toHaveLength(0);
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+
+    expect(attackTagsResponse.status).toBe(200);
+    expect(attackTagsResponse.body.attackTags.length).toBeGreaterThanOrEqual(690);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1003")
+    ).toBe(true);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1001.001")
+    ).toBe(true);
+    expect(
+      attackTagsResponse.body.attackTags.some((tag: { attack_id: string }) => tag.attack_id === "T1685")
+    ).toBe(true);
+
+    const deleteCustomTagResponse = await request(app)
+      .delete(`/api/cases/${caseAId}/custom-tags/${customTagId}`)
+      .set("x-user-id", commanderId);
+
+    expect(deleteCustomTagResponse.status).toBe(204);
+  });
+
+  it("returns attached tags on finding and timeline lists so the UI can render them", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Tag Visibility Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Tag Visibility Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Lateral Movement",
+        color: "#2255aa"
+      });
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+    const attackTagId = attackTagsResponse.body.attackTags.find((tag: { attack_id: string }) => tag.attack_id === "T1003")?.id as
+      | string
+      | undefined;
+    expect(attackTagId).toBeTruthy();
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Credential dumping detected",
+        status: "confirmed",
+        severity: "high"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "LSASS access observed",
+        eventTime: new Date().toISOString(),
+        source: "EDR"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const attachFindingCustomTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({ customTagId });
+    expect(attachFindingCustomTagResponse.status).toBe(204);
+
+    const attachFindingAttackTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", commanderId)
+      .send({ attackTagId });
+    expect(attachFindingAttackTagResponse.status).toBe(204);
+
+    const attachTimelineCustomTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({ customTagId });
+    expect(attachTimelineCustomTagResponse.status).toBe(204);
+
+    const attachTimelineAttackTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/attack-tags`)
+      .set("x-user-id", commanderId)
+      .send({ attackTagId });
+    expect(attachTimelineAttackTagResponse.status).toBe(204);
+
+    const findingsListResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId);
+    expect(findingsListResponse.status).toBe(200);
+    expect(findingsListResponse.body.findings[0].custom_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: customTagId, name: "Lateral Movement" })])
+    );
+    expect(findingsListResponse.body.findings[0].attack_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: attackTagId, attack_id: "T1003" })])
+    );
+
+    const timelineListResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId);
+    expect(timelineListResponse.status).toBe(200);
+    expect(timelineListResponse.body.timelineEvents[0].custom_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: customTagId, name: "Lateral Movement" })])
+    );
+    expect(timelineListResponse.body.timelineEvents[0].attack_tags).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: attackTagId, attack_id: "T1003" })])
+    );
+  });
+
+  it("searches incident records by attached tags and returns tag entities in scoped results", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Search Tags Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Search Tags Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const customTagResponse = await request(app)
+      .post(`/api/cases/${caseId}/custom-tags`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Beaconing",
+        color: "#2244aa"
+      });
+    const customTagId = customTagResponse.body.customTag.id as string;
+
+    const attackTagsResponse = await request(app).get("/api/attack-tags");
+    const attackTagId = attackTagsResponse.body.attackTags.find((tag: { attack_id: string }) => tag.attack_id === "T1003")?.id as
+      | string
+      | undefined;
+    expect(attackTagId).toBeTruthy();
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Host artifact review",
+        status: "confirmed",
+        severity: "medium"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Analyst triage step",
+        eventTime: new Date().toISOString(),
+        source: "Console"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/findings/${findingId}/custom-tags`)
+        .set("x-user-id", commanderId)
+        .send({ customTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/custom-tags`)
+        .set("x-user-id", commanderId)
+        .send({ customTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+        .set("x-user-id", commanderId)
+        .send({ attackTagId })
+    ).toHaveProperty("status", 204);
+    expect(
+      await request(app)
+        .post(`/api/incidents/${incidentId}/timeline-events/${timelineEventId}/attack-tags`)
+        .set("x-user-id", commanderId)
+        .send({ attackTagId })
+    ).toHaveProperty("status", 204);
+
+    const customTagSearchResponse = await request(app)
+      .get(`/api/search?q=beacon&incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(customTagSearchResponse.status).toBe(200);
+    expect(customTagSearchResponse.body.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entity_type: "custom_tag", entity_id: customTagId }),
+        expect.objectContaining({ entity_type: "finding", entity_id: findingId }),
+        expect.objectContaining({ entity_type: "timeline_event", entity_id: timelineEventId })
+      ])
+    );
+
+    const attackTagSearchResponse = await request(app)
+      .get(`/api/search?q=T1003&incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(attackTagSearchResponse.status).toBe(200);
+    expect(attackTagSearchResponse.body.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entity_type: "attack_tag", entity_id: attackTagId }),
+        expect.objectContaining({ entity_type: "finding", entity_id: findingId }),
+        expect.objectContaining({ entity_type: "timeline_event", entity_id: timelineEventId })
+      ])
+    );
+  });
+
+  it("manages case and incident membership with notifications", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Membership Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const addCaseMemberResponse = await request(app)
+      .post(`/api/cases/${caseId}/members`)
+      .set("x-user-id", commanderId)
+      .send({
+        userId: analystTwoId,
+        caseRole: "member"
+      });
+
+    expect(addCaseMemberResponse.status).toBe(204);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Membership Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const addIncidentMemberResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/members`)
+      .set("x-user-id", commanderId)
+      .send({
+        userId: analystTwoId,
+        incidentRole: "analyst"
+      });
+
+    expect(addIncidentMemberResponse.status).toBe(204);
+
+    const notificationsResponse = await request(app)
+      .get("/api/notifications")
+      .set("x-user-id", analystTwoId);
+
+    expect(notificationsResponse.status).toBe(200);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "case.member_added" &&
+          notification.body === "You were added to Case: Membership Case"
+      )
+    ).toBe(true);
+    expect(
+      notificationsResponse.body.notifications.some(
+        (notification: { body: string; event_type: string }) =>
+          notification.event_type === "incident.member_added" &&
+          notification.body === "You were added to Case: Membership Case; Incident: Membership Incident"
+      )
+    ).toBe(true);
+  });
+
+  it("supports scoped search and audit log reads", async () => {
+    const responseLeadId = randomUUID();
+    await insertUser(pool, {
+      id: responseLeadId,
+      email: "lead@example.com",
+      displayName: "Lead",
+      globalRole: "commander"
+    });
+
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Search Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Search Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addCaseMember(pool, caseId, responseLeadId, commanderId);
+    await addIncidentMember(pool, incidentId, responseLeadId, commanderId);
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({
+        name: "CrowdStrike Hunt",
+        language: "spl",
+        queryBody: "index=main credential_access"
+      });
+
+    const searchResponse = await request(app)
+      .get(`/api/search?q=credential&incidentId=${incidentId}`)
+      .set("x-user-id", analystId);
+
+    expect(searchResponse.status).toBe(200);
+    expect(searchResponse.body.results).toEqual(
+      expect.arrayContaining([expect.objectContaining({ entity_type: "query" })])
+    );
+
+    const forbiddenAuditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", analystId);
+
+    expect(forbiddenAuditResponse.status).toBe(403);
+
+    const auditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", commanderId);
+
+    expect(auditResponse.status).toBe(200);
+    expect(auditResponse.body.auditLogs.length).toBeGreaterThan(0);
+
+    const leadAuditResponse = await request(app)
+      .get(`/api/audit-logs?incidentId=${incidentId}`)
+      .set("x-user-id", responseLeadId);
+
+    expect(leadAuditResponse.status).toBe(200);
+    expect(leadAuditResponse.body.auditLogs.length).toBeGreaterThan(0);
+  });
+
+  it("creates graph entity links and exposes manual plus derived MITRE graph data", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Graph Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+    await addCaseMember(pool, caseId, analystTwoId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Graph Incident",
+        status: "open",
+        severity: "high"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+    await addIncidentMember(pool, incidentId, analystTwoId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "Suspicious PowerShell Execution",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const timelineResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/timeline-events`)
+      .set("x-user-id", analystId)
+      .send({
+        eventTime: "2026-05-18T10:42:00.000Z",
+        title: "Word spawned PowerShell"
+      });
+    const timelineEventId = timelineResponse.body.timelineEvent.id as string;
+
+    const attackTagResponse = (await pool.query("select id from attack_tags where attack_id = 'T1059.001'")) as {
+      rows: Array<{ id: string }>;
+    };
+    const attackTagId = attackTagResponse.rows[0].id;
+
+    const attachFindingTagResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({
+        attackTagId
+      });
+
+    expect(attachFindingTagResponse.status).toBe(204);
+
+    const createEntityLinkResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/entity-links`)
+      .set("x-user-id", analystId)
+      .send({
+        sourceType: "timeline_event",
+        sourceId: timelineEventId,
+        targetType: "finding",
+        targetId: findingId,
+        linkType: "evidence_for"
+      });
+
+    expect(createEntityLinkResponse.status).toBe(201);
+    const linkId = createEntityLinkResponse.body.entityLink.id as string;
+
+    const linksResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/entity-links`)
+      .set("x-user-id", analystId);
+
+    expect(linksResponse.status).toBe(200);
+    expect(linksResponse.body.entityLinks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: linkId, link_type: "evidence_for" })])
+    );
+
+    const graphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?includeDerived=true&includeManual=true&mode=mitre`)
+      .set("x-user-id", analystId);
+
+    expect(graphResponse.status).toBe(200);
+    expect(graphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "maps_to", derived: true }),
+        expect.objectContaining({ type: "evidence_for", derived: false })
+      ])
+    );
+    expect(graphResponse.body.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "finding", entityId: findingId }),
+        expect.objectContaining({ type: "mitre_technique", mitreId: "T1059.001" })
+      ])
+    );
+
+    const investigationGraphResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/graph?includeDerived=true&includeManual=true&mode=investigation`)
+      .set("x-user-id", analystId);
+
+    expect(investigationGraphResponse.status).toBe(200);
+    expect(investigationGraphResponse.body.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "finding",
+          entityId: findingId,
+          metadata: expect.objectContaining({ createdAt: expect.any(String) })
+        }),
+        expect.objectContaining({
+          type: "timeline_event",
+          entityId: timelineEventId,
+          metadata: expect.objectContaining({ eventTime: "2026-05-18T10:42:00.000Z" })
+        })
+      ])
+    );
+    expect(investigationGraphResponse.body.nodes).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "user",
+          entityId: analystTwoId
+        })
+      ])
+    );
+    expect(investigationGraphResponse.body.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: `finding:${findingId}`, target: `user:${analystId}`, type: "assigned_to", derived: true }),
+        expect.objectContaining({ source: `timeline_event:${timelineEventId}`, target: `user:${analystId}`, type: "assigned_to", derived: true })
+      ])
+    );
+
+    const forbiddenDeleteResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/entity-links/${linkId}`)
+      .set("x-user-id", analystTwoId);
+
+    expect(forbiddenDeleteResponse.status).toBe(403);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/entity-links/${linkId}`)
+      .set("x-user-id", analystId);
+
+    expect(deleteResponse.status).toBe(204);
+  });
+
+  it("builds a MITRE matrix from finding and query mappings", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "MITRE Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "MITRE Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const findingResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/findings`)
+      .set("x-user-id", analystId)
+      .send({
+        title: "PowerShell finding",
+        status: "draft"
+      });
+    const findingId = findingResponse.body.finding.id as string;
+
+    const queryResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/queries`)
+      .set("x-user-id", analystId)
+      .send({
+        name: "PowerShell Process Tree",
+        language: "spl",
+        queryBody: "index=main powershell"
+      });
+    const queryId = queryResponse.body.query.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Investigate PowerShell",
+        status: "todo",
+        priority: "high"
+      });
+    const taskId = taskResponse.body.task.id as string;
+
+    const attackTagResponse = (await pool.query("select id from attack_tags where attack_id = 'T1059.001'")) as {
+      rows: Array<{ id: string }>;
+    };
+    const attackTagId = attackTagResponse.rows[0].id;
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/findings/${findingId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({ attackTagId });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/queries/${queryId}/attack-tags`)
+      .set("x-user-id", analystId)
+      .send({ attackTagId });
+
+    await request(app)
+      .post(`/api/incidents/${incidentId}/tasks/${taskId}/links`)
+      .set("x-user-id", commanderId)
+      .send({
+        entityType: "query",
+        entityId: queryId
+      });
+
+    const matrixResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/mitre-matrix?q=powershell`)
+      .set("x-user-id", analystId);
+
+    expect(matrixResponse.status).toBe(200);
+    expect(matrixResponse.body.tactics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Execution" })])
+    );
+    expect(matrixResponse.body.techniques).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mitreId: "T1059.001",
+          counts: expect.objectContaining({
+            findings: 1,
+            queries: 1,
+            tasks: 1,
+            total: 3
+          })
+        })
+      ])
+    );
+  });
+
+  it("supports update and delete flows for incident records", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "CRUD Case",
+        clientName: "Acme",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    await addCaseMember(pool, caseId, analystId, commanderId);
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "CRUD Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+    await addIncidentMember(pool, incidentId, analystId, commanderId);
+
+    const systemResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/systems`)
+      .set("x-user-id", analystId)
+      .send({
+        hostname: "host-01",
+        os: "Windows",
+        status: "online"
+      });
+    expect(systemResponse.status).toBe(201);
+    expect(systemResponse.body.system.status).toBe("online");
+    const systemId = systemResponse.body.system.id as string;
+
+    const patchSystemResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/systems/${systemId}`)
+      .set("x-user-id", analystId)
+      .send({
+        status: "compromised",
+        owner: "SOC",
+        notes: "critical asset"
+      });
+    expect(patchSystemResponse.status).toBe(200);
+    expect(patchSystemResponse.body.system.status).toBe("compromised");
+    expect(patchSystemResponse.body.system.owner).toBe("SOC");
+
+    const deleteSystemResponse = await request(app)
+      .delete(`/api/incidents/${incidentId}/systems/${systemId}`)
+      .set("x-user-id", commanderId);
+    expect(deleteSystemResponse.status).toBe(204);
+
+    const accountResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/accounts`)
+      .set("x-user-id", analystId)
+      .send({
+        username: "alice",
+        domain: "corp"
+      });
+    expect(accountResponse.status).toBe(201);
+    const accountId = accountResponse.body.account.id as string;
+
+    const patchAccountResponse = await request(app)
+      .patch(`/api/incidents/${incidentId}/accounts/${accountId}`)
+      .set("x-user-id", analystId)
+      .send({
+        status: "disabled"
+      });
+    expect(patchAccountResponse.status).toBe(200);
+    expect(patchAccountResponse.body.account.status).toBe("disabled");
+  });
+
+  it("stores task markdown notes and uploads note images outside Postgres", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Notes Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Notes Incident",
+        status: "open",
+        severity: "low"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const taskResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks`)
+      .set("x-user-id", commanderId)
+      .send({
+        title: "Document image paste",
+        status: "todo",
+        priority: "medium"
+      });
+    expect(taskResponse.status).toBe(201);
+    const taskId = taskResponse.body.task.id as string;
+
+    const updateNoteResponse = await request(app)
+      .put(`/api/incidents/${incidentId}/tasks/${taskId}/notes`)
+      .set("x-user-id", commanderId)
+      .send({ content: "Before\n\n![image](/api/uploads/task-notes/example.png)\n" });
+    expect(updateNoteResponse.status).toBe(200);
+    expect(updateNoteResponse.body.content).toContain("![image]");
+
+    const getNoteResponse = await request(app)
+      .get(`/api/incidents/${incidentId}/tasks/${taskId}/notes`)
+      .set("x-user-id", commanderId);
+    expect(getNoteResponse.status).toBe(200);
+    expect(getNoteResponse.body.content).toContain("Before");
+
+    const uploadResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/tasks/${taskId}/notes/images`)
+      .set("x-user-id", commanderId)
+      .set("content-type", "image/png")
+      .set("x-filename", "paste.png")
+      .send(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    expect(uploadResponse.status).toBe(201);
+    expect(uploadResponse.body.filename).toBe("paste.png");
+    expect(uploadResponse.body.url).toMatch(new RegExp(`^/api/uploads/task-notes/${taskId}/.+\\.png$`));
+
+    const unauthenticatedImageResponse = await request(app).get(uploadResponse.body.url);
+    expect(unauthenticatedImageResponse.status).toBe(401);
+
+    const authorizedImageResponse = await request(app)
+      .get(uploadResponse.body.url)
+      .set("x-user-id", commanderId);
+    expect(authorizedImageResponse.status).toBe(200);
+    expect(authorizedImageResponse.headers["content-type"]).toContain("image/png");
+  });
+
+  it("uploads report markdown images and gates report image reads", async () => {
+    const caseResponse = await request(app)
+      .post("/api/cases")
+      .set("x-user-id", commanderId)
+      .send({
+        caseName: "Report Images Case",
+        status: "open"
+      });
+    const caseId = caseResponse.body.case.id as string;
+
+    const incidentResponse = await request(app)
+      .post(`/api/cases/${caseId}/incidents`)
+      .set("x-user-id", commanderId)
+      .send({
+        name: "Report Images Incident",
+        status: "open",
+        severity: "medium"
+      });
+    const incidentId = incidentResponse.body.incident.id as string;
+
+    const uploadResponse = await request(app)
+      .post(`/api/incidents/${incidentId}/report-images`)
+      .set("x-user-id", commanderId)
+      .set("content-type", "image/png")
+      .set("x-filename", "report-paste.png")
+      .send(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    expect(uploadResponse.status).toBe(201);
+    expect(uploadResponse.body.filename).toBe("report-paste.png");
+    expect(uploadResponse.body.url).toMatch(new RegExp(`^/api/uploads/reports/${incidentId}/.+\\.png$`));
+
+    const unauthenticatedImageResponse = await request(app).get(uploadResponse.body.url);
+    expect(unauthenticatedImageResponse.status).toBe(401);
+
+    const authorizedImageResponse = await request(app)
+      .get(uploadResponse.body.url)
+      .set("x-user-id", commanderId);
+    expect(authorizedImageResponse.status).toBe(200);
+    expect(authorizedImageResponse.headers["content-type"]).toContain("image/png");
+  });
+});

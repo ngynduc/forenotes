@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forenotes MITRE Matrix Demo</title>
+  <style>
+    :root {
+      --bg: #030303;
+      --panel: #0a0a0a;
+      --panel-soft: #111111;
+      --line: #1f1f1f;
+      --muted: #a3a3a3;
+      --text: #f5f5f5;
+      --orange: #f97316;
+      --orange-soft: #fb923c;
+      --orange-dim: #9a3412;
+      --blue: #60a5fa;
+      --green: #34d399;
+      --red: #f87171;
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      background:
+        radial-gradient(circle at top left, rgba(249, 115, 22, 0.12), transparent 32rem),
+        linear-gradient(180deg, #050505 0%, #000 100%);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(3, 3, 3, 0.9);
+      backdrop-filter: blur(12px);
+    }
+
+    .title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .eyebrow {
+      color: var(--orange-soft);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 700;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 999px;
+    }
+
+    .tab {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: 140ms ease;
+    }
+
+    .tab.active {
+      color: #111;
+      background: var(--orange);
+      font-weight: 700;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) repeat(4, auto);
+      gap: 10px;
+      align-items: center;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 10, 10, 0.72);
+    }
+
+    .input,
+    .select,
+    .toggle {
+      height: 36px;
+      border: 1px solid var(--line);
+      background: #050505;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 0 12px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .input:focus,
+    .select:focus {
+      border-color: var(--orange-dim);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .toggle input {
+      accent-color: var(--orange);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      min-height: 0;
+    }
+
+    .matrix-wrap {
+      overflow: auto;
+      padding: 22px 24px 32px;
+    }
+
+    .view-hidden {
+      display: none;
+    }
+
+    .map-wrap {
+      overflow: auto;
+      padding: 22px 24px 32px;
+      min-height: 720px;
+    }
+
+    .map-canvas {
+      min-width: 1180px;
+      min-height: 680px;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        radial-gradient(circle at 18% 20%, rgba(249, 115, 22, 0.09), transparent 24rem),
+        #030303;
+      background-size: 32px 32px, 32px 32px, auto, auto;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    .map-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .edge {
+      stroke: rgba(249, 115, 22, 0.62);
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .edge.derived {
+      stroke-dasharray: 7 6;
+      stroke: rgba(96, 165, 250, 0.55);
+    }
+
+    .edge-label {
+      fill: #a3a3a3;
+      font-size: 11px;
+      paint-order: stroke;
+      stroke: #030303;
+      stroke-width: 4px;
+    }
+
+    .map-node {
+      position: absolute;
+      width: 180px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(17, 17, 17, 0.96);
+      padding: 10px;
+      cursor: pointer;
+      transition: 140ms ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .map-node:hover,
+    .map-node.selected {
+      transform: translateY(-1px);
+      border-color: var(--orange-soft);
+      box-shadow: 0 10px 28px rgba(249, 115, 22, 0.18);
+    }
+
+    .map-node.finding { border-color: rgba(249, 115, 22, 0.55); }
+    .map-node.timeline { border-color: rgba(96, 165, 250, 0.55); }
+    .map-node.task { border-color: rgba(250, 204, 21, 0.55); }
+    .map-node.asset { border-color: rgba(52, 211, 153, 0.55); }
+    .map-node.ioc { border-color: rgba(248, 113, 113, 0.55); }
+    .map-node.query { border-color: rgba(167, 139, 250, 0.55); }
+    .map-node.mitre { border-color: rgba(251, 146, 60, 0.9); background: rgba(124, 45, 18, 0.92); }
+
+    .node-type {
+      color: var(--orange-soft);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .node-title {
+      margin-top: 5px;
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .node-sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .matrix {
+      min-width: 1600px;
+      display: grid;
+      grid-template-columns: repeat(10, minmax(140px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    .tactic-column {
+      min-height: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tactic-header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 10px 8px;
+      color: #e5e5e5;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.15;
+      background: rgba(0, 0, 0, 0.94);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tech-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 8px;
+    }
+
+    .tech-card {
+      position: relative;
+      width: 100%;
+      min-height: 74px;
+      border: 1px solid rgba(251, 146, 60, 0.45);
+      background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+      color: #111;
+      border-radius: 4px;
+      padding: 9px 10px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(249, 115, 22, 0.12);
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, filter 140ms ease;
+    }
+
+    .tech-card:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+      border-color: #fed7aa;
+      box-shadow: 0 6px 20px rgba(249, 115, 22, 0.24);
+    }
+
+    .tech-card.selected {
+      outline: 2px solid #fed7aa;
+      outline-offset: 2px;
+    }
+
+    .tech-card.dim {
+      background: #9a3412;
+      color: #f5f5f5;
+      border-color: rgba(249, 115, 22, 0.28);
+    }
+
+    .tech-id {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+    }
+
+    .tech-name {
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 700;
+    }
+
+    .tech-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
+    .subtech {
+      margin-left: 16px;
+      width: calc(100% - 16px);
+    }
+
+    .subtech::before {
+      content: "";
+      position: absolute;
+      left: -11px;
+      top: 50%;
+      width: 10px;
+      height: 1px;
+      background: rgba(251, 146, 60, 0.65);
+    }
+
+    .empty-space {
+      min-height: 74px;
+      border: 1px dashed rgba(255, 255, 255, 0.04);
+      border-radius: 4px;
+      opacity: 0.25;
+    }
+
+    .inspector {
+      border-left: 1px solid var(--line);
+      background: rgba(10, 10, 10, 0.92);
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .inspector-card {
+      border: 1px solid var(--line);
+      background: var(--panel-soft);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+    }
+
+    .inspector h2 {
+      margin: 0 0 6px;
+      font-size: 17px;
+    }
+
+    .inspector .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .stat {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #050505;
+    }
+
+    .stat-value {
+      color: var(--orange-soft);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      margin: 18px 0 8px;
+      color: #d4d4d4;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 800;
+    }
+
+    .evidence-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .evidence-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #050505;
+    }
+
+    .evidence-type {
+      color: var(--orange-soft);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .evidence-title {
+      margin-top: 4px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .button {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #050505;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: 140ms ease;
+    }
+
+    .button.primary {
+      border-color: transparent;
+      background: var(--orange);
+      color: #111;
+      font-weight: 800;
+    }
+
+    .button:hover {
+      border-color: var(--orange-dim);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      background: var(--orange);
+    }
+
+    .swatch.dim {
+      background: var(--orange-dim);
+    }
+
+    @media (max-width: 1100px) {
+      .toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .inspector {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="title-group">
+        <div class="eyebrow">Forenotes Graph Demo</div>
+        <h1>Incident MITRE Matrix</h1>
+        <div class="meta">Incident: Ransomware Investigation · 17 mapped evidence items · 10 tactics</div>
+      </div>
+
+      <div class="tabs" aria-label="Graph view switcher">
+        <button class="tab" id="relationshipTab" data-view="relationship">Relationship Graph</button>
+        <button class="tab active" id="matrixTab" data-view="matrix">MITRE Matrix</button>
+      </div>
+    </header>
+
+    <section class="toolbar" aria-label="Matrix filters">
+      <input class="input" id="search" placeholder="Search technique, ID, evidence..." />
+      <select class="select" id="tacticFilter">
+        <option value="all">All tactics</option>
+        <option value="Execution">Execution</option>
+        <option value="Credential Access">Credential Access</option>
+        <option value="Command and Control">Command and Control</option>
+      </select>
+      <select class="select" id="evidenceFilter">
+        <option value="all">All evidence</option>
+        <option value="finding">Findings</option>
+        <option value="timeline">Timeline</option>
+        <option value="query">Queries</option>
+      </select>
+      <label class="toggle"><input type="checkbox" id="subToggle" checked /> Show sub-techniques</label>
+      <label class="toggle"><input type="checkbox" checked /> Mapped only</label>
+    </section>
+
+    <section class="workspace">
+      <div class="map-wrap view-hidden" id="relationshipView">
+        <div class="map-canvas">
+          <svg class="map-svg" viewBox="0 0 1180 680" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="rgba(249, 115, 22, 0.72)"></path>
+              </marker>
+              <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="rgba(96, 165, 250, 0.72)"></path>
+              </marker>
+            </defs>
+
+            <path class="edge" marker-end="url(#arrow)" d="M 290 130 C 360 130, 385 140, 450 170"></path>
+            <text class="edge-label" x="345" y="128">evidence_for</text>
+
+            <path class="edge" marker-end="url(#arrow)" d="M 290 250 C 360 260, 390 250, 450 220"></path>
+            <text class="edge-label" x="335" y="268">evidence_for</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 620 170 C 690 130, 715 115, 780 110"></path>
+            <text class="edge-label" x="660" y="125">maps_to</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 960 110 C 1010 110, 1025 130, 1040 170"></path>
+            <text class="edge-label" x="985" y="104">belongs_to</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 620 220 C 690 270, 715 300, 780 320"></path>
+            <text class="edge-label" x="660" y="285">maps_to</text>
+
+            <path class="edge" marker-end="url(#arrow)" d="M 540 315 C 540 360, 475 380, 410 390"></path>
+            <text class="edge-label" x="458" y="360">investigates</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 160 150 C 145 250, 155 325, 170 405"></path>
+            <text class="edge-label" x="74" y="282">observed_on</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 160 270 C 165 360, 190 450, 220 520"></path>
+            <text class="edge-label" x="188" y="390">contains_ioc</text>
+
+            <path class="edge derived" marker-end="url(#arrowBlue)" d="M 620 250 C 690 390, 735 468, 790 520"></path>
+            <text class="edge-label" x="690" y="430">contains_ioc</text>
+          </svg>
+
+          <button class="map-node timeline" style="left: 90px; top: 92px" data-map-title="Timeline: Word spawned PowerShell" data-map-sub="Observed on WIN-042 · 2026-05-18 10:42">
+            <div class="node-type">Timeline</div>
+            <div class="node-title">Word spawned PowerShell</div>
+            <div class="node-sub">WIN-042 · j.smith</div>
+          </button>
+
+          <button class="map-node timeline" style="left: 90px; top: 214px" data-map-title="Timeline: Outbound C2 Connection" data-map-sub="185.199.108.153 · evil-c2.example">
+            <div class="node-type">Timeline</div>
+            <div class="node-title">Outbound C2 connection</div>
+            <div class="node-sub">Network event</div>
+          </button>
+
+          <button class="map-node finding" style="left: 450px; top: 150px" data-map-title="Finding: Suspicious PowerShell Execution" data-map-sub="High severity · Open · 3 linked items">
+            <div class="node-type">Finding</div>
+            <div class="node-title">Suspicious PowerShell Execution</div>
+            <div class="node-sub">High · Open</div>
+          </button>
+
+          <button class="map-node finding" style="left: 450px; top: 270px" data-map-title="Finding: Cobalt Strike Beacon" data-map-sub="High severity · Open · 2 IOCs">
+            <div class="node-type">Finding</div>
+            <div class="node-title">Cobalt Strike Beacon</div>
+            <div class="node-sub">High · Open</div>
+          </button>
+
+          <button class="map-node mitre" style="left: 780px; top: 70px" data-map-title="MITRE: T1059.001 PowerShell" data-map-sub="Execution · 3 evidence items">
+            <div class="node-type">MITRE Technique</div>
+            <div class="node-title">T1059.001 PowerShell</div>
+            <div class="node-sub">Execution</div>
+          </button>
+
+          <button class="map-node mitre" style="left: 780px; top: 290px" data-map-title="MITRE: T1071 Application Layer Protocol" data-map-sub="Command and Control · 3 evidence items">
+            <div class="node-type">MITRE Technique</div>
+            <div class="node-title">T1071 Application Layer Protocol</div>
+            <div class="node-sub">Command and Control</div>
+          </button>
+
+          <button class="map-node mitre" style="left: 1010px; top: 160px" data-map-title="MITRE Tactic: Execution" data-map-sub="1 mapped technique · 3 evidence items">
+            <div class="node-type">MITRE Tactic</div>
+            <div class="node-title">TA0002 Execution</div>
+            <div class="node-sub">Tactic</div>
+          </button>
+
+          <button class="map-node asset" style="left: 90px; top: 405px" data-map-title="System: WIN-042" data-map-sub="Impacted workstation · 2 timeline events">
+            <div class="node-type">System</div>
+            <div class="node-title">WIN-042</div>
+            <div class="node-sub">Workstation</div>
+          </button>
+
+          <button class="map-node task" style="left: 300px; top: 380px" data-map-title="Task: Investigate WIN-042" data-map-sub="Assigned to Admin Analyst · In progress">
+            <div class="node-type">Task</div>
+            <div class="node-title">Investigate WIN-042</div>
+            <div class="node-sub">In progress</div>
+          </button>
+
+          <button class="map-node ioc" style="left: 220px; top: 520px" data-map-title="IOC: 185.199.108.153" data-map-sub="IP address · linked to C2 activity">
+            <div class="node-type">IOC</div>
+            <div class="node-title">185.199.108.153</div>
+            <div class="node-sub">IP address</div>
+          </button>
+
+          <button class="map-node query" style="left: 790px; top: 520px" data-map-title="Query: C2 Beacon Detection" data-map-sub="Detects T1071 · 1 linked finding">
+            <div class="node-type">Query</div>
+            <div class="node-title">C2 Beacon Detection</div>
+            <div class="node-sub">Detects T1071</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="matrix-wrap" id="matrixView">
+        <div class="matrix" id="matrix">
+          <section class="tactic-column" data-tactic="Initial Access">
+            <div class="tactic-header">Initial Access</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1566" data-name="Phishing" data-tactic="Initial Access" data-evidence="2" data-findings="1" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1566</div>
+                <div class="tech-name">Phishing</div>
+                <div class="tech-footer"><span>2 evidence</span><span>High</span></div>
+              </button>
+              <button class="tech-card dim" data-id="T1190" data-name="Exploit Public-Facing Application" data-tactic="Initial Access" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1190</div>
+                <div class="tech-name">Exploit Public-Facing Application</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Execution">
+            <div class="tactic-header">Execution</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1059" data-name="Command and Scripting Interpreter" data-tactic="Execution" data-evidence="4" data-findings="2" data-timeline="1" data-queries="1">
+                <div class="tech-id">T1059</div>
+                <div class="tech-name">Command and Scripting Interpreter</div>
+                <div class="tech-footer"><span>4 evidence</span><span>High</span></div>
+              </button>
+              <button class="tech-card subtech" data-subtech="true" data-id="T1059.001" data-name="PowerShell" data-tactic="Execution" data-evidence="3" data-findings="1" data-timeline="1" data-queries="1">
+                <div class="tech-id">T1059.001</div>
+                <div class="tech-name">PowerShell</div>
+                <div class="tech-footer"><span>3 evidence</span><span>High</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Persistence">
+            <div class="tactic-header">Persistence</div>
+            <div class="tech-list">
+              <button class="tech-card dim" data-id="T1053" data-name="Scheduled Task/Job" data-tactic="Persistence" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1053</div>
+                <div class="tech-name">Scheduled Task/Job</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+              <div class="empty-space"></div>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Privilege Escalation">
+            <div class="tactic-header">Privilege Escalation</div>
+            <div class="tech-list">
+              <button class="tech-card dim" data-id="T1068" data-name="Exploitation for Privilege Escalation" data-tactic="Privilege Escalation" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1068</div>
+                <div class="tech-name">Exploitation for Privilege Escalation</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Defense Evasion">
+            <div class="tactic-header">Defense Evasion</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1027" data-name="Obfuscated Files or Information" data-tactic="Defense Evasion" data-evidence="2" data-findings="1" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1027</div>
+                <div class="tech-name">Obfuscated Files or Information</div>
+                <div class="tech-footer"><span>2 evidence</span><span>High</span></div>
+              </button>
+              <button class="tech-card dim" data-id="T1562" data-name="Impair Defenses" data-tactic="Defense Evasion" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1562</div>
+                <div class="tech-name">Impair Defenses</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Credential Access">
+            <div class="tactic-header">Credential Access</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1003" data-name="OS Credential Dumping" data-tactic="Credential Access" data-evidence="2" data-findings="1" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1003</div>
+                <div class="tech-name">OS Credential Dumping</div>
+                <div class="tech-footer"><span>2 evidence</span><span>High</span></div>
+              </button>
+              <button class="tech-card subtech" data-subtech="true" data-id="T1003.001" data-name="LSASS Memory" data-tactic="Credential Access" data-evidence="2" data-findings="1" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1003.001</div>
+                <div class="tech-name">LSASS Memory</div>
+                <div class="tech-footer"><span>2 evidence</span><span>High</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Discovery">
+            <div class="tactic-header">Discovery</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1082" data-name="System Information Discovery" data-tactic="Discovery" data-evidence="2" data-findings="1" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1082</div>
+                <div class="tech-name">System Information Discovery</div>
+                <div class="tech-footer"><span>2 evidence</span><span>Med</span></div>
+              </button>
+              <button class="tech-card dim" data-id="T1033" data-name="System Owner/User Discovery" data-tactic="Discovery" data-evidence="1" data-findings="0" data-timeline="1" data-queries="0">
+                <div class="tech-id">T1033</div>
+                <div class="tech-name">System Owner/User Discovery</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Low</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Lateral Movement">
+            <div class="tactic-header">Lateral Movement</div>
+            <div class="tech-list">
+              <button class="tech-card dim" data-id="T1021" data-name="Remote Services" data-tactic="Lateral Movement" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1021</div>
+                <div class="tech-name">Remote Services</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Command and Control">
+            <div class="tactic-header">Command and Control</div>
+            <div class="tech-list">
+              <button class="tech-card" data-id="T1071" data-name="Application Layer Protocol" data-tactic="Command and Control" data-evidence="3" data-findings="1" data-timeline="1" data-queries="1">
+                <div class="tech-id">T1071</div>
+                <div class="tech-name">Application Layer Protocol</div>
+                <div class="tech-footer"><span>3 evidence</span><span>High</span></div>
+              </button>
+              <button class="tech-card dim" data-id="T1105" data-name="Ingress Tool Transfer" data-tactic="Command and Control" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1105</div>
+                <div class="tech-name">Ingress Tool Transfer</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Med</span></div>
+              </button>
+            </div>
+          </section>
+
+          <section class="tactic-column" data-tactic="Collection">
+            <div class="tactic-header">Collection</div>
+            <div class="tech-list">
+              <button class="tech-card dim" data-id="T1005" data-name="Data from Local System" data-tactic="Collection" data-evidence="1" data-findings="1" data-timeline="0" data-queries="0">
+                <div class="tech-id">T1005</div>
+                <div class="tech-name">Data from Local System</div>
+                <div class="tech-footer"><span>1 evidence</span><span>Low</span></div>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <aside class="inspector" aria-label="Selected MITRE technique">
+        <div class="inspector-card">
+          <div class="eyebrow">Selected Technique</div>
+          <h2 id="selectedTitle">T1059.001 PowerShell</h2>
+          <div class="sub" id="selectedSub">Execution · Sub-technique of T1059</div>
+
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-value" id="statEvidence">3</div>
+              <div class="stat-label">Evidence</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="statFindings">1</div>
+              <div class="stat-label">Findings</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="statTimeline">1</div>
+              <div class="stat-label">Timeline</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value" id="statQueries">1</div>
+              <div class="stat-label">Queries</div>
+            </div>
+          </div>
+
+          <div class="section-title">Evidence</div>
+          <div class="evidence-list" id="evidenceList">
+            <div class="evidence-item">
+              <div class="evidence-type">Finding</div>
+              <div class="evidence-title">Suspicious PowerShell Execution</div>
+            </div>
+            <div class="evidence-item">
+              <div class="evidence-type">Timeline Event</div>
+              <div class="evidence-title">Word spawned powershell.exe on WIN-042</div>
+            </div>
+            <div class="evidence-item">
+              <div class="evidence-type">Query</div>
+              <div class="evidence-title">PowerShell Process Tree</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="button primary">Filter Relationship Graph</button>
+            <button class="button">Create Task From Technique</button>
+            <button class="button">Open MITRE Details</button>
+          </div>
+
+          <div class="legend">
+            <span class="legend-item"><span class="swatch"></span>2+ evidence</span>
+            <span class="legend-item"><span class="swatch dim"></span>1 evidence</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const relationshipTab = document.getElementById('relationshipTab');
+    const matrixTab = document.getElementById('matrixTab');
+    const relationshipView = document.getElementById('relationshipView');
+    const matrixView = document.getElementById('matrixView');
+    const mapNodes = Array.from(document.querySelectorAll('.map-node'));
+
+    function setGraphView(view) {
+      const isRelationship = view === 'relationship';
+      relationshipView.classList.toggle('view-hidden', !isRelationship);
+      matrixView.classList.toggle('view-hidden', isRelationship);
+      relationshipTab.classList.toggle('active', isRelationship);
+      matrixTab.classList.toggle('active', !isRelationship);
+    }
+
+    relationshipTab.addEventListener('click', () => setGraphView('relationship'));
+    matrixTab.addEventListener('click', () => setGraphView('matrix'));
+
+    mapNodes.forEach((node) => {
+      node.addEventListener('click', () => {
+        mapNodes.forEach((item) => item.classList.remove('selected'));
+        node.classList.add('selected');
+        selectedTitle.textContent = node.dataset.mapTitle;
+        selectedSub.textContent = node.dataset.mapSub;
+        statEvidence.textContent = '—';
+        statFindings.textContent = '—';
+        statTimeline.textContent = '—';
+        statQueries.textContent = '—';
+        evidenceList.innerHTML = `
+          <div class="evidence-item">
+            <div class="evidence-type">Map Selection</div>
+            <div class="evidence-title">${node.dataset.mapSub}</div>
+          </div>
+        `;
+      });
+    });
+
+    const cards = Array.from(document.querySelectorAll('.tech-card'));
+    const search = document.getElementById('search');
+    const tacticFilter = document.getElementById('tacticFilter');
+    const evidenceFilter = document.getElementById('evidenceFilter');
+    const subToggle = document.getElementById('subToggle');
+
+    const selectedTitle = document.getElementById('selectedTitle');
+    const selectedSub = document.getElementById('selectedSub');
+    const statEvidence = document.getElementById('statEvidence');
+    const statFindings = document.getElementById('statFindings');
+    const statTimeline = document.getElementById('statTimeline');
+    const statQueries = document.getElementById('statQueries');
+    const evidenceList = document.getElementById('evidenceList');
+
+    const evidenceTemplates = {
+      finding: [
+        'Suspicious PowerShell Execution',
+        'Cobalt Strike Beacon',
+        'Credential Dumping Activity'
+      ],
+      timeline: [
+        'Word spawned powershell.exe on WIN-042',
+        'Outbound C2 connection observed',
+        'LSASS access observed on DC-01'
+      ],
+      query: [
+        'PowerShell Process Tree',
+        'C2 Beacon Detection',
+        'LSASS Access Detection'
+      ]
+    };
+
+    function selectCard(card) {
+      cards.forEach((item) => item.classList.remove('selected'));
+      card.classList.add('selected');
+
+      const id = card.dataset.id;
+      const name = card.dataset.name;
+      const tactic = card.dataset.tactic;
+      const evidence = Number(card.dataset.evidence || 0);
+      const findings = Number(card.dataset.findings || 0);
+      const timeline = Number(card.dataset.timeline || 0);
+      const queries = Number(card.dataset.queries || 0);
+      const isSubtech = card.dataset.subtech === 'true';
+
+      selectedTitle.textContent = `${id} ${name}`;
+      selectedSub.textContent = `${tactic}${isSubtech ? ' · Sub-technique' : ' · Technique'}`;
+      statEvidence.textContent = evidence;
+      statFindings.textContent = findings;
+      statTimeline.textContent = timeline;
+      statQueries.textContent = queries;
+
+      const items = [];
+      for (let i = 0; i < findings; i += 1) {
+        items.push(['Finding', evidenceTemplates.finding[i % evidenceTemplates.finding.length]]);
+      }
+      for (let i = 0; i < timeline; i += 1) {
+        items.push(['Timeline Event', evidenceTemplates.timeline[i % evidenceTemplates.timeline.length]]);
+      }
+      for (let i = 0; i < queries; i += 1) {
+        items.push(['Query', evidenceTemplates.query[i % evidenceTemplates.query.length]]);
+      }
+
+      evidenceList.innerHTML = items.map(([type, title]) => `
+        <div class="evidence-item">
+          <div class="evidence-type">${type}</div>
+          <div class="evidence-title">${title}</div>
+        </div>
+      `).join('');
+    }
+
+    function applyFilters() {
+      const q = search.value.trim().toLowerCase();
+      const tactic = tacticFilter.value;
+      const evidenceType = evidenceFilter.value;
+      const showSubtech = subToggle.checked;
+
+      cards.forEach((card) => {
+        const text = `${card.dataset.id} ${card.dataset.name} ${card.dataset.tactic}`.toLowerCase();
+        const matchesSearch = !q || text.includes(q);
+        const matchesTactic = tactic === 'all' || card.dataset.tactic === tactic;
+        const matchesSubtech = showSubtech || card.dataset.subtech !== 'true';
+
+        let matchesEvidence = true;
+        if (evidenceType === 'finding') matchesEvidence = Number(card.dataset.findings || 0) > 0;
+        if (evidenceType === 'timeline') matchesEvidence = Number(card.dataset.timeline || 0) > 0;
+        if (evidenceType === 'query') matchesEvidence = Number(card.dataset.queries || 0) > 0;
+
+        card.style.display = matchesSearch && matchesTactic && matchesSubtech && matchesEvidence ? '' : 'none';
+      });
+    }
+
+    cards.forEach((card) => {
+      card.addEventListener('click', () => selectCard(card));
+    });
+
+    [search, tacticFilter, evidenceFilter, subToggle].forEach((control) => {
+      control.addEventListener('input', applyFilters);
+      control.addEventListener('change', applyFilters);
+    });
+
+    const defaultCard = document.querySelector('[data-id="T1059.001"]');
+    if (defaultCard) selectCard(defaultCard);
+  </script>
+</body>
+</html>
