@@ -271,10 +271,11 @@ export function useAuditLogs(caseId?: string, incidentId?: string) {
 }
 
 // Users
-export function useUsers() {
+export function useUsers(enabled = true) {
   return useQuery({
     queryKey: ["users"],
     queryFn: () => api.listUsers(),
+    enabled,
   });
 }
 

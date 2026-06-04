@@ -23,7 +23,8 @@ export function createUserRoutes(database: Database) {
   router.get(
     "/",
     asyncHandler(async (request, response) => {
-      await requireAuth(request, database);
+      const actor = await requireAuth(request, database);
+      await requirePermission(database, actor, "user:manage");
       response.json({ users: await listUsers(database) });
     })
   );

@@ -81,6 +81,7 @@ async function addIncidentMember(
 describe("Forenotes API", () => {
   let app: ReturnType<typeof createApp>;
   let pool: Awaited<ReturnType<typeof createTestApp>>["pool"];
+  let adminId: string;
   let commanderId: string;
   let analystId: string;
   let analystTwoId: string;
@@ -95,6 +96,9 @@ describe("Forenotes API", () => {
     commanderId = randomUUID();
     analystId = randomUUID();
     analystTwoId = randomUUID();
+
+    const adminResult = (await pool.query("select id from users where global_role = 'admin' limit 1")) as { rows: Array<{ id: string }> };
+    adminId = adminResult.rows[0].id;
 
     await insertUser(pool, {
       id: commanderId,
@@ -316,6 +320,16 @@ describe("Forenotes API", () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("Authentication required");
+  });
+
+  it("restricts user listing to user managers", async () => {
+    const analystResponse = await request(app).get("/api/users").set("x-user-id", analystId);
+    expect(analystResponse.status).toBe(403);
+    expect(analystResponse.body.error).toBe("Missing permission: user:manage");
+
+    const adminResponse = await request(app).get("/api/users").set("x-user-id", adminId);
+    expect(adminResponse.status).toBe(200);
+    expect(adminResponse.body.users.map((user: { id: string }) => user.id)).toContain(adminId);
   });
 
   it("creates a case and incident for a permitted user", async () => {

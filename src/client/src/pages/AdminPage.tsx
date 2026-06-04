@@ -4,6 +4,7 @@ import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { usePermissions } from "@/hooks/use-auth";
 import { useUsers } from "@/hooks/use-entities";
 import { api } from "@/lib/api";
 import { useScopeStore } from "@/stores/scope-store";
@@ -13,7 +14,9 @@ import { getEntityDefinitions } from "@/config/entity-definitions";
 const tableDef = TABLE_DEFINITIONS.users;
 
 export default function AdminPage() {
-  const { data, isLoading } = useUsers();
+  const { can } = usePermissions();
+  const canManageUsers = can("user:manage");
+  const { data, isLoading } = useUsers(canManageUsers);
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
@@ -32,6 +35,15 @@ export default function AdminPage() {
     },
     onError: (error) => setResetMessage(error instanceof Error ? error.message : "Unable to reset password."),
   });
+
+  if (!canManageUsers) {
+    return (
+      <div className="max-w-xl rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <h2 className="text-lg font-semibold">Access denied</h2>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">User administration requires the user management permission.</p>
+      </div>
+    );
+  }
 
   return (
     <div>

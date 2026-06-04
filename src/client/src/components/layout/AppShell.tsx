@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from "react-router";
 import { useUIStore } from "@/stores/ui-store";
 import { useScopeStore } from "@/stores/scope-store";
+import { usePermissions } from "@/hooks/use-auth";
 import { useNotificationStream, useNotifications } from "@/hooks/use-entities";
 import { cn } from "@/lib/utils";
 import {
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
 
-const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon }> = [
+const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; permission?: string }> = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/cases", label: "Cases", icon: Briefcase },
   { to: "/findings", label: "Findings", icon: Search },
@@ -36,7 +37,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon }> = [
   { to: "/tags", label: "Tags", icon: Tags },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/admin", label: "Admin", icon: Shield },
+  { to: "/admin", label: "Admin", icon: Shield, permission: "user:manage" },
 ];
 
 export function AppShell() {
@@ -44,6 +45,7 @@ export function AppShell() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const flash = useUIStore((s) => s.flash);
   useNotificationStream();
+  const { can } = usePermissions();
   const { data: notificationsData } = useNotifications();
   const unreadNotifications = notificationsData?.notifications.filter((notification) => notification.unseen).length ?? 0;
   const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
@@ -67,7 +69,7 @@ export function AppShell() {
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => can(item.permission)).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
