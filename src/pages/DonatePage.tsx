@@ -7,18 +7,18 @@ import { Reveal } from "@/components/RevealSection";
 const supportItems = [
   {
     icon: Code2,
-    title: "Keep Forenotes open",
+    title: "Project maintenance",
     desc: "Donations help cover the time needed to maintain the project, review issues, and keep the app usable for responders.",
   },
   {
     icon: Coffee,
-    title: "Fund practical fixes",
+    title: "Ongoing improvements",
     desc: "Support goes toward focused improvements: deployment polish, docs, bug fixes, and investigation workflows.",
   },
   {
     icon: Github,
-    title: "No paid gate",
-    desc: "Forenotes is an open-source project now. The app should be useful without a pricing page or subscription pitch.",
+    title: "Open access",
+    desc: "Forenotes is an open-source project. No pricing or subscription.",
   },
 ];
 
@@ -38,10 +38,10 @@ export function DonatePage() {
                   Donate
                 </p>
                 <h1 className="mt-3 text-[2.1rem] font-semibold leading-[1.12] tracking-tight sm:text-[2.75rem]">
-                  Support open-source Forenotes.
+                  Support Forenotes.
                 </h1>
                 <p className="mx-auto mt-5 max-w-[560px] text-[1.0625rem] leading-relaxed text-[var(--color-text-muted)]">
-                  Forenotes is no longer sold as a commercial product. If the project helps your DFIR work, you can support ongoing development through Ko-fi.
+                  If the project helps your DFIR work, you can support ongoing development through Ko-fi.
                 </p>
                 <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                   <a
