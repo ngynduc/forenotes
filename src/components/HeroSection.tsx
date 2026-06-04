@@ -8,10 +8,10 @@ export function HeroSection() {
       <GraphCanvas />
       <Container className="relative z-10 text-center">
         <h1 className="mx-auto max-w-[680px] text-[2.25rem] font-semibold leading-[1.15] tracking-tight sm:text-[2.75rem]">
-          Open-source case notes, evidence context, and reports for DFIR work.
+          Your DFIR workspace for clear notes, connected evidence, and faster reports.
         </h1>
         <p className="mx-auto mt-5 max-w-[560px] text-[1.0625rem] leading-relaxed text-[var(--color-text-muted)]">
-          Forenotes is a community-maintained workspace for structuring cases, incidents, findings, timelines, tasks, and reports without a commercial sales layer.
+          Keep incidents organized from first finding to final report, with a workspace built for investigators, responders, and security teams.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <a

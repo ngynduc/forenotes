@@ -20,9 +20,6 @@ export function SiteFooter() {
               <Link to="/#product" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Features
               </Link>
-              <Link to="/#workflow" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-                Workflow
-              </Link>
               <Link to="/docs" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Docs
               </Link>

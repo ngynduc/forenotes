@@ -18,7 +18,7 @@ export function DeploymentSection() {
             <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-[var(--color-primary)]">
               Open source
             </p>
-            <h2 className="mt-3 text-[1.625rem] font-semibold leading-snug tracking-tight">
+            <h2 className="mt-3 text-[1.375rem] font-semibold leading-snug tracking-tight sm:text-[1.625rem]">
               Built for self-hosted response workflows.
             </h2>
             <p className="mt-4 text-[0.9375rem] leading-relaxed text-[var(--color-text-muted)]">
@@ -29,9 +29,12 @@ export function DeploymentSection() {
         <Reveal animation="fade" delay={200}>
           <div className="mt-10 flex flex-wrap gap-3">
             {items.map((item) => (
-              <div key={item.label} className="glass glass-hover flex items-center gap-2.5 px-4 py-2.5 text-[0.875rem] text-[var(--color-text-muted)]">
-                <item.icon size={16} strokeWidth={1.5} className="text-[var(--color-primary)]" />
-                <span>{item.label}</span>
+              <div
+                key={item.label}
+                className="glass glass-hover flex w-full items-start gap-2.5 px-4 py-2.5 text-[0.875rem] text-[var(--color-text-muted)] sm:w-auto sm:items-center"
+              >
+                <item.icon size={16} strokeWidth={1.5} className="mt-0.5 shrink-0 text-[var(--color-primary)] sm:mt-0" />
+                <span className="leading-relaxed">{item.label}</span>
               </div>
             ))}
           </div>

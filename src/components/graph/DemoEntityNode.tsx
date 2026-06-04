@@ -62,22 +62,22 @@ export function DemoEntityNode({ data, selected }: NodeProps) {
         cursor: "pointer",
         transition: "opacity 400ms ease, box-shadow 400ms ease, border-color 400ms ease",
       }}
-      className="relative min-w-[180px] rounded-[10px] border bg-[rgba(255,255,255,0.05)] px-3 py-2.5 backdrop-blur-sm"
+      className="relative min-w-[132px] rounded-[10px] border bg-[rgba(255,255,255,0.05)] px-2.5 py-2 backdrop-blur-sm sm:min-w-[180px] sm:px-3 sm:py-2.5"
     >
       <Handle type="target" position={Position.Top} className="!h-0 !w-0 !border-0 !bg-transparent" />
       <Handle type="source" position={Position.Bottom} className="!h-0 !w-0 !border-0 !bg-transparent" />
       <div className="flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#2dd4bf]" />
-        <span className="truncate text-[13px] font-semibold text-[#e8efec]">{d.label}</span>
+        <span className="truncate text-[11px] font-semibold text-[#e8efec] sm:text-[13px]">{d.label}</span>
       </div>
       {d.subtitle && (
-        <p className="mt-1 truncate pl-[26px] text-[10px] text-[#8fa9a1]">{d.subtitle}</p>
+        <p className="mt-1 truncate pl-[26px] text-[9px] text-[#8fa9a1] sm:text-[10px]">{d.subtitle}</p>
       )}
       {(d.status || d.severity) && (
         <div className="mt-1.5 flex items-center gap-1.5 pl-[26px]">
           {d.severity && (
             <span
-              className="rounded-[4px] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+              className="rounded-[4px] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide sm:px-2 sm:text-[9px]"
               style={{
                 color: SEVERITY_COLORS[d.severity] ?? "#2dd4bf",
                 background: d.severity === "critical" ? "rgba(248,113,113,0.12)"
@@ -90,7 +90,7 @@ export function DemoEntityNode({ data, selected }: NodeProps) {
             </span>
           )}
           {d.status && (
-            <span className="rounded-[4px] bg-[rgba(45,212,191,0.1)] px-2 py-0.5 text-[9px] font-semibold text-[#2dd4bf]">
+            <span className="rounded-[4px] bg-[rgba(45,212,191,0.1)] px-1.5 py-0.5 text-[8px] font-semibold text-[#2dd4bf] sm:px-2 sm:text-[9px]">
               {d.status}
             </span>
           )}

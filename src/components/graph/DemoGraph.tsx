@@ -68,6 +68,18 @@ function GraphInner() {
   const [autoActive, setAutoActive] = useState(true);
   const [autoPathIndex, setAutoPathIndex] = useState(0);
   const [autoNodeIndex, setAutoNodeIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const updateViewport = () => setIsMobile(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
 
   const { nodes: baseNodes, edges: baseEdges } = useMemo(() => {
     const nodes: FlowNode[] = DEMO_NODES.map((gn) => ({
@@ -182,7 +194,7 @@ function GraphInner() {
 
   return (
     <div className="relative">
-      <div className="h-[560px] overflow-hidden rounded-[var(--radius-md)] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] backdrop-blur-sm sm:h-[680px]">
+      <div className="h-[420px] overflow-hidden rounded-[var(--radius-md)] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] backdrop-blur-sm sm:h-[560px] lg:h-[680px]">
         <ReactFlow<FlowNode, FlowEdge>
           nodes={flowNodes}
           edges={flowEdges}
@@ -193,13 +205,13 @@ function GraphInner() {
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
           fitView
-          fitViewOptions={{ padding: 0.04 }}
-          minZoom={0.65}
-          maxZoom={1.35}
+          fitViewOptions={{ padding: isMobile ? 0.18 : 0.04 }}
+          minZoom={isMobile ? 0.4 : 0.65}
+          maxZoom={isMobile ? 1.15 : 1.35}
           zoomOnScroll={false}
-          zoomOnPinch={false}
+          zoomOnPinch={isMobile}
           zoomOnDoubleClick={false}
-          panOnDrag={false}
+          panOnDrag={isMobile}
           panOnScroll={false}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -212,7 +224,7 @@ function GraphInner() {
       </div>
 
       {selectedDetail && (
-        <div className="absolute right-4 top-4 max-w-[240px] rounded-[var(--radius-md)] border border-[rgba(255,255,255,0.08)] bg-[rgba(10,15,14,0.92)] p-4 backdrop-blur-xl">
+        <div className="absolute inset-x-3 bottom-3 top-auto max-w-none rounded-[var(--radius-md)] border border-[rgba(255,255,255,0.08)] bg-[rgba(10,15,14,0.92)] p-4 backdrop-blur-xl sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-4 sm:max-w-[240px]">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[0.8125rem] font-semibold text-[#e8efec]">{selectedDetail.label}</p>
             <button

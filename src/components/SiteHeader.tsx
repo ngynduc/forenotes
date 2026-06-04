@@ -5,7 +5,6 @@ import { Container } from "./Container";
 
 const navLinks = [
   { label: "Product", href: "/#product" },
-  { label: "Workflow", href: "/#workflow" },
   { label: "Docs", href: "/docs" },
   { label: "Donate", href: "/donate" },
 ];
