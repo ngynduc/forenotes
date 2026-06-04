@@ -1,6 +1,9 @@
 import { Link } from "react-router";
+import { Github } from "lucide-react";
 import { Container } from "./Container";
 import { GraphCanvas } from "./GraphCanvas";
+
+const githubUrl = "https://github.com/ngynduc/forenotes";
 
 export function HeroSection() {
   return (
@@ -13,7 +16,7 @@ export function HeroSection() {
         <p className="mx-auto mt-5 max-w-[560px] text-[1.0625rem] leading-relaxed text-[var(--color-text-muted)]">
           Keep incidents organized from first finding to final report, with a workspace built for investigators, responders, and security teams.
         </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
             href="/docs"
             className="inline-flex h-10 items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-6 text-[0.875rem] font-medium text-[var(--color-bg)] transition-colors hover:bg-[var(--color-primary-strong)]"
@@ -26,6 +29,15 @@ export function HeroSection() {
           >
             Donate
           </Link>
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="glass glass-hover inline-flex h-10 items-center gap-2 rounded-[var(--radius-sm)] px-6 text-[0.875rem] font-medium text-[var(--color-text)] transition-colors"
+          >
+            <Github size={16} aria-hidden="true" />
+            GitHub
+          </a>
         </div>
       </Container>
     </section>

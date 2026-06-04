@@ -1,6 +1,8 @@
 import { Link } from "react-router";
 import { Container } from "./Container";
 
+const githubUrl = "https://github.com/ngynduc/forenotes";
+
 export function SiteFooter() {
   return (
     <footer>
@@ -36,6 +38,14 @@ export function SiteFooter() {
               <Link to="/docs" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Documentation
               </Link>
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                Source code
+              </a>
               <span className="text-[0.8125rem] text-[var(--color-text-soft)]">Changelog (soon)</span>
               <a
                 href="https://ko-fi.com/ducnta"

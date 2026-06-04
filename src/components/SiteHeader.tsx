@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Menu, X } from "lucide-react";
+import { Github, Menu, X } from "lucide-react";
 import { Container } from "./Container";
 
 const navLinks = [
@@ -8,6 +8,8 @@ const navLinks = [
   { label: "Docs", href: "/docs" },
   { label: "Donate", href: "/donate" },
 ];
+
+const githubUrl = "https://github.com/ngynduc/forenotes";
 
 export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -38,6 +40,15 @@ export function SiteHeader() {
             </Link>
           ))}
           <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-[0.8125rem] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+          >
+            <Github size={15} aria-hidden="true" />
+            GitHub
+          </a>
+          <a
             href="/docs"
             className="inline-flex h-8 items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 text-[0.8125rem] font-medium text-[var(--color-bg)] transition-colors hover:bg-[var(--color-primary-strong)]"
           >
@@ -67,6 +78,16 @@ export function SiteHeader() {
               {link.label}
             </Link>
           ))}
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 py-2.5 text-[0.8125rem] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+            onClick={() => setMobileOpen(false)}
+          >
+            <Github size={16} aria-hidden="true" />
+            GitHub
+          </a>
           <a
             href="/docs"
             className="mt-2 inline-flex h-8 items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 text-[0.8125rem] font-medium text-[var(--color-bg)]"
