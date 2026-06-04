@@ -125,7 +125,7 @@ async function ensureDevelopmentUsers(database: Database) {
   }
 }
 
-async function ensureBootstrapAdmin(database: Database) {
+export async function ensureBootstrapAdmin(database: Database) {
   const existingAdmin = await database.query("select 1 from users where global_role = 'admin' limit 1");
   if (existingAdmin.rowCount && existingAdmin.rowCount > 0) {
     return;
@@ -135,7 +135,7 @@ async function ensureBootstrapAdmin(database: Database) {
     throw new Error("Refusing to bootstrap production with the default admin password.");
   }
 
-  await database.query(
+  const result = await database.query(
     `
       insert into users (
         id, username, email, display_name, global_role, status, password_hash, must_change_password, is_bootstrap_admin
@@ -152,6 +152,19 @@ async function ensureBootstrapAdmin(database: Database) {
       env.FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY || env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!"
     ]
   );
+
+  if (result.rowCount === 0) {
+    const conflict = await database.query<{ global_role: string }>(
+      "select global_role from users where lower(email) = lower($1) limit 1",
+      [env.FORENOTES_BOOTSTRAP_ADMIN_EMAIL]
+    );
+    if (conflict.rowCount && conflict.rows[0].global_role !== "admin") {
+      throw new Error(
+        `Cannot bootstrap admin because ${env.FORENOTES_BOOTSTRAP_ADMIN_EMAIL} already belongs to a ${conflict.rows[0].global_role} user.`
+      );
+    }
+    throw new Error("Bootstrap admin was not created. Check bootstrap email and existing users.");
+  }
 }
 
 function normalizeUsername(username: string) {

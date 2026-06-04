@@ -15,9 +15,6 @@ services:
       retries: 10
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
     image: forenotes-app:v1
     restart: unless-stopped
     depends_on:

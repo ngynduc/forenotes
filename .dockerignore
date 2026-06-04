@@ -1,6 +1,10 @@
 node_modules
 src/client/node_modules
 dist
+src/server/tests
+src/**/*.test.ts
+src/**/*.spec.ts
+coverage
 .env
 .env.*
 !.env.example
@@ -9,7 +13,6 @@ dist
 .git
 .gitignore
 docs
-coverage
 .claude
 .codex
 .gsd

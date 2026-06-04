@@ -63,6 +63,11 @@ class GenerateReportRequest(BaseModel):
     incidentContext: dict[str, Any]
 
 
+@app.get("/health")
+def health() -> dict[str, bool]:
+    return {"ok": True}
+
+
 def provider_spec(provider: str) -> dict[str, Any]:
     clean_provider = provider.strip().lower() or "openai"
     if clean_provider == "litellm":

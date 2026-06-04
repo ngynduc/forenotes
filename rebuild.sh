@@ -61,9 +61,11 @@ compose_cmd=(docker compose -f "${compose_file}" --env-file "${env_file}")
 
 app_port="3000"
 if [[ "${stack_name}" == "demo" ]]; then
-  app_port="${FORENOTES_DEMO_HOST_PORT:-3000}"
+  configured_port="$(sed -n 's/^FORENOTES_DEMO_HOST_PORT=//p' "${env_file}" | tail -n 1)"
+  app_port="${configured_port:-${FORENOTES_DEMO_HOST_PORT:-3000}}"
 else
-  app_port="${FORENOTES_HOST_PORT:-3000}"
+  configured_port="$(sed -n 's/^FORENOTES_HOST_PORT=//p' "${env_file}" | tail -n 1)"
+  app_port="${configured_port:-${FORENOTES_HOST_PORT:-3000}}"
 fi
 
 if [[ "${no_cache}" == "1" ]]; then

@@ -4,7 +4,9 @@ import { z } from "zod";
 config();
 
 const envSchema = z.object({
-  PORT: z.coerce.number().default(8787),
+  APP_HOST: z.string().trim().min(1).default("0.0.0.0"),
+  APP_PORT: z.coerce.number().int().positive().optional(),
+  PORT: z.coerce.number().int().positive().optional(),
   DATABASE_URL: z.string().default("postgres://postgres:postgres@127.0.0.1:5432/forenotes"),
   FORENOTES_BOOTSTRAP_ADMIN_USERNAME: z.string().trim().min(1).default("admin"),
   FORENOTES_BOOTSTRAP_ADMIN_EMAIL: z.string().email().default("admin@example.com"),
@@ -36,6 +38,14 @@ const envSchema = z.object({
     return;
   }
 
+  if (!process.env.DATABASE_URL?.trim()) {
+    context.addIssue({
+      code: "custom",
+      message: "Production DATABASE_URL is required.",
+      path: ["DATABASE_URL"]
+    });
+  }
+
   if (value.FORENOTES_ALLOW_HEADER_AUTH) {
     context.addIssue({
       code: "custom",
@@ -52,7 +62,13 @@ const envSchema = z.object({
     });
   }
 
-  if (value.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!" || value.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD.length < 12) {
+  if (!process.env.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD?.trim()) {
+    context.addIssue({
+      code: "custom",
+      message: "Production FORENOTES_BOOTSTRAP_ADMIN_PASSWORD is required.",
+      path: ["FORENOTES_BOOTSTRAP_ADMIN_PASSWORD"]
+    });
+  } else if (value.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD === "ChangeMe123!" || value.FORENOTES_BOOTSTRAP_ADMIN_PASSWORD.length < 12) {
     context.addIssue({
       code: "custom",
       message: "Production bootstrap admin password must be changed and at least 12 characters.",
@@ -77,7 +93,19 @@ const envSchema = z.object({
   }
 });
 
-export const env = envSchema.parse(process.env);
+const parsedEnv = envSchema.safeParse(process.env);
+
+if (!parsedEnv.success) {
+  const details = parsedEnv.error.issues
+    .map((issue) => `${issue.path.join(".") || "environment"}: ${issue.message}`)
+    .join("\n");
+  throw new Error(`Invalid Forenotes environment:\n${details}`);
+}
+
+export const env = {
+  ...parsedEnv.data,
+  PORT: parsedEnv.data.APP_PORT ?? parsedEnv.data.PORT ?? 8787
+};
 
 function isDefaultDatabaseUrl(value: string) {
   return /postgres:\/\/(?:postgres:postgres|forenotes:forenotes)@/i.test(value);

@@ -3,6 +3,6 @@ import { env } from "./env.js";
 
 const app = createApp();
 
-app.listen(env.PORT, () => {
-  process.stdout.write(`Forenotes API listening on http://127.0.0.1:${env.PORT}\n`);
+app.listen(env.PORT, env.APP_HOST, () => {
+  process.stdout.write(`Forenotes API listening on http://${env.APP_HOST}:${env.PORT}\n`);
 });
