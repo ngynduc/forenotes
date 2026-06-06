@@ -31,119 +31,22 @@ const toc = [
 ];
 
 const folderStructure = `
-forenotes/
+forenotes-prod/
 |-- docker-compose.prod.yml
 |-- .env.production
-|-- forenotes-app-v1.tar
-|-- services/
-|   \`-- report-llm-service/
-\`-- docs/
-`;
-
-const composeExample = `
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: \${POSTGRES_USER:?set POSTGRES_USER}
-      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: \${POSTGRES_DB:?set POSTGRES_DB}
-    volumes:
-      - forenotes_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \\"$\${POSTGRES_USER}\\" -d \\"$\${POSTGRES_DB}\\""]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  app:
-    image: forenotes-app:v1
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      report-llm-service:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      APP_HOST: \${APP_HOST:-0.0.0.0}
-      APP_PORT: \${APP_PORT:-3000}
-      DATABASE_URL: \${DATABASE_URL:?set DATABASE_URL}
-      FORENOTES_DATA_DIR: /app/data
-      FORENOTES_BOOTSTRAP_ADMIN_USERNAME: \${FORENOTES_BOOTSTRAP_ADMIN_USERNAME:?set FORENOTES_BOOTSTRAP_ADMIN_USERNAME}
-      FORENOTES_BOOTSTRAP_ADMIN_EMAIL: \${FORENOTES_BOOTSTRAP_ADMIN_EMAIL:?set FORENOTES_BOOTSTRAP_ADMIN_EMAIL}
-      FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME: \${FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME:?set FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME}
-      FORENOTES_BOOTSTRAP_ADMIN_PASSWORD: \${FORENOTES_BOOTSTRAP_ADMIN_PASSWORD:?set FORENOTES_BOOTSTRAP_ADMIN_PASSWORD}
-      FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY: \${FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY:-true}
-      FORENOTES_LLM_SECRET_KEY: \${FORENOTES_LLM_SECRET_KEY:?set FORENOTES_LLM_SECRET_KEY}
-      SECURE_SESSION_COOKIES: \${SECURE_SESSION_COOKIES:-true}
-      LITELLM_SERVICE_URL: http://report-llm-service:8001
-      LLM_PROVIDER: \${LLM_PROVIDER:-}
-      LLM_MODEL: \${LLM_MODEL:-}
-      LLM_API_KEY: \${LLM_API_KEY:-}
-      LLM_API_ENDPOINT: \${LLM_API_ENDPOINT:-}
-      LLM_SYSTEM_PROMPT: \${LLM_SYSTEM_PROMPT:-}
-      LLM_CUSTOM_HEADERS_JSON: \${LLM_CUSTOM_HEADERS_JSON:-{}}
-    ports:
-      - "\${FORENOTES_HOST_PORT:-3000}:\${APP_PORT:-3000}"
-    volumes:
-      - forenotes_app_data:/app/data
-
-  report-llm-service:
-    build: ./services/report-llm-service
-    image: forenotes-report-llm:v1
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      LLM_PROVIDER: \${LLM_PROVIDER:-}
-      LLM_MODEL: \${LLM_MODEL:-}
-      LLM_API_KEY: \${LLM_API_KEY:-}
-      LLM_API_ENDPOINT: \${LLM_API_ENDPOINT:-}
-      LLM_SYSTEM_PROMPT: \${LLM_SYSTEM_PROMPT:-}
-      LLM_CUSTOM_HEADERS_JSON: \${LLM_CUSTOM_HEADERS_JSON:-{}}
-
-volumes:
-  forenotes_postgres_data:
-  forenotes_app_data:
-`;
-
-const envExample = `
-NODE_ENV=production
-APP_HOST=0.0.0.0
-APP_PORT=3000
-FORENOTES_HOST_PORT=3000
-
-POSTGRES_USER=forenotes
-POSTGRES_PASSWORD=change_me_to_a_long_random_database_password
-POSTGRES_DB=forenotes
-DATABASE_URL=postgres://forenotes:change_me_to_a_long_random_database_password@postgres:5432/forenotes
-
-FORENOTES_BOOTSTRAP_ADMIN_USERNAME=admin
-FORENOTES_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME=Forenotes Admin
-FORENOTES_BOOTSTRAP_ADMIN_PASSWORD=change_me_to_a_long_random_temporary_password
-FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY=true
-
-FORENOTES_LLM_SECRET_KEY=change_me_to_at_least_32_random_characters
-SECURE_SESSION_COOKIES=true
-
-LLM_PROVIDER=
-LLM_MODEL=
-LLM_API_KEY=
-LLM_API_ENDPOINT=
-LLM_SYSTEM_PROMPT=
-LLM_CUSTOM_HEADERS_JSON={}
+\`-- .env.production.example
 `;
 
 const startCommands = `
-docker build -t forenotes:beta-v1-prod -f Dockerfile .
-docker run --env-file .env.production -p 3000:3000 -v forenotes_data:/app/data forenotes:beta-v1-prod
+docker pull ngynduc/forenotes:latest
 `;
 
 const startCommandsCompose = `
 cp .env.production.example .env.production
-docker compose --env-file .env.production up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production pull
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d postgres
+docker compose -f docker-compose.prod.yml --env-file .env.production ps postgres
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 `;
 
 const stopCommands = `
@@ -159,8 +62,8 @@ OS: Linux recommended
 `;
 
 const updateCommands = `
-docker compose -f docker-compose.prod.yml --env-file .env.production pull
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+docker compose -f docker-compose.prod.yml --env-file .env.production pull app
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 `;
 
 const archiveUpdateCommands = `
@@ -190,18 +93,24 @@ const concepts = [
 const workflowSteps = [
   {
     title: "Create a case",
+    image: "/user-guide/create-case.png",
+    alt: "Forenotes Cases page with an active case selected and the Create Case action available.",
+    caption: "Cases are the top-level workspace. Start here before creating incidents, assigning members, or collecting evidence.",
     steps: [
       "Go to Cases.",
-      "Select New Case.",
+      "Select Create Case.",
       "Enter the case name, client, severity, status, and summary.",
       "Save the case and open the case workspace.",
     ],
   },
   {
     title: "Add team members",
+    image: "/user-guide/team-members.png",
+    alt: "Forenotes selected case panel showing the Members tab next to Incidents and Case Details.",
+    caption: "Open the selected case panel and use Members to manage who can access the case and its incidents.",
     steps: [
       "Open the case.",
-      "Go to the members or settings area.",
+      "Go to Members in the selected case panel.",
       "Add users by username or email.",
       "Assign a role that matches the work they should perform.",
     ],
@@ -209,24 +118,34 @@ const workflowSteps = [
   },
   {
     title: "Create an incident",
+    image: "/user-guide/create-incident.png",
+    alt: "Forenotes selected case panel showing the Incidents tab and Create Incident action.",
+    caption: "Incidents are created from a selected case so the new investigation inherits the right case context.",
     steps: [
       "Open a case.",
-      "Select New Incident.",
+      "Select Create Incident from the selected case panel.",
       "Add incident name, status, severity, summary, and key timestamps.",
       "Save the incident before adding findings, timeline events, tasks, notes, or reports.",
     ],
   },
   {
     title: "Add findings",
+    image: "/user-guide/add-finding.png",
+    alt: "Forenotes Findings page with the selected case and incident, finding rows, tags, MITRE techniques, and Details actions.",
+    caption: "Findings support dense review, inline scanning, tags, MITRE technique context, and detail drill-downs.",
     steps: [
       "Open an incident.",
       "Go to Findings.",
+      "Select Add Finding or open Details on an existing finding.",
       "Add a finding title, severity, status, affected asset, description, evidence, and recommendation.",
       "Save the finding and keep evidence language specific enough for report review.",
     ],
   },
   {
     title: "Build a timeline",
+    image: "/user-guide/timeline.png",
+    alt: "Forenotes Timeline page showing timestamped incident events, sources, summaries, owners, tags, and Details actions.",
+    caption: "Timeline events reconstruct sequence and preserve source, owner, tag, and MITRE context for review.",
     steps: [
       "Open Timeline.",
       "Add timestamped events with the source, confidence, and description when available.",
@@ -235,7 +154,24 @@ const workflowSteps = [
     ],
   },
   {
+    title: "Link entities to findings and timeline events",
+    image: "/user-guide/entity-links-graph.png",
+    alt: "Forenotes Relationship Graph showing connected investigation objects with derived and manual relationship filters.",
+    caption: "Use Entities to maintain IOCs, systems, and accounts, then verify entity relationships from the graph.",
+    steps: [
+      "Open Entities and confirm the IOC, system, or account already exists.",
+      "Open Findings or Timeline, then select Details on the record that should explain the relationship.",
+      "In Linked Entities, choose the target type, select the target entity, and choose the relationship type.",
+      "Select Link, then save the Finding or Timeline Event detail.",
+      "Open Graph and enable Manual or Derived relationships to verify the connection.",
+    ],
+    note: "Entity links are strongest when the finding or timeline event text explains why the IOC, host, or account is relevant.",
+  },
+  {
     title: "Manage tasks",
+    image: "/user-guide/tasks.png",
+    alt: "Forenotes Tasks board showing Todo, In Progress, Blocked, and Done columns with task cards and Open Notes actions.",
+    caption: "The board view organizes work by status and keeps owner, assignee, priority, due date, and task notes visible.",
     steps: [
       "Open Tasks.",
       "Create a task with a clear action title.",
@@ -246,15 +182,22 @@ const workflowSteps = [
   },
   {
     title: "Write notes",
+    image: "/user-guide/task-notes.png",
+    alt: "Forenotes Tasks board showing task cards with Open Notes actions for task-level notes.",
+    caption: "In this build, notes are exposed from task cards. Use them for task-specific analysis and handoff context.",
     steps: [
-      "Open Notes.",
-      "Create a Markdown note.",
-      "Paste images if your release package supports image uploads.",
-      "Link notes to case or incident objects when those linking controls are available.",
+      "Open Tasks.",
+      "Select Open Notes on the relevant task card.",
+      "Add the note text needed for analyst handoff or review.",
+      "Save the note and return to the task board.",
     ],
+    note: "The current app navigation does not expose a standalone Notes page. Keep standalone case or incident notes out of the guide until that route is available in the product build.",
   },
   {
     title: "Generate reports",
+    image: "/user-guide/reports.png",
+    alt: "Forenotes Reports page showing report templates, report workspace controls, generated reports, and PDF download actions.",
+    caption: "Reports combine selected case and incident context with templates, preview generation, and PDF exports.",
     steps: [
       "Open Reports.",
       "Select a report template.",
@@ -268,6 +211,7 @@ const workflowSteps = [
 
 const envRows = [
   ["NODE_ENV", "Yes", "production", "Runtime mode. Production enables stricter startup validation."],
+  ["FORENOTES_IMAGE", "Yes", "ngynduc/forenotes:latest", "Docker image tag used by docker-compose.prod.yml. Pin a versioned tag for controlled upgrades."],
   ["APP_HOST", "Yes", "0.0.0.0", "Container bind address. Keep this value for Docker deployments."],
   ["APP_PORT", "Yes", "3000", "Application port inside the app container."],
   ["FORENOTES_HOST_PORT", "Yes", "3000", "Host port published by Docker Compose."],
@@ -282,19 +226,13 @@ const envRows = [
   ["FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY", "Yes", "true", "Forces the bootstrap admin to change password after first login."],
   ["FORENOTES_LLM_SECRET_KEY", "Yes", "32+ random characters", "Secret used to encrypt stored per-user LLM API keys."],
   ["SECURE_SESSION_COOKIES", "Yes", "true", "Use true behind HTTPS. Use false only for local HTTP testing."],
+  ["LITELLM_SERVICE_URL", "No", "http://llm-service.example.internal:8001", "Optional report LLM service URL. Leave empty if the service is not deployed."],
   ["LLM_PROVIDER", "No", "openai", "Optional environment-level default provider for report generation."],
   ["LLM_MODEL", "No", "gpt-4o-mini", "Optional default model. User settings can override it."],
   ["LLM_API_KEY", "No", "provider key", "Optional default LLM provider API key."],
   ["LLM_API_ENDPOINT", "No", "https://api.example.com/v1", "Optional custom or provider-specific API endpoint."],
   ["LLM_SYSTEM_PROMPT", "No", "custom prompt", "Optional report-generation system prompt."],
   ["LLM_CUSTOM_HEADERS_JSON", "No", "{}", "Optional JSON object for provider-specific headers."],
-];
-
-const licenseRows = [
-  ["Individual", "Solo analyst", "Core case and incident workflow"],
-  ["Pro", "Professional analyst", "Individual features plus Graph"],
-  ["Teams", "Internal team", "Pro features plus multiple users and tasks"],
-  ["Enterprise", "Large organization", "Teams features plus future SSO and enterprise controls"],
 ];
 
 const troubleshooting = [
@@ -431,7 +369,7 @@ export function DocsPage() {
 
           <DocsSection id="deployment-options" eyebrow="Deployment" title="Deployment options">
             <p>
-              The intended production path is a customer-owned, self-hosted deployment. Use the Forenotes Docker image,
+              The intended production path is a customer-owned, self-hosted deployment. Use the published Forenotes Docker image,
               Docker Compose, PostgreSQL, persistent volumes, and environment configuration. The app can run on an
               internet-connected server, an internal network, or an offline environment where images are loaded from an
               archive.
@@ -440,7 +378,7 @@ export function DocsPage() {
               <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                 <h3 className="text-[1rem] font-semibold text-[var(--color-text)]">Connected server</h3>
                 <p className="mt-2 text-[0.875rem]">
-                  Pull or build the image, configure <InlineCode>.env.production</InlineCode>, then start the stack with
+                  Pull the published image, configure <InlineCode>.env.production</InlineCode>, then start the stack with
                   Docker Compose. Put Nginx, Caddy, Traefik, or another reverse proxy in front when serving over HTTPS.
                 </p>
               </div>
@@ -462,7 +400,7 @@ export function DocsPage() {
                 "Docker Compose",
                 "A server, VM, or local machine",
                 "PostgreSQL, either in Compose or external",
-                "A release image or image archive",
+                "The published Docker image or an offline image archive",
                 "Optional reverse proxy such as Nginx, Caddy, or Traefik",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
@@ -482,17 +420,16 @@ export function DocsPage() {
             </p>
             <CodeBlock title="Example folder structure" code={folderStructure} />
             <p>
-              Copy .env.production.example to .env.production and replace every placeholder secret before first boot. 
+              Copy <InlineCode>.env.production.example</InlineCode> to <InlineCode>.env.production</InlineCode> and replace every placeholder secret before first boot.
               Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing <InlineCode>FORENOTES_LLM_SECRET_KEY</InlineCode>.
             </p>
-            <CodeBlock title="Start Forenotes" language="bash" code={startCommands} />
-            <CodeBlock title="Compose Deployment" language="bash" code={startCommandsCompose} />
+            <CodeBlock title="Pull published image" language="bash" code={startCommands} />
+            <CodeBlock title="Compose deployment" language="bash" code={startCommandsCompose} />
             <CodeBlock title="Restart or stop" language="bash" code={stopCommands} />
-            
+
             <p>
-              If your release ships with a prebuilt archive, load it with <InlineCode>docker load</InlineCode>. If your
-              team builds images internally, tag the resulting app image as <InlineCode>forenotes-app:v1</InlineCode> or
-              adjust the Compose image name consistently.
+              If your release ships with a prebuilt archive, load it with <InlineCode>docker load</InlineCode> and set
+              <InlineCode>FORENOTES_IMAGE</InlineCode> to the loaded image tag. Pin a versioned tag for production upgrades.
             </p>
           </DocsSection>
 
@@ -536,8 +473,21 @@ export function DocsPage() {
             </p>
             <div className="space-y-4">
               {workflowSteps.map((workflow) => (
-                <section key={workflow.title} className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+                <section key={workflow.title} className="docs-workflow-card">
                   <h3 className="text-[1.0625rem] font-semibold text-[var(--color-text)]">{workflow.title}</h3>
+                  <figure className="docs-workflow-figure mt-4">
+                    <a href={workflow.image} className="docs-screenshot-link" target="_blank" rel="noreferrer">
+                      <img
+                        src={workflow.image}
+                        alt={workflow.alt}
+                        className="docs-screenshot-image"
+                        loading="lazy"
+                      />
+                    </a>
+                    <figcaption className="docs-screenshot-caption">
+                      {workflow.caption}
+                    </figcaption>
+                  </figure>
                   <div className="mt-4">
                     <StepList steps={workflow.steps} />
                   </div>
