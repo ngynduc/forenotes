@@ -15,13 +15,8 @@ services:
       retries: 10
 
   app:
-    image: forenotes-app:v1
+    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:latest}
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      report-llm-service:
-        condition: service_healthy
     environment:
       NODE_ENV: production
       APP_HOST: ${APP_HOST:-0.0.0.0}
@@ -35,7 +30,7 @@ services:
       FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY: ${FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY:-true}
       FORENOTES_LLM_SECRET_KEY: ${FORENOTES_LLM_SECRET_KEY:?set FORENOTES_LLM_SECRET_KEY}
       SECURE_SESSION_COOKIES: ${SECURE_SESSION_COOKIES:-true}
-      LITELLM_SERVICE_URL: http://report-llm-service:8001
+      LITELLM_SERVICE_URL: ${LITELLM_SERVICE_URL:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -51,25 +46,6 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 30s
-      retries: 5
-
-  report-llm-service:
-    build: ./services/report-llm-service
-    image: forenotes-report-llm:v1
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_API_ENDPOINT: ${LLM_API_ENDPOINT:-}
-      LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-}
-      LLM_CUSTOM_HEADERS_JSON: ${LLM_CUSTOM_HEADERS_JSON:-{}}
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\""]
-      interval: 30s
-      timeout: 5s
-      start_period: 20s
       retries: 5
 
 volumes:

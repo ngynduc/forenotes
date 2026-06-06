@@ -54,13 +54,28 @@ Stores all application users.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | id | uuid | PK, default gen_random_uuid() | User identifier |
+| username | text | UNIQUE | Login username |
 | email | text | UNIQUE, NOT NULL | User email |
 | display_name | text | NOT NULL | Display name |
 | global_role | text | NOT NULL | One of: admin, commander, analyst, viewer |
 | status | text | NOT NULL, default 'active' | User status (active/inactive) |
 | password_hash | text | | Hashed password |
+| must_change_password | boolean | default false | Forces first-login password change |
+| is_bootstrap_admin | boolean | default false | Marks the env-created first admin |
+| last_login_at | timestamptz | | Last successful login |
 | created_at | timestamptz | default now() | Creation timestamp |
 | updated_at | timestamptz | default now() | Last update timestamp |
+
+### sessions
+
+Database-backed opaque web sessions.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | uuid | PK | Session cookie value |
+| user_id | uuid | FK → users, NOT NULL | Session owner |
+| expires_at | timestamptz | NOT NULL | Session expiry |
+| created_at | timestamptz | default now() | Creation timestamp |
 
 ### cases
 
@@ -389,6 +404,53 @@ Links tasks to evidence entities.
 | metadata_json | jsonb | Additional context |
 | created_at | timestamptz | |
 
+### report_templates
+
+Markdown report templates scoped to an incident.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| incident_id | uuid | FK → incidents |
+| name | text | Template name |
+| report_type | text | daily or incident |
+| template_body | text | Markdown/template content |
+| created_by_user_id | uuid | FK → users |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+### reports
+
+Generated or manually authored reports.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| incident_id | uuid | FK → incidents |
+| template_id | uuid | FK → report_templates |
+| title | text | Report title |
+| report_type | text | daily or incident |
+| report_date | date | Optional report date |
+| status | text | draft/final workflow status |
+| content_markdown | text | Report body |
+| created_by_user_id | uuid | FK → users |
+| updated_by_user_id | uuid | FK → users |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
+
+### report_exports
+
+PDF export history for reports.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | PK |
+| report_id | uuid | FK → reports |
+| exported_by_user_id | uuid | FK → users |
+| export_format | text | Export format, currently PDF |
+| file_name | text | Export file name |
+| created_at | timestamptz | |
+
 ## Migrations
 
 | File | Description |
@@ -396,3 +458,9 @@ Links tasks to evidence entities.
 | `001_initial.sql` | Core schema: users, cases, incidents, all entity tables, RBAC, tags, audit, notifications |
 | `002_graph_workspace.sql` | Graph workspace support |
 | `003_timeline_relationship_fields.sql` | Added `system_id` and `account_id` foreign keys to timeline_events |
+| `004_auth_sessions.sql` | Password/session auth fields and `sessions` table |
+| `005_reports.sql` | Report templates, reports, PDF export tracking, LLM settings |
+| `006_case_membership_password_hardening.sql` | Case membership and password hardening updates |
+| `007_llm_system_prompt.sql` | LLM system prompt storage |
+| `008_system_status.sql` | System status field |
+| `009_collapse_response_lead_roles.sql` | Normalize legacy lead roles to `commander` |

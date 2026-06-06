@@ -106,6 +106,18 @@ Save and share investigation queries used during analysis.
 - **MITRE ATT&CK tagging** — map queries to the techniques they detect
 - **Ownership** tracking
 
+## Reports And PDF Export
+
+Reports turn investigation records into stakeholder-ready markdown and PDF output.
+
+- **Daily and incident report types**
+- **Markdown report authoring** with incident context
+- **Template library** scoped to incidents
+- **PDF template workspace** for report layout control
+- **PDF export** from saved reports
+- **Optional LLM-assisted report generation** through configured user/provider settings
+- **Per-user LLM settings** encrypted with `FORENOTES_LLM_SECRET_KEY`
+
 ## Entity Relationships
 
 Two types of relationships exist between investigation artifacts:
@@ -210,3 +222,13 @@ Event-driven notifications for team awareness.
 - **Per-user delivery** to relevant team members
 - **Unseen/read** state tracking
 - **Entity context** linking back to the source item
+
+## Administration And Settings
+
+Admins and commanders can manage operational configuration from the app.
+
+- **User management** with role assignment
+- **Password reset** with forced change on next login
+- **Session-cookie authentication** with password login/logout
+- **Timezone settings** for local-day filtering and display
+- **Audit log review** for mutation history

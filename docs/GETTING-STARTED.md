@@ -1,33 +1,32 @@
 # Getting Started
 
+This guide is for local development and demo runs. For production installs, use [INSTALL_PRODUCTION.md](./INSTALL_PRODUCTION.md).
+
 ## Prerequisites
 
-- Node.js (v18+)
-- PostgreSQL (v14+)
+- Node.js 20 or newer
+- npm
+- PostgreSQL 14 or newer
+- Docker and Docker Compose for container runs
 
-## Installation
+## Local Install
 
 ```bash
 git clone <repository-url>
 cd forenotes
 npm install
+npm --prefix src/client install
+cp .env.example .env
 ```
 
-## Environment Variables
+Set at least:
 
-Create a `.env` file in the project root:
-
-```env
-PORT=8787
+```dotenv
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/forenotes
+APP_HOST=127.0.0.1
+APP_PORT=8787
+FORENOTES_LLM_SECRET_KEY=change_me_to_at_least_32_random_characters
 ```
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8787` | Server port |
-| `DATABASE_URL` | `postgres://postgres:postgres@127.0.0.1:5432/forenotes` | PostgreSQL connection string |
-
-## Database Setup
 
 Create the database and run migrations:
 
@@ -36,104 +35,107 @@ createdb forenotes
 npm run db:migrate
 ```
 
-Migrations are located in `src/server/db/migrations/` and run sequentially:
+## Development Server
 
-1. `001_initial.sql` - Core schema (users, cases, incidents, findings, etc.)
-2. `002_graph_workspace.sql` - Graph workspace tables
-3. `003_timeline_relationship_fields.sql` - Timeline event relationship fields
+Run the API and React client together:
 
-## Running the Application
+```bash
+npm run dev:full
+```
 
-### Development
+The API uses `APP_PORT` or `PORT` and defaults to `8787`. The Vite client runs from `src/client` and proxies API calls to the server during development.
+
+Server only:
 
 ```bash
 npm run dev
 ```
 
-This starts the server with file watching via `tsx`. The server runs on `http://localhost:8787`.
-
-### Demo Mode
+Client only:
 
 ```bash
-npm run dev:demo
+npm run dev:client
 ```
 
-### Production
+## Demo Data
+
+Seed demo records into the configured database:
 
 ```bash
-npm run build    # Compile TypeScript
-npm start        # Run compiled output
+npm run seed:demo
 ```
 
-## Running Tests
+`seed:demo` creates demo users, cases, incidents, findings, timeline events, tasks, queries, notes, reports, tags, and graph relationships. Do not run it against production.
+
+## Demo Docker
+
+The demo Docker stack is intentionally unsafe for production because it seeds predictable demo credentials.
 
 ```bash
-npm run test
+cp .env.demo.example .env.demo
+docker compose -f docker-compose.demo.yml --env-file .env.demo up -d --build
 ```
 
-Tests use `vitest` with `pg-mem` for in-memory PostgreSQL simulation and `supertest` for HTTP assertions.
+Demo credentials:
 
-## Type Checking
+```text
+admin / admin123
+commander / commander123
+lead / lead123
+analyst / analyst123
+viewer / viewer123
+```
+
+Stop the demo stack:
+
+```bash
+docker compose -f docker-compose.demo.yml --env-file .env.demo down
+```
+
+## Production Docker
+
+Production uses the published image and explicit secrets:
+
+```bash
+cp .env.production.example .env.production
+docker compose -f docker-compose.prod.yml --env-file .env.production pull
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+```
+
+Edit `.env.production` before starting. See [INSTALL_PRODUCTION.md](./INSTALL_PRODUCTION.md) for the full install flow.
+
+## Build And Verify
 
 ```bash
 npm run lint
+npm run test
+npm run build
 ```
 
-Runs `tsc --noEmit` to check TypeScript types without producing output.
+`npm run build` compiles the server TypeScript project and builds the React client into `dist/client`.
 
 ## Project Structure
 
-```
+```text
 forenotes/
 ├── src/
-│   ├── client/static/           # Frontend SPA
-│   │   ├── app.js               # Entry point
-│   │   ├── index.html           # HTML shell
-│   │   ├── styles.css           # Styles
-│   │   └── modules/             # JS modules
-│   │       ├── state.js         # Global state management
-│   │       ├── api.js           # HTTP client
-│   │       ├── data.js          # Data fetching
-│   │       ├── entities.js      # Entity CRUD operations
-│   │       ├── graphApi.js      # Graph API client
-│   │       ├── code-editor.js   # Code editor component
-│   │       ├── tableDefinitions.js
-│   │       └── render/          # UI rendering modules
-│   │           ├── shell.js     # Main layout
-│   │           ├── dashboard.js # Dashboard view
-│   │           ├── table.js     # Table component
-│   │           ├── graph.js     # Graph visualization
-│   │           ├── tasks.js     # Task board (Kanban)
-│   │           ├── modal.js     # Modal dialogs
-│   │           └── admin.js     # Admin/settings views
-│   ├── server/
-│   │   ├── index.ts             # Server entry point
-│   │   ├── app.ts               # Express app setup
-│   │   ├── db/
-│   │   │   ├── pool.ts          # PostgreSQL connection pool
-│   │   │   ├── setup.ts         # Migration runner
-│   │   │   └── migrations/      # SQL migration files
-│   │   ├── graph/
-│   │   │   ├── graphBuilder.ts  # Graph construction
-│   │   │   ├── graphTypes.ts    # Graph type definitions
-│   │   │   └── entityLinksRepository.ts
-│   │   ├── permissions/
-│   │   │   └── catalog.ts       # Permission definitions
-│   │   ├── routes/
-│   │   │   ├── caseRoutes.ts
-│   │   │   ├── incidentRoutes.ts
-│   │   │   ├── tagRoutes.ts
-│   │   │   ├── searchRoutes.ts
-│   │   │   ├── dashboardRoutes.ts
-│   │   │   ├── auditLogRoutes.ts
-│   │   │   ├── notificationRoutes.ts
-│   │   │   └── userRoutes.ts
-│   │   ├── schemas/
-│   │   │   └── schemas.ts       # Zod validation schemas
-│   │   └── services/            # Business logic (20+ services)
-│   └── shared/
-│       └── domain.ts            # Domain constants and types
-├── docs/                        # Documentation
-├── package.json
-└── tsconfig.json
+│   ├── client/                 # React/Vite client app
+│   │   ├── src/pages/          # App pages
+│   │   ├── src/components/     # UI, tables, graph, reports, layout
+│   │   ├── src/hooks/          # API-backed hooks
+│   │   ├── src/stores/         # Client state stores
+│   │   └── vite.config.ts
+│   ├── server/                 # Express API and services
+│   │   ├── routes/             # REST route modules
+│   │   ├── services/           # Business logic
+│   │   ├── db/                 # Pool, migrations, bootstrap
+│   │   ├── graph/              # Incident graph and MITRE builders
+│   │   └── permissions/        # RBAC catalog and enforcement
+│   ├── demo/                   # Demo seed data
+│   └── shared/                 # Shared domain types/constants
+├── docs/
+├── Dockerfile
+├── Dockerfile.dev
+├── docker-compose.prod.yml
+└── docker-compose.demo.yml
 ```

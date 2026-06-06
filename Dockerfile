@@ -33,7 +33,7 @@ ENV FORENOTES_DATA_DIR=/app/data
 ENV PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --chown=forenotes:forenotes scripts ./scripts
 COPY --from=build --chown=forenotes:forenotes /app/dist/server ./dist/server

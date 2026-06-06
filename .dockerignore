@@ -3,7 +3,9 @@ src/client/node_modules
 dist
 src/server/tests
 src/**/*.test.ts
+src/**/*.test.tsx
 src/**/*.spec.ts
+src/**/*.spec.tsx
 coverage
 .env
 .env.*
