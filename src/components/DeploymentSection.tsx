@@ -1,6 +1,7 @@
 import { Container } from "./Container";
 import { Reveal } from "./RevealSection";
-import { Shield, Server, FileCheck, Network } from "lucide-react";
+import { ArrowRight, BookOpen, Shield, Server, FileCheck, Network } from "lucide-react";
+import { Link } from "react-router";
 
 const items = [
   { icon: Shield, label: "Self-hosted response workspaces" },
@@ -24,6 +25,14 @@ export function DeploymentSection() {
             <p className="mt-4 text-[0.9375rem] leading-relaxed text-[var(--color-text-muted)]">
               Run it as a practical internal workspace and keep the focus on investigation records, not generic project management noise or subscription mechanics.
             </p>
+            <Link
+              to="/docs"
+              className="mt-6 inline-flex h-10 items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-5 text-[0.875rem] font-semibold text-[var(--color-bg)] transition-colors hover:bg-[var(--color-primary-strong)]"
+            >
+              <BookOpen size={16} aria-hidden="true" />
+              Read the installation guide
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
           </div>
         </Reveal>
         <Reveal animation="fade" delay={200}>
