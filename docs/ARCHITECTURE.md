@@ -1,134 +1,126 @@
 # Architecture
 
-## Overview
+Forenotes is a React/Vite single-page application served by an Express 5 API. The backend owns authentication, authorization, validation, migrations, audit logging, notifications, graph construction, report generation, and PostgreSQL persistence.
 
-Forenotes follows a layered architecture with clear separation between the frontend SPA, REST API routes, business logic services, and the PostgreSQL database.
+```text
+React/Vite client
+  pages, hooks, stores, table/graph/report components
+        |
+        | HTTP JSON + forenotes_session cookie
+        v
+Express app
+  /api/health
+  /api/auth
+  /api/cases
+  /api/incidents
+  /api/dashboard
+  /api/notifications
+  /api/uploads and /uploads
+        |
+        v
+Route modules
+  auth, users, cases, incidents, tags, search, reports, audit, uploads
+        |
+        v
+Services
+  authService, permissionService, caseService, incidentService,
+  findingService, timelineEventService, taskService, reportService,
+  graphBuilder, mitreMatrixBuilder, notificationService, auditLogService
+        |
+        v
+PostgreSQL
+  migrations, sessions, users, cases, incidents, entities, reports, tags
+```
 
-```
-┌─────────────────────────────────────────┐
-│          Frontend (Vanilla JS SPA)       │
-│  state.js ← api.js ← render modules    │
-└──────────────────┬──────────────────────┘
-                   │ HTTP (JSON)
-┌──────────────────┴──────────────────────┐
-│           Express 5 Routes              │
-│  caseRoutes, incidentRoutes, tagRoutes  │
-│  searchRoutes, dashboardRoutes, etc.    │
-├─────────────────────────────────────────┤
-│          Zod Schema Validation          │
-├─────────────────────────────────────────┤
-│         Middleware (Auth + RBAC)         │
-│  authService → permissionService        │
-├─────────────────────────────────────────┤
-│          Business Logic Services        │
-│  caseService, findingService,           │
-│  timelineEventService, taskService,     │
-│  graphBuilder, mitreMatrixBuilder, etc. │
-├─────────────────────────────────────────┤
-│          PostgreSQL (pg driver)         │
-│  pool.ts → migrations/                  │
-└─────────────────────────────────────────┘
-```
+## Runtime Layout
+
+- `src/server/index.ts` starts the server.
+- `src/server/app.ts` creates the Express app, security headers, `/api/health`, API routes, static client serving, SPA fallback, and error handling.
+- `src/server/routes/index.ts` mounts all route modules.
+- `src/server/env.ts` validates environment variables and rejects unsafe production settings.
+- `src/client` is the React application built by Vite.
+- `dist/server` and `dist/client` are copied into the production Docker image.
 
 ## Request Flow
 
-1. Client sends HTTP request with `x-user-id` header
-2. Route handler receives request
-3. **Auth middleware** resolves user from `x-user-id` header
-4. **Permission check** validates user's role has required permission
-5. **Membership check** verifies user belongs to case/incident
-6. **Zod validation** validates request body/params
-7. **Service layer** executes business logic
-8. **Audit log** records mutation (create/update/delete)
-9. **Notification** created for relevant team members
-10. JSON response returned to client
+1. The browser logs in through `POST /api/auth/login`.
+2. The server verifies the password with Argon2 and creates a database-backed session.
+3. The server sets the HTTP-only `forenotes_session` cookie.
+4. Subsequent API requests are resolved through the session cookie.
+5. Route handlers validate params/body with Zod.
+6. Permission checks validate the user's global role and case/incident membership.
+7. Services execute database operations.
+8. Mutations create audit log and notification records where applicable.
+9. JSON responses are returned to the client.
+
+`x-user-id` header auth remains available only for tests or explicitly enabled non-production development. It is ignored in production.
 
 ## Frontend Architecture
 
-The frontend is a module-based SPA without a framework. Key patterns:
+The client is a React/Vite app organized around pages, reusable UI components, and API-backed hooks.
 
-### State Management (`state.js`)
-
-Single global state object with getter/setter pattern. All data flows through state:
-
-```
-state = {
-  users, activeUserId, currentUser, permissions,
-  cases, selectedCaseId, incidents, selectedIncidentId,
-  caseMembers, incidentMembers,
-  findings, timelineEvents, indicators, systems, accounts,
-  tasks, queries, entityLinks, customTags, attackTags,
-  notifications, auditLogs, searchResults, dashboardSummary,
-  ui: { activeSection, sidebarExpanded, ... }
-}
-```
-
-### Rendering Pipeline
-
-```
-User Action → entities.js (CRUD) → api.js (HTTP) → data.js (refresh state)
-                                                          ↓
-                                              render module re-renders
-```
-
-### UI Sections
-
-| Section | Render Module | Description |
-|---------|---------------|-------------|
-| Dashboard | `render/dashboard.js` | Metrics, SLA, activity feed |
-| Cases | `render/table.js` | Case listing with CRUD |
-| Findings | `render/table.js` | Findings table with evidence links |
-| Timeline | `render/table.js` | Chronological event listing |
-| Tasks | `render/tasks.js` | Kanban board (todo/in-progress/blocked/done) |
-| Entities | `render/table.js` | Systems, accounts, indicators |
-| Queries | `render/table.js` | Saved investigation queries |
-| Graph | `render/graph.js` | Incident relationship visualization |
-| Tags | `render/admin.js` | Tag management |
-| Settings | `render/admin.js` | User/role management |
+| Area | Path | Purpose |
+|------|------|---------|
+| Pages | `src/client/src/pages` | Dashboard, cases, findings, timeline, graph, reports, settings, audit, admin |
+| Layout | `src/client/src/components/layout` | App shell and incident/case context bar |
+| Tables | `src/client/src/components/data-table` | Inline table display and quick editing |
+| Entity modal | `src/client/src/components/entity-modal` | Rich entity edit, links, tags, MITRE mapping |
+| Graph | `src/client/src/components/graph` | Relationship graph and node inspection |
+| MITRE | `src/client/src/components/mitre` | ATT&CK matrix and technique inspection |
+| Reports | `src/client/src/components/reports` | PDF template workspace |
+| Hooks | `src/client/src/hooks` | Query and mutation hooks for API domains |
+| Stores | `src/client/src/stores` | UI, scope, and graph state |
 
 ## Backend Services
 
-Services encapsulate all business logic. Each service owns its database queries and validation logic.
+Services encapsulate business logic and database access.
 
 | Service | Responsibility |
-|---------|---------------|
-| `authService` | User resolution from request headers |
-| `permissionService` | RBAC enforcement, permission queries |
-| `caseService` | Case CRUD, case membership |
-| `incidentService` | Incident CRUD, incident membership |
-| `findingService` | Finding CRUD, evidence linking |
-| `timelineEventService` | Timeline event CRUD, system/account linking |
-| `indicatorService` | Indicator CRUD, duplicate prevention |
-| `systemService` | Affected system CRUD |
-| `accountService` | Affected account CRUD |
-| `taskService` | Task CRUD, assignment, task-evidence linking |
-| `queryService` | Query CRUD, attack tag support |
-| `tagService` | Custom tag management |
-| `evidenceLinkService` | Finding-to-evidence relationships |
-| `membershipService` | Case/incident member management |
-| `notificationService` | Notification creation and delivery |
-| `auditLogService` | Mutation audit trail |
-| `searchService` | Full-text search across all entities |
-| `dashboardService` | Metrics, SLA tracking, analytics |
-| `graphBuilder` | Incident graph construction |
-| `mitreMatrixBuilder` | MITRE ATT&CK matrix generation |
+|---------|----------------|
+| `authService` | Login, logout, session cookies, password changes, optional header auth |
+| `permissionService` | RBAC permission lookup and enforcement |
+| `caseService` | Case CRUD and case membership |
+| `incidentService` | Incident CRUD and incident membership |
+| `findingService` | Findings, ownership, evidence relationships |
+| `timelineEventService` | Timeline events and system/account linking |
+| `indicatorService` | Indicator CRUD and duplicate prevention |
+| `systemService` / `accountService` | Affected infrastructure and identity records |
+| `taskService` | Kanban tasks, assignment, evidence links |
+| `queryService` | Saved investigation queries and ATT&CK mappings |
+| `tagService` | Custom tags and ATT&CK tag mappings |
+| `evidenceLinkService` | Finding and task evidence relationships |
+| `dashboardService` | Activity, SLA, and summary metrics |
+| `searchService` | Global/case/incident search |
+| `reportService` | Markdown reports and PDF export |
+| `notificationService` | Notification records and event stream |
+| `auditLogService` | Mutation history |
+
+## Deployment Architecture
+
+Production uses `docker-compose.prod.yml`:
+
+- `postgres`: PostgreSQL 16 with a named volume.
+- `app`: published Forenotes image, environment-driven config, `/app/data` named volume, `/api/health` healthcheck.
+
+The production image runs migrations before starting the app. It refuses unsafe production settings such as default database credentials, demo mode, header auth, short bootstrap passwords, or a missing `FORENOTES_LLM_SECRET_KEY`.
 
 ## Error Handling
 
-Centralized error handling via `AppError` class:
+The Express error handler returns:
 
 | Status | Meaning |
 |--------|---------|
 | 400 | Validation failure |
-| 401 | Authentication failure (missing/invalid user) |
-| 403 | Permission denied (insufficient role/membership) |
+| 401 | Authentication failure |
+| 403 | Permission or membership denied |
 | 404 | Resource not found |
-| 409 | Conflict (duplicate indicator, etc.) |
+| 409 | Conflict |
+| 429 | Login rate limit |
 | 500 | Internal server error |
 
-## Testing Strategy
+## Testing
 
-- **Unit/Integration tests** with Vitest
-- **In-memory PostgreSQL** via `pg-mem` for fast DB tests
-- **HTTP assertions** via Supertest
-- Tests located alongside source files or in `__tests__` directories
+- `npm run lint` runs TypeScript checking.
+- `npm run test` runs Vitest and Supertest tests.
+- `pg-mem` supports fast database-backed tests.
+- `npm run build` compiles the server and builds the React client.

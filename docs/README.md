@@ -6,7 +6,8 @@
 
 | Document | Description |
 |----------|-------------|
-| [Getting Started](./GETTING-STARTED.md) | Setup, installation, and running the application |
+| [Production Install](./INSTALL_PRODUCTION.md) | Docker Compose production install, upgrades, backup, and troubleshooting |
+| [Getting Started](./GETTING-STARTED.md) | Local development and demo setup |
 | [Architecture](./ARCHITECTURE.md) | System architecture, tech stack, and project structure |
 | [API Reference](./API.md) | Complete REST API documentation |
 | [Database Schema](./DATABASE.md) | Database tables, relationships, and migrations |
@@ -17,9 +18,10 @@
 
 - **Backend:** Node.js, Express 5, TypeScript
 - **Database:** PostgreSQL
-- **Frontend:** Vanilla JavaScript (module-based SPA)
+- **Frontend:** React, Vite, TypeScript
 - **Validation:** Zod
 - **Testing:** Vitest, Supertest, pg-mem
+- **Deployment:** Docker image plus Docker Compose
 
 ## Key Concepts
 
@@ -33,3 +35,10 @@
 - **Queries** - Saved investigation queries (KQL, SQL, etc.)
 - **Entity Links** - Relationships between investigation artifacts
 - **MITRE ATT&CK Tags** - Mapping findings and events to ATT&CK techniques
+
+## Runtime Notes
+
+- Production deployments should use the published Docker image and `docker-compose.prod.yml`.
+- Production auth uses the `forenotes_session` HTTP-only cookie created by `/api/auth/login`.
+- `x-user-id` header auth is only for tests or explicitly enabled non-production development.
+- Uploaded app data is stored under `/app/data` in the container and must be persisted.

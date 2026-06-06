@@ -7,17 +7,17 @@ Forenotes is a DFIR case notebook for incident records, findings, timelines, tas
 Copy `.env.production.example` to `.env.production` and replace every placeholder secret before first boot. Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing `FORENOTES_LLM_SECRET_KEY`.
 
 ```bash
-docker build -t forenotes:beta-v1-prod -f Dockerfile .
-docker run --env-file .env.production -p 3000:3000 -v forenotes_data:/app/data forenotes:beta-v1-prod
+docker pull ngynduc/forenotes:latest
 ```
 
-The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`.
+The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.
 
 For Compose deployments:
 
 ```bash
 cp .env.production.example .env.production
-docker compose --env-file .env.production up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production pull
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ```
 
 ## Development Demo Docker
