@@ -134,10 +134,32 @@ export async function createNotification(database: Database, input: Notification
 export async function listNotifications(database: Database, userId: string) {
   const result = await database.query(
     `
-      select id, incident_id, actor_user_id, event_type, title, body, entity_type, entity_id, unseen, read_at, created_at
-      from notifications
-      where recipient_user_id = $1
-      order by created_at desc
+      select
+        n.id,
+        n.incident_id,
+        n.actor_user_id,
+        n.event_type,
+        n.title,
+        case
+          when n.event_type = 'case.member_added' and direct_case.case_name is not null
+            then 'You were added to Case: ' || direct_case.case_name
+          when n.event_type = 'incident.member_added' and c.case_name is not null and i.name is not null
+            then 'You were added to Case: ' || c.case_name || '; Incident: ' || i.name
+          else n.body
+        end as body,
+        n.entity_type,
+        n.entity_id,
+        n.unseen,
+        n.read_at,
+        n.created_at
+      from notifications n
+      left join incidents i
+        on i.id = n.incident_id
+        or (n.incident_id is null and n.entity_type = 'incident' and i.id = n.entity_id)
+      left join cases c on c.id = i.case_id
+      left join cases direct_case on n.entity_type = 'case' and direct_case.id = n.entity_id
+      where n.recipient_user_id = $1
+      order by n.created_at desc
     `,
     [userId]
   );

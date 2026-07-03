@@ -1828,6 +1828,15 @@ describe("Forenotes API", () => {
 
     expect(addCaseMemberResponse.status).toBe(204);
 
+    await pool.query(
+      `
+        insert into notifications (
+          id, recipient_user_id, actor_user_id, event_type, title, body, entity_type, entity_id
+        ) values ($1, $2, $3, 'case.member_added', 'Added to case', $4, 'case', $5)
+      `,
+      [randomUUID(), analystTwoId, commanderId, `You were added to case ${caseId}`, caseId]
+    );
+
     const incidentResponse = await request(app)
       .post(`/api/cases/${caseId}/incidents`)
       .set("x-user-id", commanderId)
@@ -1848,6 +1857,15 @@ describe("Forenotes API", () => {
 
     expect(addIncidentMemberResponse.status).toBe(204);
 
+    await pool.query(
+      `
+        insert into notifications (
+          id, recipient_user_id, incident_id, actor_user_id, event_type, title, body, entity_type, entity_id
+        ) values ($1, $2, $3, $4, 'incident.member_added', 'Added to incident', $5, 'incident', $3)
+      `,
+      [randomUUID(), analystTwoId, incidentId, commanderId, `You were added to incident ${incidentId}`]
+    );
+
     const notificationsResponse = await request(app)
       .get("/api/notifications")
       .set("x-user-id", analystTwoId);
@@ -1866,6 +1884,39 @@ describe("Forenotes API", () => {
           notification.event_type === "incident.member_added" &&
           notification.body === "You were added to Case: Membership Case; Incident: Membership Incident"
       )
+    ).toBe(true);
+    expect(
+      notificationsResponse.body.notifications
+        .filter((notification: { event_type: string }) => notification.event_type === "incident.member_added")
+        .every((notification: { body: string }) => !notification.body.includes(incidentId))
+    ).toBe(true);
+    expect(
+      notificationsResponse.body.notifications
+        .filter((notification: { event_type: string }) => notification.event_type === "case.member_added")
+        .every((notification: { body: string }) => !notification.body.includes(caseId))
+    ).toBe(true);
+
+    const dashboardResponse = await request(app)
+      .get("/api/dashboard")
+      .set("x-user-id", analystTwoId);
+
+    expect(dashboardResponse.status).toBe(200);
+    expect(
+      dashboardResponse.body.summary.unreadUpdates.some(
+        (notification: { body: string; eventType: string }) =>
+          notification.eventType === "incident.member_added" &&
+          notification.body === "You were added to Case: Membership Case; Incident: Membership Incident"
+      )
+    ).toBe(true);
+    expect(
+      dashboardResponse.body.summary.unreadUpdates
+        .filter((notification: { eventType: string }) => notification.eventType === "incident.member_added")
+        .every((notification: { body: string }) => !notification.body.includes(incidentId))
+    ).toBe(true);
+    expect(
+      dashboardResponse.body.summary.unreadUpdates
+        .filter((notification: { eventType: string }) => notification.eventType === "case.member_added")
+        .every((notification: { body: string }) => !notification.body.includes(caseId))
     ).toBe(true);
   });
 
