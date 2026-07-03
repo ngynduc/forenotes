@@ -1,8 +1,8 @@
-# Authentication & Authorization
+# Authentication And Authorization
 
-## Authentication
+Forenotes uses username/password login with database-backed HTTP-only sessions in production.
 
-Forenotes production authentication is username/password login with a database-backed HTTP-only session cookie.
+## Session Login
 
 ```http
 POST /api/auth/login
@@ -17,33 +17,22 @@ Content-Type: application/json
 On success the server sets:
 
 ```text
-Set-Cookie: forenotes_session=<uuid>; HttpOnly; SameSite=Lax; Path=/
+Set-Cookie: forenotes_session=<opaque session id>; HttpOnly; SameSite=Lax; Path=/
 ```
 
-The cookie is looked up in the `sessions` table on later API requests. Sessions expire after 12 hours. `/api/auth/logout` deletes the session and clears the cookie.
+The session is looked up in PostgreSQL on later API requests. Logout deletes the session and clears the cookie.
 
-## Header Auth
+## Header Auth Boundary
 
-`x-user-id` header auth is supported only for tests or explicitly enabled non-production development:
+`x-user-id` header auth is only for tests or explicitly enabled non-production development:
 
 ```dotenv
 FORENOTES_ALLOW_HEADER_AUTH=true
 ```
 
-When `NODE_ENV=production`, header auth is always disabled. Production startup also refuses `FORENOTES_ALLOW_HEADER_AUTH=true`.
+Production ignores header auth and refuses unsafe production settings.
 
-## Auth Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/auth/login` | Create a session cookie from username/password |
-| `POST` | `/api/auth/logout` | Delete the current session |
-| `GET` | `/api/auth/me` | Return the current user and permissions |
-| `POST` | `/api/auth/change-password` | Change the current user's password |
-
-Login failures are rate-limited per IP and username.
-
-## Password Policy
+## Password Rules
 
 New passwords must:
 
@@ -52,59 +41,48 @@ New passwords must:
 - contain at least one number or symbol
 - differ from the current password when changed by the user
 
-Bootstrap and reset flows mark users with `must_change_password` so the UI can require a first-login password change.
+Bootstrap and reset flows can mark users with `must_change_password` so the UI requires a first-login password change.
 
-## Authorization Model
+## Roles
 
-Authorization combines global RBAC with case and incident membership.
+| Scope | Roles |
+|-------|-------|
+| Global | `admin`, `commander`, `analyst`, `viewer` |
+| Case | `commander`, `analyst`, `viewer` |
+| Incident | `commander`, `analyst`, `viewer` |
 
-### Global Roles
+Admins can manage the system. Commanders lead investigation work. Analysts contribute records. Viewers review work without mutation access.
 
-| Role | Description |
-|------|-------------|
-| `admin` | System administration and all permissions |
-| `commander` | Full investigation leadership access |
-| `analyst` | Investigation contributor access |
-| `viewer` | Read-only investigation access |
+## Access Layers
 
-### Case Roles
-
-| Role | Description |
-|------|-------------|
-| `commander` | Leads the case investigation |
-| `analyst` | Contributes to the case investigation |
-| `viewer` | Reviews case records |
-
-### Incident Roles
-
-| Role | Description |
-|------|-------------|
-| `commander` | Leads the incident response |
-| `analyst` | Contributes to the incident response |
-| `viewer` | Reviews incident records |
-
-## Access Control Layers
-
-1. Authentication resolves the current user from `forenotes_session`.
-2. The user's global role grants or denies the requested permission.
-3. Case-scoped routes require case membership.
-4. Incident-scoped routes require incident membership.
-5. Services perform the mutation or read.
+1. Resolve the user from `forenotes_session`.
+2. Check the user's global role and permission catalog.
+3. Require case membership for case-scoped routes.
+4. Require incident membership for incident-scoped routes.
+5. Apply service-level rules such as assignment ownership or last-commander protection.
 
 ## Permission Groups
 
 | Group | Examples |
 |-------|----------|
-| Cases | `case:create`, `case:update`, `case:member_manage` |
-| Incidents | `incident:create`, `incident:update`, `incident:member_manage` |
-| Findings | `finding:create`, `finding:update`, `finding:delete`, evidence links |
-| Timeline | `timeline:create`, `timeline:update`, `timeline:delete` |
-| Indicators | `indicator:create`, `indicator:update`, `indicator:delete` |
-| Tasks | `task:create`, `task:update`, `task:assign`, `task:link` |
-| Queries | `query:create`, `query:update`, `query:delete` |
-| Tags | custom tag create/update and ATT&CK mappings |
-| Graph/MITRE | graph and matrix reads |
-| Reports | report create/update/delete/export |
-| Admin/Audit | user management and audit-log reads |
+| Cases | Create cases, update cases, manage case members |
+| Incidents | Create incidents, update incidents, manage incident members |
+| Findings | Create, update, delete, and link evidence |
+| Timeline | Create, update, delete, and tag events |
+| Indicators | Create, update, and delete IoCs |
+| Tasks | Create, update, assign, and link evidence |
+| Queries | Create, update, delete, and tag saved queries |
+| Reports | Create, update, delete, generate, and export reports |
+| Admin | User management and audit-log review |
 
-Task assignees can update their own task progress without `task:assign`; `task:assign` is required to change owner or assignee.
+Task assignees can update their own task progress without needing the assignment permission. Changing owner or assignee requires assignment authority.
+
+## Production Checks
+
+Before exposing the app:
+
+- Keep `SECURE_SESSION_COOKIES=true` behind HTTPS.
+- Disable demo mode.
+- Leave header auth disabled.
+- Use a long random `FORENOTES_LLM_SECRET_KEY`.
+- Change the bootstrap admin password after first login.

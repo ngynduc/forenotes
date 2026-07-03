@@ -1,44 +1,47 @@
 # Forenotes Documentation
 
-**Forenotes** is a collaborative DFIR (Digital Forensics & Incident Response) notebook application. It enables security teams to manage investigation cases, track incidents, document findings, build timelines, and map evidence to the MITRE ATT&CK framework.
+Forenotes is an open-source DFIR notebook for response teams. It organizes cases, incidents, findings, timelines, tasks, reports, evidence relationships, and MITRE ATT&CK mapping in one collaborative workspace.
 
-## Documentation Index
+> These docs describe the full Forenotes application. The landing-page branch only hosts this static website. Application source, Docker files, migrations, and server code live on the main application branch and in release artifacts.
 
-| Document | Description |
-|----------|-------------|
-| [Production Install](./INSTALL_PRODUCTION.md) | Docker Compose production install, upgrades, backup, and troubleshooting |
-| [Getting Started](./GETTING-STARTED.md) | Local development and demo setup |
-| [Architecture](./ARCHITECTURE.md) | System architecture, tech stack, and project structure |
-| [API Reference](./API.md) | Complete REST API documentation |
-| [Database Schema](./DATABASE.md) | Database tables, relationships, and migrations |
-| [Authentication & Authorization](./AUTHENTICATION.md) | Auth flow, RBAC roles, and permissions |
-| [Features](./FEATURES.md) | Feature documentation and domain concepts |
+## Start Here
 
-## Tech Stack
+| Need | Read |
+|------|------|
+| Install Forenotes on a server | [Production Install](./INSTALL_PRODUCTION.md) |
+| Run the static documentation site locally | [Getting Started](./GETTING-STARTED.md) |
+| Understand the investigation workflow | [Features](./FEATURES.md) |
+| Review the application architecture | [Architecture](./ARCHITECTURE.md) |
+| Integrate with the API | [API Reference](./API.md) |
+| Understand auth and permissions | [Authentication & Authorization](./AUTHENTICATION.md) |
+| Inspect the data model | [Database Schema](./DATABASE.md) |
 
-- **Backend:** Node.js, Express 5, TypeScript
-- **Database:** PostgreSQL
-- **Frontend:** React, Vite, TypeScript
-- **Validation:** Zod
-- **Testing:** Vitest, Supertest, pg-mem
-- **Deployment:** Docker image plus Docker Compose
+## Reader Paths
 
-## Key Concepts
+- **Operators:** start with the production install guide, then read backup, restore, upgrade, and security notes before exposing the app to a team.
+- **Investigators:** start with Features to see the case-to-report workflow and the main screens.
+- **Admins:** read Authentication and Database to understand users, roles, membership, sessions, and audit logging.
+- **Developers:** read Getting Started for branch-specific setup, then Architecture, API, and Database.
 
-- **Cases** - Top-level investigation containers (e.g., a client engagement)
-- **Incidents** - Security events within a case being investigated
-- **Findings** - Analyst conclusions about what happened
-- **Timeline Events** - Chronological observations from evidence
-- **Indicators** - Indicators of Compromise (IoCs)
-- **Systems / Accounts** - Affected infrastructure and identities
-- **Tasks** - Investigation work items assigned to team members
-- **Queries** - Saved investigation queries (KQL, SQL, etc.)
-- **Entity Links** - Relationships between investigation artifacts
-- **MITRE ATT&CK Tags** - Mapping findings and events to ATT&CK techniques
+## Core Concepts
 
-## Runtime Notes
+| Concept | Purpose |
+|---------|---------|
+| Case | Top-level investigation or engagement container |
+| Incident | Security event investigated inside a case |
+| Finding | Analyst conclusion backed by evidence |
+| Timeline event | Time-bound observation from evidence or analysis |
+| Indicator | IoC such as host, IP, domain, URL, hash, process, or registry key |
+| System and account | Affected infrastructure and identities |
+| Task | Assignable investigation work item |
+| Query | Saved KQL, SQL, SPL, or other investigation query |
+| Entity link | Manual or derived relationship between investigation records |
+| Report | Markdown or PDF-ready incident communication |
 
-- Production deployments should use the published Docker image and `docker-compose.prod.yml`.
-- Production auth uses the `forenotes_session` HTTP-only cookie created by `/api/auth/login`.
-- `x-user-id` header auth is only for tests or explicitly enabled non-production development.
-- Uploaded app data is stored under `/app/data` in the container and must be persisted.
+## Where Source Lives
+
+- Static website branch: this landing page and embedded documentation.
+- Full app branch: application server, client, database migrations, Dockerfiles, and production Compose files.
+- Repository: [https://github.com/ngynduc/forenotes](https://github.com/ngynduc/forenotes)
+
+Use release tags or the main application branch when following production and full-app development commands.

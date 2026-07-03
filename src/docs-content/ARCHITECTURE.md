@@ -1,126 +1,82 @@
 # Architecture
 
-Forenotes is a React/Vite single-page application served by an Express 5 API. The backend owns authentication, authorization, validation, migrations, audit logging, notifications, graph construction, report generation, and PostgreSQL persistence.
+This page describes the full Forenotes application on the main application branch. The static landing site is a separate Vite package that publishes marketing pages and these docs.
+
+## System Shape
 
 ```text
-React/Vite client
-  pages, hooks, stores, table/graph/report components
-        |
-        | HTTP JSON + forenotes_session cookie
-        v
-Express app
-  /api/health
-  /api/auth
-  /api/cases
-  /api/incidents
-  /api/dashboard
-  /api/notifications
-  /api/uploads and /uploads
-        |
-        v
-Route modules
-  auth, users, cases, incidents, tags, search, reports, audit, uploads
-        |
-        v
-Services
-  authService, permissionService, caseService, incidentService,
-  findingService, timelineEventService, taskService, reportService,
-  graphBuilder, mitreMatrixBuilder, notificationService, auditLogService
-        |
-        v
+Browser
+  React client
+  HTTP JSON with forenotes_session cookie
+
+Express API
+  auth, cases, incidents, dashboard, reports, uploads, search
+
+Service layer
+  validation, RBAC, audit, notifications, graph, report generation
+
 PostgreSQL
-  migrations, sessions, users, cases, incidents, entities, reports, tags
+  users, sessions, cases, incidents, entities, tags, reports, audit logs
+
+App data volume
+  uploaded task-note images, report images, and generated artifacts
 ```
 
-## Runtime Layout
+## Runtime Responsibilities
 
-- `src/server/index.ts` starts the server.
-- `src/server/app.ts` creates the Express app, security headers, `/api/health`, API routes, static client serving, SPA fallback, and error handling.
-- `src/server/routes/index.ts` mounts all route modules.
-- `src/server/env.ts` validates environment variables and rejects unsafe production settings.
-- `src/client` is the React application built by Vite.
-- `dist/server` and `dist/client` are copied into the production Docker image.
+| Layer | Responsibility |
+|-------|----------------|
+| React client | Authenticated workspace UI, tables, graph, reports, settings, and admin screens |
+| Express routes | Request parsing, auth boundary, route-level validation, and response shaping |
+| Services | Business rules, membership checks, audit records, notifications, report workflows, and graph construction |
+| PostgreSQL | Durable relational state, sessions, RBAC, investigation records, report state, and audit history |
+| Data directory | Files that must survive container recreation |
 
 ## Request Flow
 
-1. The browser logs in through `POST /api/auth/login`.
-2. The server verifies the password with Argon2 and creates a database-backed session.
-3. The server sets the HTTP-only `forenotes_session` cookie.
-4. Subsequent API requests are resolved through the session cookie.
-5. Route handlers validate params/body with Zod.
-6. Permission checks validate the user's global role and case/incident membership.
-7. Services execute database operations.
-8. Mutations create audit log and notification records where applicable.
-9. JSON responses are returned to the client.
+1. The user signs in through `POST /api/auth/login`.
+2. The server verifies the password and creates a database-backed session.
+3. The browser receives the `forenotes_session` HTTP-only cookie.
+4. Later API calls resolve the current user from the session table.
+5. Routes validate params and bodies with Zod.
+6. Permission checks combine global role, case membership, and incident membership.
+7. Services perform the read or mutation.
+8. Mutations write audit logs and notifications where applicable.
+9. The API returns JSON to the client.
 
-`x-user-id` header auth remains available only for tests or explicitly enabled non-production development. It is ignored in production.
+## Source Layout On Main
 
-## Frontend Architecture
+| Path | Purpose |
+|------|---------|
+| `src/client` | Authenticated React/Vite app |
+| `src/server` | Express API, services, routes, DB setup, and migrations |
+| `src/shared` | Shared domain types and constants |
+| `src/demo` | Demo seed data |
+| `docs` | Source documentation for the full app |
+| `Dockerfile` | Production image build |
+| `docker-compose.prod.yml` | Production runtime stack |
+| `docker-compose.demo.yml` | Unsafe local demo stack |
 
-The client is a React/Vite app organized around pages, reusable UI components, and API-backed hooks.
+## Landing Site Layout
 
-| Area | Path | Purpose |
-|------|------|---------|
-| Pages | `src/client/src/pages` | Dashboard, cases, findings, timeline, graph, reports, settings, audit, admin |
-| Layout | `src/client/src/components/layout` | App shell and incident/case context bar |
-| Tables | `src/client/src/components/data-table` | Inline table display and quick editing |
-| Entity modal | `src/client/src/components/entity-modal` | Rich entity edit, links, tags, MITRE mapping |
-| Graph | `src/client/src/components/graph` | Relationship graph and node inspection |
-| MITRE | `src/client/src/components/mitre` | ATT&CK matrix and technique inspection |
-| Reports | `src/client/src/components/reports` | PDF template workspace |
-| Hooks | `src/client/src/hooks` | Query and mutation hooks for API domains |
-| Stores | `src/client/src/stores` | UI, scope, and graph state |
+| Path | Purpose |
+|------|---------|
+| `src/pages/LandingPage.tsx` | Product landing page |
+| `src/pages/DocsPage.tsx` | Embedded docs renderer |
+| `src/docs-content` | Markdown loaded into the docs tabs |
+| `public/user-guide` | Screenshots used by the feature guide |
+| `vercel.json` | Static site deployment routing |
 
-## Backend Services
+## Deployment Model
 
-Services encapsulate business logic and database access.
+The full application is deployed as a Docker image plus Compose file. Production startup validates unsafe settings, runs migrations, and bootstraps the first admin when needed.
 
-| Service | Responsibility |
-|---------|----------------|
-| `authService` | Login, logout, session cookies, password changes, optional header auth |
-| `permissionService` | RBAC permission lookup and enforcement |
-| `caseService` | Case CRUD and case membership |
-| `incidentService` | Incident CRUD and incident membership |
-| `findingService` | Findings, ownership, evidence relationships |
-| `timelineEventService` | Timeline events and system/account linking |
-| `indicatorService` | Indicator CRUD and duplicate prevention |
-| `systemService` / `accountService` | Affected infrastructure and identity records |
-| `taskService` | Kanban tasks, assignment, evidence links |
-| `queryService` | Saved investigation queries and ATT&CK mappings |
-| `tagService` | Custom tags and ATT&CK tag mappings |
-| `evidenceLinkService` | Finding and task evidence relationships |
-| `dashboardService` | Activity, SLA, and summary metrics |
-| `searchService` | Global/case/incident search |
-| `reportService` | Markdown reports and PDF export |
-| `notificationService` | Notification records and event stream |
-| `auditLogService` | Mutation history |
+The landing site is deployed as a static Vite build. It does not include the API server, migrations, Dockerfiles, or production environment templates.
 
-## Deployment Architecture
+## Operational Boundaries
 
-Production uses `docker-compose.prod.yml`:
-
-- `postgres`: PostgreSQL 16 with a named volume.
-- `app`: published Forenotes image, environment-driven config, `/app/data` named volume, `/api/health` healthcheck.
-
-The production image runs migrations before starting the app. It refuses unsafe production settings such as default database credentials, demo mode, header auth, short bootstrap passwords, or a missing `FORENOTES_LLM_SECRET_KEY`.
-
-## Error Handling
-
-The Express error handler returns:
-
-| Status | Meaning |
-|--------|---------|
-| 400 | Validation failure |
-| 401 | Authentication failure |
-| 403 | Permission or membership denied |
-| 404 | Resource not found |
-| 409 | Conflict |
-| 429 | Login rate limit |
-| 500 | Internal server error |
-
-## Testing
-
-- `npm run lint` runs TypeScript checking.
-- `npm run test` runs Vitest and Supertest tests.
-- `pg-mem` supports fast database-backed tests.
-- `npm run build` compiles the server and builds the React client.
+- Header auth is test/dev-only and disabled in production.
+- Sessions are database-backed and represented by an HTTP-only cookie.
+- Uploaded files live outside the database and require persistent storage.
+- Report LLM settings are optional and depend on external provider/service configuration.
+- Audit logs are written for entity mutations and should be retained with the database.
