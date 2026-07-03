@@ -3,6 +3,7 @@ dist/
 .vite/
 *.tsbuildinfo
 *.log
+*.tgz
 .DS_Store
 Thumbs.db
 .agents/
@@ -13,3 +14,4 @@ AGENTS.md
 CLAUDE.md
 data/
 docs/
+package/

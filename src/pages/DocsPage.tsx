@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, type ComponentType, type MouseEvent, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Braces,
@@ -24,17 +24,25 @@ import { SiteHeader } from "@/components/SiteHeader";
 type MarkdownBlock =
   | { type: "heading"; level: number; text: string }
   | { type: "paragraph"; text: string }
-  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "list"; ordered: boolean; items: MarkdownListItem[] }
   | { type: "code"; language: string; code: string }
   | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "image"; alt: string; src: string }
   | { type: "blockquote"; text: string }
   | { type: "rule" };
+
+type MarkdownListItem = {
+  text: string;
+  children: string[];
+};
+
+type HeadingTag = "h2" | "h3" | "h4" | "h5";
 
 type DocTab = {
   id: string;
   label: string;
   description: string;
-  icon: React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
+  icon: ComponentType<{ size?: number; "aria-hidden"?: boolean }>;
   markdown: string;
 };
 
@@ -97,6 +105,17 @@ const docsTabs: DocTab[] = [
   },
 ];
 
+const docFileTabIds: Record<string, string> = {
+  "README.md": "overview",
+  "INSTALL_PRODUCTION.md": "install",
+  "GETTING-STARTED.md": "develop",
+  "FEATURES.md": "features",
+  "ARCHITECTURE.md": "architecture",
+  "API.md": "api",
+  "AUTHENTICATION.md": "auth",
+  "DATABASE.md": "data",
+};
+
 function isTableSeparator(line: string) {
   return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
 }
@@ -108,6 +127,19 @@ function splitTableRow(line: string) {
     .replace(/\|$/, "")
     .split("|")
     .map((cell) => cell.trim());
+}
+
+function getListMatch(line: string) {
+  const match = line.match(/^(\s*)((?:[-*])|\d+\.)\s+(.*)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    indent: match[1].length,
+    ordered: /^\d+\.$/.test(match[2]),
+    text: match[3],
+  };
 }
 
 function parseMarkdown(markdown: string): MarkdownBlock[] {
@@ -133,6 +165,13 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
         index += 1;
       }
       blocks.push({ type: "code", language, code: codeLines.join("\n") });
+      index += 1;
+      continue;
+    }
+
+    const image = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (image) {
+      blocks.push({ type: "image", alt: image[1], src: image[2] });
       index += 1;
       continue;
     }
@@ -174,16 +213,31 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
       continue;
     }
 
-    if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line);
-      const items: string[] = [];
-      while (
-        index < lines.length &&
-        (ordered ? /^\s*\d+\.\s+/.test(lines[index]) : /^\s*[-*]\s+/.test(lines[index]))
-      ) {
-        items.push(lines[index].replace(/^\s*(?:[-*]|\d+\.)\s+/, ""));
+    const listMatch = getListMatch(line);
+    if (listMatch) {
+      const { indent, ordered } = listMatch;
+      const items: MarkdownListItem[] = [];
+      while (index < lines.length) {
+        const itemMatch = getListMatch(lines[index]);
+        if (!itemMatch || itemMatch.indent !== indent || itemMatch.ordered !== ordered) {
+          break;
+        }
+
+        const item: MarkdownListItem = { text: itemMatch.text, children: [] };
         index += 1;
+
+        while (index < lines.length) {
+          const childMatch = getListMatch(lines[index]);
+          if (!childMatch || childMatch.indent <= indent) {
+            break;
+          }
+          item.children.push(childMatch.text);
+          index += 1;
+        }
+
+        items.push(item);
       }
+
       blocks.push({ type: "list", ordered, items });
       continue;
     }
@@ -194,9 +248,9 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
       index < lines.length &&
       lines[index].trim() &&
       !lines[index].trim().startsWith("```") &&
+      !/^!\[[^\]]*\]\([^)]+\)$/.test(lines[index].trim()) &&
       !/^#{1,4}\s+/.test(lines[index].trim()) &&
-      !/^\s*[-*]\s+/.test(lines[index]) &&
-      !/^\s*\d+\.\s+/.test(lines[index]) &&
+      !getListMatch(lines[index]) &&
       !lines[index].trim().startsWith(">") &&
       !(lines[index].trim().includes("|") && index + 1 < lines.length && isTableSeparator(lines[index + 1]))
     ) {
@@ -209,7 +263,16 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
   return blocks;
 }
 
-function renderInline(text: string) {
+function getLocalDocTabId(href: string) {
+  if (!href.startsWith("./")) {
+    return null;
+  }
+
+  const fileName = href.slice(2).split("#")[0];
+  return docFileTabIds[fileName] ?? null;
+}
+
+function renderInline(text: string, onDocLink: (tabId: string) => void) {
   const pieces = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
 
   return pieces.map((piece, index) => {
@@ -227,11 +290,26 @@ function renderInline(text: string) {
 
     const link = piece.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link) {
+      const localTabId = getLocalDocTabId(link[2]);
+      if (localTabId) {
+        const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+          event.preventDefault();
+          onDocLink(localTabId);
+        };
+
+        return (
+          <a key={`${piece}-${index}`} href={`/docs#${localTabId}`} onClick={handleClick}>
+            {link[1]}
+          </a>
+        );
+      }
+
       const href = link[2].startsWith("./")
-        ? `https://github.com/ngynduc/forenotes/tree/main/docs/${link[2].slice(2)}`
+        ? `https://github.com/ngynduc/forenotes/blob/main/docs/${link[2].slice(2)}`
         : link[2];
+      const isExternal = /^https?:\/\//.test(href);
       return (
-        <a key={`${piece}-${index}`} href={href} target="_blank" rel="noreferrer">
+        <a key={`${piece}-${index}`} href={href} target={isExternal ? "_blank" : undefined} rel={isExternal ? "noreferrer" : undefined}>
           {link[1]}
         </a>
       );
@@ -241,19 +319,19 @@ function renderInline(text: string) {
   });
 }
 
-function MarkdownContent({ markdown }: { markdown: string }) {
+function MarkdownContent({ markdown, onDocLink }: { markdown: string; onDocLink: (tabId: string) => void }) {
   const blocks = useMemo(() => parseMarkdown(markdown), [markdown]);
 
   return (
     <div className="docs-markdown">
       {blocks.map((block, index) => {
         if (block.type === "heading") {
-          const Heading = `h${Math.min(block.level + 1, 5)}` as keyof JSX.IntrinsicElements;
-          return <Heading key={`${block.type}-${index}`}>{renderInline(block.text)}</Heading>;
+          const Heading = `h${Math.min(block.level + 1, 5)}` as HeadingTag;
+          return <Heading key={`${block.type}-${index}`}>{renderInline(block.text, onDocLink)}</Heading>;
         }
 
         if (block.type === "paragraph") {
-          return <p key={`${block.type}-${index}`}>{renderInline(block.text)}</p>;
+          return <p key={`${block.type}-${index}`}>{renderInline(block.text, onDocLink)}</p>;
         }
 
         if (block.type === "list") {
@@ -261,7 +339,16 @@ function MarkdownContent({ markdown }: { markdown: string }) {
           return (
             <List key={`${block.type}-${index}`}>
               {block.items.map((item, itemIndex) => (
-                <li key={`${item}-${itemIndex}`}>{renderInline(item)}</li>
+                <li key={`${item.text}-${itemIndex}`}>
+                  {renderInline(item.text, onDocLink)}
+                  {item.children.length > 0 && (
+                    <ul>
+                      {item.children.map((child, childIndex) => (
+                        <li key={`${child}-${childIndex}`}>{renderInline(child, onDocLink)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
               ))}
             </List>
           );
@@ -285,7 +372,7 @@ function MarkdownContent({ markdown }: { markdown: string }) {
                 <thead>
                   <tr>
                     {block.headers.map((header) => (
-                      <th key={header}>{renderInline(header)}</th>
+                      <th key={header}>{renderInline(header, onDocLink)}</th>
                     ))}
                   </tr>
                 </thead>
@@ -293,7 +380,7 @@ function MarkdownContent({ markdown }: { markdown: string }) {
                   {block.rows.map((row, rowIndex) => (
                     <tr key={`${row.join("-")}-${rowIndex}`}>
                       {row.map((cell, cellIndex) => (
-                        <td key={`${cell}-${cellIndex}`}>{renderInline(cell)}</td>
+                        <td key={`${cell}-${cellIndex}`}>{renderInline(cell, onDocLink)}</td>
                       ))}
                     </tr>
                   ))}
@@ -303,8 +390,17 @@ function MarkdownContent({ markdown }: { markdown: string }) {
           );
         }
 
+        if (block.type === "image") {
+          return (
+            <figure key={`${block.type}-${index}`} className="docs-image-frame">
+              <img src={block.src} alt={block.alt} loading="lazy" />
+              {block.alt && <figcaption>{block.alt}</figcaption>}
+            </figure>
+          );
+        }
+
         if (block.type === "blockquote") {
-          return <blockquote key={`${block.type}-${index}`}>{renderInline(block.text)}</blockquote>;
+          return <blockquote key={`${block.type}-${index}`}>{renderInline(block.text, onDocLink)}</blockquote>;
         }
 
         return <hr key={`${block.type}-${index}`} />;
@@ -314,12 +410,16 @@ function MarkdownContent({ markdown }: { markdown: string }) {
 }
 
 export function DocsPage() {
-  const [activeTab, setActiveTab] = useState(docsTabs[0].id);
+  const [activeTab, setActiveTab] = useState(() => {
+    const requestedTab = window.location.hash.replace("#", "");
+    return docsTabs.some((tab) => tab.id === requestedTab) ? requestedTab : docsTabs[0].id;
+  });
   const docsPanelRef = useRef<HTMLDivElement>(null);
   const activeDoc = useMemo(() => docsTabs.find((tab) => tab.id === activeTab) ?? docsTabs[0], [activeTab]);
   const ActiveIcon = activeDoc.icon;
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
+    window.history.replaceState(null, "", `/docs#${tabId}`);
     window.requestAnimationFrame(() => {
       const panelTop = docsPanelRef.current?.getBoundingClientRect().top ?? 0;
       const stickyOffset = window.matchMedia("(min-width: 1024px)").matches ? 88 : 134;
@@ -407,7 +507,7 @@ export function DocsPage() {
                     </div>
                   </div>
 
-                  <MarkdownContent markdown={activeDoc.markdown} />
+                  <MarkdownContent markdown={activeDoc.markdown} onDocLink={handleTabChange} />
                 </div>
               </article>
             </div>

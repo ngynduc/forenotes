@@ -1,234 +1,96 @@
 # Features
 
-## Case Management
+Forenotes is built around a practical incident-response workflow: create a case, add incidents, collect evidence-backed findings, coordinate tasks, map relationships, and publish reports.
 
-Cases are top-level containers for investigations. Each case represents an engagement or investigation project.
+## Investigation Flow
 
-- **Create cases** with client name, date range, and summary
-- **Case membership** controls who can access case data
-- **Case roles** (`commander`, `analyst`, `viewer`) define responsibilities
-- **Status tracking:** open, closed
-- **Multiple incidents** per case
+1. Create a case for an engagement, customer, or investigation.
+2. Add one or more incidents under that case.
+3. Record findings, timeline events, indicators, affected systems, and accounts.
+4. Link evidence so conclusions are traceable.
+5. Assign tasks and track work state.
+6. Map activity to MITRE ATT&CK tags.
+7. Generate reports for stakeholders.
 
-## Incident Management
+## Case Workspace
 
-Incidents are discrete security events being investigated within a case.
+Cases are top-level investigation containers. They hold incident records and define who can access the work.
 
-- **Severity levels:** low, medium, high, critical
-- **Status workflow:** open → contained → closed
-- **Incident membership** with inherited case roles
-- All investigation artifacts are scoped to an incident
+![Create case form](/user-guide/create-case.png)
+
+Case membership supports `commander`, `analyst`, and `viewer` roles. Commanders lead the response, analysts contribute records, and viewers review work without changing it.
+
+![Cases list](/user-guide/cases.png)
+
+## Incidents
+
+Incidents are discrete security events within a case. Each incident can have its own severity, status, membership, tasks, evidence, reports, and timeline.
+
+![Create incident form](/user-guide/create-incident.png)
+
+Incident membership keeps sensitive work scoped to the right people while still allowing case-level coordination.
 
 ## Findings
 
-Findings are analyst-authored conclusions about incident activity.
+Findings capture analyst conclusions with severity, confidence, impact, recommendations, owner, and status.
 
-- **Severity and confidence** ratings for prioritization
-- **Status workflow:** draft → confirmed → false_positive/resolved
-- **Impact and recommendation** fields for stakeholder communication
-- **Evidence linking** — connect findings to supporting evidence:
-  - Timeline events
-  - Systems
-  - Accounts
-  - Indicators
-  - Queries
-- **Tagging** with MITRE ATT&CK techniques and custom tags
-- **Ownership** model with creator and current owner
+![Findings table](/user-guide/findings.png)
 
-## Timeline Events
+Findings can be linked to timeline events, systems, accounts, indicators, queries, and tasks so the final conclusion points back to supporting evidence.
 
-Chronologically-ordered observations extracted from evidence sources.
+![Add finding form](/user-guide/add-finding.png)
 
-- **Event time** for accurate timeline reconstruction
-- **Source attribution** — where the observation came from
-- **Raw evidence reference** — pointer to original evidence
-- **System and account linking** — which host/account was involved
-- **MITRE ATT&CK and custom tags** for classification
+## Timeline
 
-## Indicators of Compromise (IoCs)
+Timeline events preserve chronological observations from logs, endpoint data, user interviews, and analyst notes.
 
-Track indicators discovered during investigation.
+![Timeline page](/user-guide/timeline.png)
 
-**Supported types:**
+Use timeline records to connect activity to affected hosts, users, findings, and MITRE ATT&CK tags.
 
-| Type | Example |
+## Entities And Graph
+
+Forenotes tracks systems, accounts, indicators, findings, tasks, timeline events, queries, tags, and manual links as graphable entities.
+
+![Entity list](/user-guide/entities.png)
+
+Derived links come from evidence relationships. Manual links let investigators describe relationships that are not captured by a direct field.
+
+![Entity relationship graph](/user-guide/entity-links-graph.png)
+
+## Tasks And Notes
+
+Tasks coordinate investigation work. They include priority, owner, assignee, due date, status, and optional evidence links.
+
+![Tasks board](/user-guide/tasks.png)
+
+Task notes support richer investigation context and image attachments.
+
+![Task notes](/user-guide/task-notes.png)
+
+## Reports
+
+Reports turn investigation data into stakeholder-ready Markdown and PDF output.
+
+![Reports workspace](/user-guide/reports.png)
+
+Teams can maintain incident-specific templates, generate report drafts from context, and export final reports.
+
+## Team Management
+
+Admins manage users globally. Case and incident commanders manage membership within their response scope.
+
+![Team member management](/user-guide/team-members.png)
+
+## MITRE ATT&CK
+
+Findings, timeline events, and queries can be mapped to ATT&CK techniques. The matrix view shows which techniques are observed and where supporting evidence lives.
+
+## Search, Dashboard, Audit, Notifications
+
+| Area | Purpose |
 |------|---------|
-| host | `WORKSTATION-01` |
-| ip | `192.168.1.100` |
-| domain | `malicious.example.com` |
-| url | `https://evil.com/payload` |
-| email | `phish@attacker.com` |
-| file_hash | `d41d8cd98f00b204e9800998ecf8427e` |
-| registry | `HKLM\Software\...` |
-| mutex | `Global\MyMutex` |
-| process | `svchost.exe` |
-| user_agent | `Mozilla/5.0 ...` |
-| other | Free-form |
-
-- **Uniqueness enforcement** — same type+value cannot be added twice per incident
-- **Confidence** rating (low/medium/high)
-- **First seen / last seen** timestamps
-- **Source** attribution
-
-## Systems
-
-Track affected infrastructure involved in an incident.
-
-- Hostname, IP address, OS, owner
-- Can be linked to timeline events
-- Can be linked to findings as evidence
-
-## Accounts
-
-Track affected user accounts involved in an incident.
-
-- Username, domain, status, owner
-- Can be linked to timeline events
-- Can be linked to findings as evidence
-
-## Tasks
-
-Investigation work items for team coordination.
-
-- **Kanban board** with columns: Todo, In Progress, Blocked, Done
-- **Priority levels:** low, medium, high, critical
-- **Owner/assignee separation** — task creator vs. person doing the work
-- **Due dates** with SLA tracking (overdue/due soon on dashboard)
-- **Evidence linking** — connect tasks to related entities (findings, timeline events, systems, accounts, indicators, queries)
-- **Assignment rules:** assignees can update their own task's status without needing `task:assign` permission
-
-## Queries
-
-Save and share investigation queries used during analysis.
-
-- **Language field** for query type (SQL, KQL, Splunk SPL, etc.)
-- **Query body** for the actual query text
-- **MITRE ATT&CK tagging** — map queries to the techniques they detect
-- **Ownership** tracking
-
-## Reports And PDF Export
-
-Reports turn investigation records into stakeholder-ready markdown and PDF output.
-
-- **Daily and incident report types**
-- **Markdown report authoring** with incident context
-- **Template library** scoped to incidents
-- **PDF template workspace** for report layout control
-- **PDF export** from saved reports
-- **Optional LLM-assisted report generation** through configured user/provider settings
-- **Per-user LLM settings** encrypted with `FORENOTES_LLM_SECRET_KEY`
-
-## Entity Relationships
-
-Two types of relationships exist between investigation artifacts:
-
-### Derived Links
-Automatically created from evidence relationships:
-- Finding → evidence links (finding_evidence_links)
-- Timeline event → system/account (via foreign keys)
-- Task → evidence links (task_links)
-- Entity → MITRE tag mappings
-
-### Manual Links
-Explicitly created by investigators:
-- Stored in `incident_entity_links`
-- Support arbitrary source/target entity types
-- Typed relationships: related_to, evidence_for, caused_by, followed_by, investigates, references, observed_on, used_account, contains_ioc, maps_to, detects, assigned_to, has_tag
-
-## Incident Graph
-
-Visual representation of relationships between all entities in an incident.
-
-### Graph Modes
-
-| Mode | Shows |
-|------|-------|
-| **overview** | All entities and relationships |
-| **investigation** | Findings, evidence, and their connections |
-| **timeline** | Timeline events with system/account links |
-| **assets** | Systems and accounts with associated events |
-| **tasks** | Tasks with linked evidence |
-| **mitre** | MITRE techniques/tactics with mapped evidence |
-
-### Node Types
-finding, timeline_event, task, system, account, ioc, query, mitre_technique, mitre_tactic, user, tag
-
-### Edge Types
-related_to, evidence_for, caused_by, followed_by, investigates, references, observed_on, used_account, contains_ioc, maps_to, belongs_to_tactic, subtechnique_of, detects, assigned_to, has_tag
-
-## MITRE ATT&CK Integration
-
-Map investigation artifacts to the MITRE ATT&CK framework.
-
-- **Technique and tactic** tags with hierarchical structure (parent/subtechnique)
-- **Findings, timeline events, and queries** can be tagged with ATT&CK techniques
-- **MITRE matrix view** shows which techniques are observed, with evidence counts per entity type
-- **Platform and version** tracking for ATT&CK entries
-
-## Tags
-
-### MITRE ATT&CK Tags
-Global tags representing ATT&CK techniques and tactics. Can be applied to findings, timeline events, and queries.
-
-### Custom Tags
-User-created tags scoped to a case. Support custom colors. Can be applied to findings and timeline events.
-
-## Search
-
-Full-text search across all investigation entities.
-
-- **Scope options:** global, case-scoped, incident-scoped
-- **Searchable entities:** findings, timeline events, indicators, queries, tasks, systems, accounts, tags, attack tags, incidents, cases
-- **Tag-aware:** finds entities tagged with the search term
-- **Results grouped** by case and incident
-
-## Dashboard
-
-Overview of investigation activity and SLA metrics.
-
-### Summary Metrics
-- Total cases, incidents, findings, tasks
-
-### SLA Tracking
-- **Overdue tasks:** past due date
-- **Due soon tasks:** due within 48 hours
-- **Stale incidents:** open with no activity for 72+ hours
-- **Aging findings:** in draft status for 7+ days
-
-### Breakdowns
-- Case status distribution (open/closed)
-- Incident severity distribution
-- Finding status distribution
-- Task status distribution
-
-### Activity
-- 7-day activity trend (findings, tasks, timeline events per day)
-- Recent activity feed (8 most recent items across entity types)
-
-## Audit Logging
-
-Complete audit trail for all entity mutations.
-
-- **Actions tracked:** entity.create, entity.update, entity.delete
-- **Before/after snapshots** as JSON for change review
-- **Actor, case, and incident** context
-- **Metadata** field for additional context
-
-## Notifications
-
-Event-driven notifications for team awareness.
-
-- **Events:** finding.created, finding.updated, incident.created, task.assigned, etc.
-- **Per-user delivery** to relevant team members
-- **Unseen/read** state tracking
-- **Entity context** linking back to the source item
-
-## Administration And Settings
-
-Admins and commanders can manage operational configuration from the app.
-
-- **User management** with role assignment
-- **Password reset** with forced change on next login
-- **Session-cookie authentication** with password login/logout
-- **Timezone settings** for local-day filtering and display
-- **Audit log review** for mutation history
+| Search | Find cases, incidents, findings, timeline events, indicators, queries, tasks, systems, accounts, and tags |
+| Dashboard | Review activity, stale work, overdue tasks, and investigation metrics |
+| Audit log | Preserve mutation history with actor, entity, before/after JSON, and context |
+| Notifications | Notify team members about assignments and important investigation events |
