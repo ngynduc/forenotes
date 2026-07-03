@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
@@ -6,6 +6,7 @@ import { Copy, Eye, Plus, Save, Trash2 } from "lucide-react";
 import type { PdfTemplate } from "@shared/reportTypes";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import {
   useCreatePdfTemplate,
   useDeletePdfTemplate,
@@ -427,8 +428,6 @@ body::before {
   }
 }`;
 
-type PdfWorkspaceTab = "details" | "html" | "css" | "preview";
-
 function messageFromError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -491,9 +490,19 @@ export function PdfTemplateWorkspace() {
   const deletePdfTemplate = useDeletePdfTemplate();
   const previewPdfTemplate = usePreviewPdfTemplate();
   const [pdfDraft, setPdfDraft] = useState<PdfTemplate | null>(null);
-  const [pdfWorkspaceTab, setPdfWorkspaceTab] = useState<PdfWorkspaceTab>("details");
+  const [search, setSearch] = useState("");
   const [pdfMessage, setPdfMessage] = useState<string | null>(null);
   const pdfTemplates = pdfTemplatesQuery.data?.templates ?? [];
+  const filteredTemplates = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    if (!normalizedSearch) return pdfTemplates;
+    return pdfTemplates.filter((template) =>
+      [template.name, template.description ?? "", template.scope, template.isDefault ? "default" : ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch)
+    );
+  }, [pdfTemplates, search]);
 
   function savePdfTemplate() {
     if (!pdfDraft) return;
@@ -546,192 +555,164 @@ export function PdfTemplateWorkspace() {
   }
 
   return (
-    <div className="space-y-4" data-report-editor="pdf-template">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold">PDF Templates</h3>
-          <p className="text-xs text-[var(--color-text-muted)]">HTML/CSS wrappers for Markdown report exports.</p>
+    <section className="reports-workspace space-y-4" data-report-editor="pdf-template">
+      <div className="reports-card rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-[220px] flex-1">
+            <h3 className="text-base font-semibold">PDF Templates</h3>
+            <p className="mt-1 text-sm text-[var(--color-text-muted)]">Design the HTML and CSS wrapper used for branded PDF exports.</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setPdfDraft(newPdfTemplateDraft());
+              setPdfMessage(null);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Create template
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setPdfDraft(newPdfTemplateDraft());
-            setPdfWorkspaceTab("details");
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Create template
-        </Button>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]">
+          <label className="space-y-1 text-sm font-medium">
+            Search templates
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search PDF templates" />
+          </label>
+          <label className="space-y-1 text-sm font-medium">
+            Selected template
+            <Select
+              value={pdfDraft?.id ?? ""}
+              onChange={(event) => {
+                const template = pdfTemplates.find((candidate) => candidate.id === event.target.value);
+                setPdfDraft(template ?? null);
+                setPdfMessage(null);
+              }}
+            >
+              <option value="">Select a template</option>
+              {filteredTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                  {template.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
-        <div className="space-y-2">
-          {pdfTemplates.length === 0 ? (
-            <div className="rounded border border-dashed border-[var(--color-border)] p-4 text-sm text-[var(--color-text-muted)]">
-              No custom PDF templates yet. Exports use the built-in default.
-            </div>
-          ) : (
-            pdfTemplates.map((template) => (
-              <article key={template.id} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3">
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => {
-                    setPdfDraft(template);
-                    setPdfWorkspaceTab("details");
-                  }}
-                >
-                  <span className="block truncate text-sm font-medium">{template.name}</span>
-                  <span className="block text-xs text-[var(--color-text-muted)]">
-                    {template.scope}
-                    {template.isDefault ? " / default" : ""}
-                  </span>
-                </button>
-                <div className="mt-3 flex gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    title="Duplicate template"
-                    onClick={() => duplicatePdfTemplate.mutate({ templateId: template.id })}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    title="Delete template"
-                    onClick={() => deletePdfTemplate.mutate(template.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </article>
-            ))
-          )}
+      {pdfTemplates.length === 0 ? (
+        <div className="reports-card rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+          No custom PDF templates yet. Exports use the built-in default.
         </div>
+      ) : null}
 
-        <div className="min-w-0">
-          {pdfDraft ? (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <h4 className="text-sm font-semibold">{pdfDraft.name || "Untitled PDF template"}</h4>
-                  <p className="text-xs text-[var(--color-text-muted)]">Edit metadata, HTML, CSS, and preview output in separate workspaces.</p>
-                </div>
-                <div className="flex max-w-full flex-wrap gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-background)] p-1">
-                  {[
-                    ["details", "Details"],
-                    ["html", "HTML"],
-                    ["css", "CSS"],
-                    ["preview", "Preview"],
-                  ].map(([tab, label]) => (
-                    <Button
-                      key={tab}
-                      type="button"
-                      variant={pdfWorkspaceTab === tab ? "secondary" : "ghost"}
-                      size="sm"
-                      aria-pressed={pdfWorkspaceTab === tab}
-                      onClick={() => setPdfWorkspaceTab(tab as PdfWorkspaceTab)}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
+      {pdfDraft ? (
+        <div className="pdf-template-editor-grid">
+          <section className="reports-card min-w-0 space-y-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4 className="text-sm font-semibold">{pdfDraft.name || "Untitled PDF template"}</h4>
+                <p className="text-xs text-[var(--color-text-muted)]">Edit metadata, HTML, and CSS in one full-width workspace.</p>
               </div>
-
-              {pdfWorkspaceTab === "details" ? (
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <label className="space-y-1 text-sm font-medium">
-                    Template name
-                    <Input value={pdfDraft.name} onChange={(event) => setPdfDraft({ ...pdfDraft, name: event.target.value })} />
-                  </label>
-                  <label className="space-y-1 text-sm font-medium">
-                    Description
-                    <Input
-                      value={pdfDraft.description ?? ""}
-                      onChange={(event) => setPdfDraft({ ...pdfDraft, description: event.target.value })}
-                    />
-                  </label>
-                  <label className="mt-7 flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={pdfDraft.isDefault}
-                      onChange={(event) => setPdfDraft({ ...pdfDraft, isDefault: event.target.checked })}
-                    />
-                    Default
-                  </label>
-                </div>
-              ) : null}
-
-              {pdfWorkspaceTab === "html" ? (
-                <CodeEditorField
-                  label="HTML template"
-                  value={pdfDraft.htmlTemplate}
-                  onChange={(htmlTemplate) => setPdfDraft({ ...pdfDraft, htmlTemplate })}
-                  height="520px"
-                  language="html"
-                />
-              ) : null}
-
-              {pdfWorkspaceTab === "css" ? (
-                <CodeEditorField
-                  label="CSS"
-                  value={pdfDraft.css}
-                  onChange={(cssValue) => setPdfDraft({ ...pdfDraft, css: cssValue })}
-                  height="520px"
-                  language="css"
-                />
-              ) : null}
-
               <div className="flex flex-wrap gap-2">
                 <Button type="button" onClick={savePdfTemplate} disabled={createPdfTemplate.isPending || updatePdfTemplate.isPending}>
                   <Save className="h-4 w-4" />
-                  Save template
+                  Save
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setPdfWorkspaceTab("preview");
-                    previewCurrentPdfTemplate();
-                  }}
-                  disabled={previewPdfTemplate.isPending}
-                >
-                  <Eye className="h-4 w-4" />
-                  Preview
+                <Button type="button" variant="outline" onClick={() => duplicatePdfTemplate.mutate({ templateId: pdfDraft.id })} disabled={!pdfDraft.id}>
+                  <Copy className="h-4 w-4" />
+                  Duplicate
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => deletePdfTemplate.mutate(pdfDraft.id)} disabled={!pdfDraft.id}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete
                 </Button>
               </div>
-
-              {pdfMessage ? (
-                <p className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
-                  {pdfMessage}
-                </p>
-              ) : null}
-
-              {pdfWorkspaceTab === "preview" ? (
-                previewPdfTemplate.data?.html ? (
-                  <iframe
-                    title="PDF template preview"
-                    srcDoc={previewPdfTemplate.data.html}
-                    className="h-[520px] w-full rounded border border-[var(--color-border)] bg-white"
-                  />
-                ) : (
-                  <div className="rounded border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-                    Run preview to render the current HTML and CSS.
-                  </div>
-                )
-              ) : null}
             </div>
-          ) : (
-            <div className="rounded border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-              Select a PDF template or create one to edit branding.
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <label className="space-y-1 text-sm font-medium">
+                Template name
+                <Input value={pdfDraft.name} onChange={(event) => setPdfDraft({ ...pdfDraft, name: event.target.value })} />
+              </label>
+              <label className="space-y-1 text-sm font-medium">
+                Description
+                <Input value={pdfDraft.description ?? ""} onChange={(event) => setPdfDraft({ ...pdfDraft, description: event.target.value })} />
+              </label>
+              <label className="mt-7 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={pdfDraft.isDefault}
+                  onChange={(event) => setPdfDraft({ ...pdfDraft, isDefault: event.target.checked })}
+                />
+                Default
+              </label>
             </div>
-          )}
+
+            <CodeEditorField
+              label="HTML template"
+              value={pdfDraft.htmlTemplate}
+              onChange={(htmlTemplate) => setPdfDraft({ ...pdfDraft, htmlTemplate })}
+              height="460px"
+              language="html"
+            />
+
+            <CodeEditorField label="CSS" value={pdfDraft.css} onChange={(cssValue) => setPdfDraft({ ...pdfDraft, css: cssValue })} height="460px" language="css" />
+          </section>
+
+          <aside className="reports-card min-w-0 space-y-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold">Preview / Test Render</h4>
+                <p className="text-xs text-[var(--color-text-muted)]">Render the current HTML and CSS with sample report content.</p>
+              </div>
+              <Button type="button" variant="outline" onClick={previewCurrentPdfTemplate} disabled={previewPdfTemplate.isPending}>
+                <Eye className="h-4 w-4" />
+                Preview
+              </Button>
+            </div>
+
+            {pdfMessage ? (
+              <p className="rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+                {pdfMessage}
+              </p>
+            ) : null}
+
+            {previewPdfTemplate.data?.html ? (
+              <iframe
+                title="PDF template preview"
+                srcDoc={previewPdfTemplate.data.html}
+                className="h-[620px] w-full rounded border border-[var(--color-border)] bg-white"
+              />
+            ) : (
+              <div className="rounded border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+                Run preview to render the current HTML and CSS.
+              </div>
+            )}
+          </aside>
         </div>
-      </div>
-    </div>
+      ) : filteredTemplates.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filteredTemplates.map((template) => (
+            <article key={template.id} className="reports-card rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <button type="button" className="w-full text-left" onClick={() => setPdfDraft(template)}>
+                <span className="block truncate text-sm font-medium">{template.name}</span>
+                <span className="block text-xs text-[var(--color-text-muted)]">
+                  {template.scope}
+                  {template.isDefault ? " / default" : ""}
+                </span>
+                {template.description ? <span className="mt-2 block text-sm text-[var(--color-text-muted)]">{template.description}</span> : null}
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="reports-card rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+          No PDF templates match the current search.
+        </div>
+      )}
+    </section>
   );
 }
