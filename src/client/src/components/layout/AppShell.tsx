@@ -55,7 +55,7 @@ export function AppShell() {
       {/* Sidebar rail */}
       <aside
         className={cn(
-          "flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-150",
+          "hidden flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-150 md:flex",
           expanded ? "w-52" : "w-14"
         )}
       >
@@ -103,11 +103,38 @@ export function AppShell() {
       </aside>
 
       {/* Main area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <header className="flex min-h-12 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 sm:px-4">
           <ContextBar />
         </header>
+
+        <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 md:hidden" aria-label="Primary navigation">
+          {NAV_ITEMS.filter((item) => can(item.permission)).map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              className={({ isActive }) =>
+                cn(
+                  "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)]",
+                  isActive
+                    ? "bg-[var(--color-primary-soft)] text-[var(--color-primary-strong)]"
+                    : "hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+                )
+              }
+              title={item.label}
+              aria-label={item.label}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.to === "/notifications" && unreadNotifications > 0 && (
+                <span className="absolute right-0.5 top-0.5 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-white">
+                  {unreadLabel}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
 
         {/* Flash message */}
         {flash && (
@@ -124,7 +151,7 @@ export function AppShell() {
         )}
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="min-w-0 flex-1 overflow-y-auto p-3 sm:p-4">
           <Outlet />
         </main>
       </div>

@@ -177,7 +177,34 @@ describe("report service", () => {
     expect(rendered.unresolvedPlaceholders).toEqual(["missing.value"]);
   });
 
-  it("treats missing incident start and end dates as resolved empty placeholders", async () => {
+  it("renders structured placeholder values as readable Markdown", async () => {
+    const rendered = renderReportTemplate("{{findings}}\n\n{{incident}}\n\n{{findings.json}}", {
+      generatedAt: "2026-05-22T00:00:00.000Z",
+      reportType: "incident",
+      incident: { name: "Incident One", status: "open" },
+      findings: [
+        { title: "Privileged clone spike", severity: "high", status: "open", description: "Repository cloning exceeded baseline" },
+        { title: "Suspicious login", severity: "medium", status: "confirmed", description: "Login from unusual ASN" }
+      ],
+      timelineEvents: [],
+      tasks: [],
+      queries: [],
+      indicators: [],
+      systems: [],
+      accounts: [],
+      members: [],
+      entityLinks: [],
+      tags: { custom: [], attack: [] }
+    });
+
+    expect(rendered.markdown).toContain("| Title | Severity | Status | Description |");
+    expect(rendered.markdown).toContain("| Privileged clone spike | high | open | Repository cloning exceeded baseline |");
+    expect(rendered.markdown).toContain("```json");
+    expect(rendered.markdown).not.toContain("[object Object]");
+    expect(rendered.unresolvedPlaceholders).toEqual([]);
+  });
+
+  it("renders missing incident start and end dates as not provided", async () => {
     const rendered = renderReportTemplate("{{incident.startDate}}|{{incident.endDate}}", {
       generatedAt: "2026-05-22T00:00:00.000Z",
       reportType: "incident",
@@ -194,7 +221,7 @@ describe("report service", () => {
       tags: { custom: [], attack: [] }
     });
 
-    expect(rendered.markdown).toBe("|");
+    expect(rendered.markdown).toBe("Not provided|Not provided");
     expect(rendered.unresolvedPlaceholders).toEqual([]);
   });
 

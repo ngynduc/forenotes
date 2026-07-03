@@ -942,11 +942,11 @@ export function renderReportTemplate(template: string, context: ReportContext) {
   const markdown = template.replace(/{{\s*([^}]+?)\s*}}/g, (_match, rawKey: string) => {
     const key = rawKey.trim();
     const value = resolvePlaceholder(key, context);
-    if (value === undefined || value === null) {
+    if (value === MISSING_PLACEHOLDER) {
       unresolved.add(key);
       return `{{${key}}}`;
     }
-    return String(value);
+    return renderReportValue(value);
   });
   return { markdown, unresolvedPlaceholders: [...unresolved].sort() };
 }
@@ -1176,9 +1176,48 @@ async function readTaskNoteContent(taskId: string) {
   }
 }
 
-function resolvePlaceholder(key: string, context: ReportContext): unknown {
+const MISSING_PLACEHOLDER = Symbol("missing report placeholder");
+const PREFERRED_REPORT_COLUMNS = [
+  "title",
+  "severity",
+  "status",
+  "description",
+  "event_time",
+  "eventTime",
+  "source",
+  "priority",
+  "note",
+  "name",
+  "type",
+  "value",
+  "confidence",
+  "attack_id",
+  "tactic",
+  "summary",
+  "clientName",
+  "caseName"
+];
+const HIDDEN_REPORT_COLUMNS = new Set([
+  "id",
+  "incident_id",
+  "incidentId",
+  "created_by_user_id",
+  "createdByUserId",
+  "owner_user_id",
+  "ownerUserId",
+  "assignee_user_id",
+  "assigneeUserId",
+  "updated_by_user_id",
+  "updatedByUserId",
+  "created_at",
+  "createdAt",
+  "updated_at",
+  "updatedAt"
+]);
+
+function resolvePlaceholder(key: string, context: ReportContext): unknown | typeof MISSING_PLACEHOLDER {
   const activityValue = resolveActivityPlaceholder(key, context);
-  if (activityValue !== undefined) {
+  if (activityValue !== MISSING_PLACEHOLDER) {
     return activityValue;
   }
 
@@ -1186,7 +1225,7 @@ function resolvePlaceholder(key: string, context: ReportContext): unknown {
     const incident = context.incident as Record<string, unknown>;
     const camelKey = key.split(".")[1];
     const snakeKey = camelKey === "startDate" ? "start_date" : "end_date";
-    return incident[camelKey] ?? incident[snakeKey] ?? "";
+    return incident[camelKey] ?? incident[snakeKey] ?? null;
   }
 
   if (key === "findings.count") {
@@ -1273,12 +1312,12 @@ function resolvePlaceholder(key: string, context: ReportContext): unknown {
     return markdownTable(context.indicators, ["indicator_type", "value", "confidence"]);
   }
 
-  return key.split(".").reduce<unknown>((current, part) => {
-    if (current && typeof current === "object" && part in current) {
-      return (current as Record<string, unknown>)[part];
-    }
-    return undefined;
-  }, context);
+  const structuredValue = resolveStructuredFormatter(key, context);
+  if (structuredValue !== MISSING_PLACEHOLDER) {
+    return structuredValue;
+  }
+
+  return resolvePathValue(key, context);
 }
 
 function resolveActivityPlaceholder(key: string, context: ReportContext) {
@@ -1295,7 +1334,7 @@ function resolveActivityPlaceholder(key: string, context: ReportContext) {
   };
   const definition = activityMap[key];
   if (!definition) {
-    return undefined;
+    return MISSING_PLACEHOLDER;
   }
 
   const rows = activityRows(context, definition.bucket, definition.name);
@@ -1333,8 +1372,157 @@ function markdownListValues(values: unknown[]) {
   return lines.length > 0 ? lines.join("\n") : "No items.";
 }
 
-function cell(value: unknown) {
-  return String(value ?? "").replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+function resolveStructuredFormatter(key: string, context: ReportContext): unknown | typeof MISSING_PLACEHOLDER {
+  const parts = key.split(".");
+  const format = parts.at(-1);
+  if (format !== "table" && format !== "list" && format !== "count" && format !== "json") {
+    return MISSING_PLACEHOLDER;
+  }
+
+  const baseKey = parts.slice(0, -1).join(".");
+  const value = resolveStructuredBaseValue(baseKey, context);
+  if (value === MISSING_PLACEHOLDER) {
+    return MISSING_PLACEHOLDER;
+  }
+
+  if (format === "count") {
+    if (Array.isArray(value)) return value.length;
+    if (isRecord(value)) return Object.keys(value).length;
+    return value === null || value === undefined ? 0 : 1;
+  }
+  if (format === "json") {
+    return `\`\`\`json\n${JSON.stringify(value ?? null, null, 2)}\n\`\`\``;
+  }
+  if (format === "table") {
+    if (Array.isArray(value) && value.every(isRecord)) {
+      return renderDynamicMarkdownTable(value);
+    }
+    if (isRecord(value)) {
+      return renderDynamicMarkdownTable([value]);
+    }
+    return renderReportValue(value);
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((item) => `- ${renderListItem(item)}`).join("\n") : "Not provided";
+  }
+  return renderReportValue(value);
+}
+
+function resolveStructuredBaseValue(baseKey: string, context: ReportContext): unknown | typeof MISSING_PLACEHOLDER {
+  if (baseKey === "timeline") {
+    return context.timelineEvents;
+  }
+  if (baseKey === "notes") {
+    return context.tasks.map((task) => task.note).filter(Boolean);
+  }
+  if (baseKey === "tags") {
+    return [...context.tags.custom, ...context.tags.attack];
+  }
+  if (baseKey === "mitre") {
+    return context.tags.attack;
+  }
+  if (baseKey === "entities") {
+    return [
+      ...context.systems.map((row) => ({ type: "system", name: row.hostname, status: row.status ?? "" })),
+      ...context.accounts.map((row) => ({ type: "account", name: row.username, status: row.status ?? "" })),
+      ...context.indicators.map((row) => ({ type: "indicator", name: row.value, status: row.confidence ?? "" }))
+    ];
+  }
+  if (baseKey === "links") {
+    return context.entityLinks;
+  }
+  return resolvePathValue(baseKey, context);
+}
+
+function resolvePathValue(key: string, context: ReportContext): unknown | typeof MISSING_PLACEHOLDER {
+  let current: unknown = context;
+  for (const part of key.split(".")) {
+    if (current && typeof current === "object" && part in current) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return MISSING_PLACEHOLDER;
+    }
+  }
+  return current;
+}
+
+function cell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.map(cell).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value).replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+  }
+  return String(value).replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+}
+
+function renderReportValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return "Not provided";
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "Not provided";
+    }
+    if (value.every(isRecord)) {
+      return renderDynamicMarkdownTable(value);
+    }
+    return value.map((item) => `- ${renderListItem(item)}`).join("\n");
+  }
+  if (isRecord(value)) {
+    return renderDynamicMarkdownTable([value]);
+  }
+  return String(value);
+}
+
+function renderListItem(value: unknown) {
+  if (!isRecord(value)) {
+    return cell(value);
+  }
+  return Object.entries(value)
+    .filter(([, entryValue]) => entryValue !== null && entryValue !== undefined && cell(entryValue) !== "")
+    .map(([key, entryValue]) => `${formatHeader(key)}: ${cell(entryValue)}`)
+    .join("; ");
+}
+
+function renderDynamicMarkdownTable(rows: Record<string, unknown>[]) {
+  if (rows.length === 0) {
+    return "Not provided";
+  }
+  const availableColumns = rows.reduce<Set<string>>((keys, row) => {
+    Object.entries(row).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && cell(value) !== "" && !HIDDEN_REPORT_COLUMNS.has(key)) {
+        keys.add(key);
+      }
+    });
+    return keys;
+  }, new Set<string>());
+  const preferredColumns = PREFERRED_REPORT_COLUMNS.filter((column) => availableColumns.has(column));
+  const remainingColumns = Array.from(availableColumns).filter((column) => !preferredColumns.includes(column));
+  const columns = [...preferredColumns, ...remainingColumns].slice(0, 6);
+  if (columns.length === 0) {
+    return "Not provided";
+  }
+  const header = `| ${columns.map(formatHeader).join(" | ")} |`;
+  const separator = `| ${columns.map(() => "---").join(" | ")} |`;
+  const body = rows.map((row) => `| ${columns.map((column) => cell(row[column])).join(" | ")} |`);
+  return [header, separator, ...body].join("\n");
+}
+
+function formatHeader(value: string) {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function localDayToUtcWindow(date: string, timezone: string) {
