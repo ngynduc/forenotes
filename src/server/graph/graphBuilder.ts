@@ -701,8 +701,13 @@ export async function buildIncidentGraph(
     }
   }
 
-  let filteredNodes = [...nodes.values()];
+  // ATT&CK techniques are shown in the dedicated MITRE Matrix, not as nodes in
+  // the relationship graph where they add noise without useful relationships.
+  let filteredNodes = [...nodes.values()].filter((node) => node.type !== "mitre_technique");
   let filteredEdges = edges.filter((edge) => (input.includeDerived || !edge.derived) && (input.includeManual || edge.derived));
+
+  const graphNodeIds = new Set(filteredNodes.map((node) => node.id));
+  filteredEdges = filteredEdges.filter((edge) => graphNodeIds.has(edge.source) && graphNodeIds.has(edge.target));
 
   const allowedEntityTypes = new Set([
     ...(MODE_ENTITY_TYPES[mode] ?? filteredNodes.map((node) => node.type)),
