@@ -4,6 +4,22 @@ Forenotes is a DFIR case notebook for incident records, findings, timelines, tas
 
 ## Production Docker
 
+### One-command install
+
+For a fresh Docker host, install Forenotes with generated secrets and a generated admin password:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh | bash
+```
+
+Open `http://localhost:3000`. The installer prints the admin password and saves it in `forenotes-prod/.bootstrap-admin-password`. For a non-default directory or port:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh | bash -s -- --dir /opt/forenotes --port 8080
+```
+
+The installer defaults to HTTP-friendly cookies for first boot. Put the app behind HTTPS and use `--secure-cookies` for a hardened deployment.
+
 Copy `.env.production.example` to `.env.production` and replace every placeholder secret before first boot. Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing `FORENOTES_LLM_SECRET_KEY`.
 
 ```bash
