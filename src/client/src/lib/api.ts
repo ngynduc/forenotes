@@ -1408,8 +1408,8 @@ class ApiClient {
   deleteReport = (incidentId: string, reportId: string) =>
     this.request(`/incidents/${incidentId}/reports/${reportId}`, "DELETE");
 
-  exportReportPdf = async (incidentId: string, reportId: string, data?: { pdfTemplateId?: string }) => {
-    const res = await fetch(`${BASE}/incidents/${incidentId}/reports/${reportId}/export/pdf`, {
+  exportReportHtml = async (incidentId: string, reportId: string, data?: { pdfTemplateId?: string }) => {
+    const res = await fetch(`${BASE}/incidents/${incidentId}/reports/${reportId}/export/html`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...this.headers() },
       credentials: "include",
@@ -1417,15 +1417,15 @@ class ApiClient {
     });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      throw new Error(payload?.error ?? "PDF export failed");
+      throw new Error(payload?.error ?? "HTML export failed");
     }
     const blob = await res.blob();
     if (blob.size === 0) {
-      throw new Error("PDF export returned an empty file.");
+      throw new Error("HTML export returned an empty file.");
     }
     const disposition = res.headers.get("Content-Disposition") ?? "";
     const match = /filename="([^"]+)"/.exec(disposition);
-    const fileName = match?.[1] ?? "incident-report.pdf";
+    const fileName = match?.[1] ?? "incident-report.html";
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

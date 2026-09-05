@@ -1993,7 +1993,7 @@ describe("Forenotes API", () => {
     expect(leadAuditResponse.body.auditLogs.length).toBeGreaterThan(0);
   });
 
-  it("creates graph entity links and exposes manual plus derived MITRE graph data", async () => {
+  it("creates graph entity links without exposing MITRE techniques as graph nodes", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
       .set("x-user-id", commanderId)
@@ -2082,15 +2082,19 @@ describe("Forenotes API", () => {
     expect(graphResponse.status).toBe(200);
     expect(graphResponse.body.edges).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: "maps_to", derived: true }),
         expect.objectContaining({ type: "evidence_for", derived: false })
       ])
+    );
+    expect(graphResponse.body.edges).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "maps_to" })])
     );
     expect(graphResponse.body.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: "finding", entityId: findingId }),
-        expect.objectContaining({ type: "mitre_technique", mitreId: "T1059.001" })
       ])
+    );
+    expect(graphResponse.body.nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "mitre_technique" })])
     );
 
     const investigationGraphResponse = await request(app)

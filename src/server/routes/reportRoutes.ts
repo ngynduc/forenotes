@@ -14,6 +14,7 @@ import {
   deleteReportTemplate,
   duplicatePdfTemplate,
   duplicateReportTemplate,
+  exportReportHtml,
   exportReportPdf,
   generateReportPreview,
   getMaskedLlmSettings,
@@ -285,6 +286,20 @@ export function createReportRoutes(database: Database) {
       const reportId = getRequiredParam(request.params.reportId, "reportId");
       await deleteReport(database, user, incidentId, reportId);
       response.status(204).send();
+    })
+  );
+
+  router.post(
+    "/incidents/:incidentId/reports/:reportId/export/html",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const reportId = getRequiredParam(request.params.reportId, "reportId");
+      const payload = exportReportPdfSchema.parse(request.body);
+      const exported = await exportReportHtml(database, user, incidentId, reportId, payload);
+      response.setHeader("Content-Type", "text/html; charset=utf-8");
+      response.setHeader("Content-Disposition", `attachment; filename="${exported.fileName}"`);
+      response.status(200).send(exported.html);
     })
   );
 

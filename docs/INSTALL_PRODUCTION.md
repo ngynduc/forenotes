@@ -16,6 +16,20 @@ The production install runs:
 - a Linux server, VM, or local workstation
 - an open host port for the app, usually `3000`
 
+## Fast install
+
+On a fresh Docker host, the installer downloads the production Compose file, generates the database/app/admin secrets, starts the stack, waits for `/api/health`, and prints the first-login password:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh | bash
+```
+
+It creates `forenotes-prod/` in the current directory. Use `--dir /opt/forenotes --port 8080` to customize the location and port. Existing `.env.production` files are preserved, so rerunning the command does not rotate credentials.
+
+The fast installer uses `SECURE_SESSION_COOKIES=false` so a new local HTTP install works immediately. For an HTTPS deployment, set the value to `true` in `.env.production` before starting, or run the installer with `--secure-cookies`.
+
+For audited or pinned deployments, continue with the manual install below and set `FORENOTES_IMAGE` to a versioned image tag.
+
 Recommended baseline:
 
 ```text

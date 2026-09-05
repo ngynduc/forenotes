@@ -7,6 +7,7 @@
 | Document | Description |
 |----------|-------------|
 | [Production Install](./INSTALL_PRODUCTION.md) | Docker Compose production install, upgrades, backup, and troubleshooting |
+| [Releasing](./RELEASING.md) | GitHub Actions image publishing and versioned releases |
 | [Getting Started](./GETTING-STARTED.md) | Local development and demo setup |
 | [Architecture](./ARCHITECTURE.md) | System architecture, tech stack, and project structure |
 | [API Reference](./API.md) | Complete REST API documentation |

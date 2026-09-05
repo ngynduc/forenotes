@@ -21,6 +21,7 @@ import {
   DEFAULT_PDF_CSS,
   DEFAULT_PDF_HTML_TEMPLATE,
   renderHtmlToPdf,
+  renderMarkdownToSanitizedHtml,
   renderPdfHtml
 } from "./reportPdfRenderer.js";
 
@@ -900,6 +901,43 @@ export async function exportReportPdf(
       createdAt: new Date().toISOString()
     }
   };
+}
+
+export async function exportReportHtml(
+  database: Database,
+  user: AuthenticatedUser,
+  incidentId: string,
+  reportId: string,
+  options: { pdfTemplateId?: string } = {}
+) {
+  await requirePermission(database, user, "report:export");
+  await requireIncidentMembership(database, user.id, incidentId);
+  const report = await getReportRow(database, incidentId, reportId);
+  const incident = await one(
+    database,
+    `select i.*, c.client_name from incidents i inner join cases c on c.id = i.case_id where i.id = $1`,
+    [incidentId],
+    "Incident not found"
+  );
+  const template = await resolvePdfTemplate(database, user, incidentId, options.pdfTemplateId);
+  const renderedHtml = renderPdfHtml({
+    report: {
+      title: String(report.title),
+      type: String(report.report_type),
+      generatedAt: new Date().toISOString(),
+      markdown: String(report.markdown)
+    },
+    incident: {
+      name: String(incident.name ?? "Not provided"),
+      clientName: String(incident.client_name ?? "Not provided"),
+      status: String(incident.status ?? "Not provided")
+    },
+    htmlTemplate: template.htmlTemplate,
+    css: template.css
+  });
+  const html = await inlineReportUploadImagesForPdf(renderedHtml, incidentId);
+  const fileName = `${safePathSegment(String(report.title)) || "report"}.html`;
+  return { html, fileName };
 }
 
 export async function inlineReportUploadImagesForPdf(html: string, incidentId: string) {
