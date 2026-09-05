@@ -66,8 +66,8 @@ export function GenerateReportWorkspace({
     () => templates.find((template) => template.id === generateForm.templateId) ?? templates[0],
     [generateForm.templateId, templates]
   );
-  const defaultPdfTemplate = pdfTemplates.find((template) => template.isDefault);
   const activeTitle = preview?.title ?? reportDraft?.title ?? "";
+  const defaultPdfTemplate = pdfTemplates.find((template) => template.isDefault);
   const canSave = Boolean(preview || reportDraft);
   const canExport = Boolean(reportDraft);
 
@@ -229,10 +229,10 @@ export function GenerateReportWorkspace({
                 if (reportDraft) onRequestExport(reportDraft);
               }}
               disabled={!canExport}
-              title={reportDraft ? `Export using ${defaultPdfTemplate?.name ?? "the built-in PDF template"}` : "Save the report before exporting"}
+              title={reportDraft ? `Export using ${defaultPdfTemplate?.name ?? "the built-in HTML template"}` : "Save the report before exporting"}
             >
               <Download className="h-4 w-4" />
-              Export PDF
+              Export HTML
             </Button>
           </div>
         </div>
@@ -248,7 +248,7 @@ export function GenerateReportWorkspace({
             value={preview?.markdown ?? reportDraft?.markdown ?? ""}
             onChange={updateMarkdown}
             onUploadImage={uploadReportImage}
-            helperText={preview ? "Preview edits are saved only when you save the report." : "Saved report content can be exported as PDF."}
+            helperText={preview ? "Preview edits are saved only when you save the report." : "Saved report content can be exported as HTML."}
           />
         ) : (
           <div className="rounded border border-dashed border-[var(--color-border)] p-8 text-center text-sm text-[var(--color-text-muted)]">

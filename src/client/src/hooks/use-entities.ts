@@ -405,10 +405,11 @@ export function useDeleteReport() {
   });
 }
 
-export function useExportReportPdf() {
+export function useExportReportHtml() {
   const id = useIncidentId();
   return useMutation({
-    mutationFn: ({ reportId, pdfTemplateId }: { reportId: string; pdfTemplateId?: string }) => api.exportReportPdf(id!, reportId, { pdfTemplateId }),
+    mutationFn: ({ reportId, pdfTemplateId }: { reportId: string; pdfTemplateId?: string }) =>
+      api.exportReportHtml(id!, reportId, { pdfTemplateId }),
   });
 }
 

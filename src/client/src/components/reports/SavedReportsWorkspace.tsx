@@ -143,7 +143,7 @@ export function SavedReportsWorkspace({ reports, templates, onOpenReport, onRequ
                     </Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => onRequestExport(report)}>
                       <Download className="h-4 w-4" />
-                      PDF
+                      HTML
                     </Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => duplicateReport(report)} disabled={createReport.isPending}>
                       <Copy className="h-4 w-4" />

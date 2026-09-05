@@ -49,8 +49,8 @@ const GUIDE_SECTIONS = [
     variables: ["{{generatedAt}}", "{{reportType}}", "{{date}}", "{{timezone}}"],
   },
   {
-    title: "PDF template variables",
-    description: "PDF templates wrap the rendered Markdown content in branded HTML/CSS.",
+    title: "HTML template variables",
+    description: "HTML templates wrap rendered Markdown content in a company-specific theme.",
     variables: ["{{content}}", "{{page.css}}", "{{report.title}}", "{{report.type}}", "{{report.generatedAt}}"],
   },
 ];

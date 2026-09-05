@@ -62,7 +62,7 @@ const DEFAULT_PDF_TEMPLATE = `<!doctype html>
     <div class="document-shell__header">
       <div class="document-shell__kicker">Forenotes incident report</div>
       <h2 class="document-shell__title">{{report.title}}</h2>
-      <p class="document-shell__lede">Markdown sections, tables, lists, and callouts inherit presentation from this PDF template.</p>
+      <p class="document-shell__lede">Markdown sections, tables, lists, and callouts inherit presentation from this HTML template.</p>
       <div class="document-shell__meta">
         <div class="document-shell__meta-item">
           <span>Incident</span>
@@ -522,9 +522,9 @@ export function PdfTemplateWorkspace() {
         {
           onSuccess: (result) => {
             setPdfDraft(result.template);
-            setPdfMessage("PDF template saved.");
+            setPdfMessage("HTML template saved.");
           },
-          onError: (error) => setPdfMessage(messageFromError(error, "Unable to save PDF template.")),
+          onError: (error) => setPdfMessage(messageFromError(error, "Unable to save HTML template.")),
         }
       );
       return;
@@ -532,9 +532,9 @@ export function PdfTemplateWorkspace() {
     createPdfTemplate.mutate(payload, {
       onSuccess: (result) => {
         setPdfDraft(result.template);
-        setPdfMessage("PDF template created.");
+        setPdfMessage("HTML template created.");
       },
-      onError: (error) => setPdfMessage(messageFromError(error, "Unable to create PDF template.")),
+      onError: (error) => setPdfMessage(messageFromError(error, "Unable to create HTML template.")),
     });
   }
 
@@ -549,7 +549,7 @@ export function PdfTemplateWorkspace() {
       },
       {
         onSuccess: () => setPdfMessage("Preview rendered below. Unsafe scripts and handlers are stripped server-side."),
-        onError: (error) => setPdfMessage(messageFromError(error, "Unable to preview PDF template.")),
+        onError: (error) => setPdfMessage(messageFromError(error, "Unable to preview HTML template.")),
       }
     );
   }
@@ -559,7 +559,7 @@ export function PdfTemplateWorkspace() {
       <div className="reports-card rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-[220px] flex-1">
-            <h3 className="text-base font-semibold">PDF Templates</h3>
+            <h3 className="text-base font-semibold">HTML Templates</h3>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">Design the HTML and CSS wrapper used for branded PDF exports.</p>
           </div>
           <Button
@@ -578,7 +578,7 @@ export function PdfTemplateWorkspace() {
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,360px)]">
           <label className="space-y-1 text-sm font-medium">
             Search templates
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search PDF templates" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search HTML templates" />
           </label>
           <label className="space-y-1 text-sm font-medium">
             Selected template
@@ -604,7 +604,7 @@ export function PdfTemplateWorkspace() {
 
       {pdfTemplates.length === 0 ? (
         <div className="reports-card rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-          No custom PDF templates yet. Exports use the built-in default.
+          No custom HTML templates yet. Exports use the built-in default.
         </div>
       ) : null}
 
@@ -613,7 +613,7 @@ export function PdfTemplateWorkspace() {
           <section className="reports-card min-w-0 space-y-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="text-sm font-semibold">{pdfDraft.name || "Untitled PDF template"}</h4>
+                <h4 className="text-sm font-semibold">{pdfDraft.name || "Untitled HTML template"}</h4>
                 <p className="text-xs text-[var(--color-text-muted)]">Edit metadata, HTML, and CSS in one full-width workspace.</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -682,7 +682,7 @@ export function PdfTemplateWorkspace() {
 
             {previewPdfTemplate.data?.html ? (
               <iframe
-                title="PDF template preview"
+                title="HTML template preview"
                 srcDoc={previewPdfTemplate.data.html}
                 className="h-[620px] w-full rounded border border-[var(--color-border)] bg-white"
               />
@@ -710,7 +710,7 @@ export function PdfTemplateWorkspace() {
         </div>
       ) : (
         <div className="reports-card rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-          No PDF templates match the current search.
+          No HTML templates match the current search.
         </div>
       )}
     </section>
