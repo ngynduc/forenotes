@@ -1051,12 +1051,6 @@ class ApiClient {
     return { members: payload.members.map(normalizeMember) };
   };
 
-  addIncidentMember = (incidentId: string, data: { userId: string; incidentRole: string }) =>
-    this.request(`/incidents/${incidentId}/members`, "POST", data);
-
-  removeIncidentMember = (incidentId: string, userId: string) =>
-    this.request(`/incidents/${incidentId}/members/${userId}`, "DELETE");
-
   listFindings = async (incidentId: string, filter?: TimeFilterRequest | null) => {
     const payload = await this.request<{ findings: RawFindingItem[] }>(
       this.withQueryParams(`/incidents/${incidentId}/findings`, {

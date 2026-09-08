@@ -5,6 +5,7 @@ import type { CaseMemberRole } from "../../shared/domain.js";
 import { AppError } from "../errors.js";
 import { requireCasePermission, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
+import { withTransaction } from "../db/transaction.js";
 
 interface CreateCaseInput {
   caseName: string;
@@ -65,45 +66,47 @@ export async function createCase(database: Database, user: AuthenticatedUser, in
     }
   }
 
-  const caseId = randomUUID();
-  await database.query(
+  return withTransaction(database, async (transaction) => {
+    const caseId = randomUUID();
+    await transaction.query(
     `
       insert into cases (id, case_name, client_name, start_date, end_date, status, summary, created_by_user_id)
       values ($1, $2, $3, $4, $5, $6, $7, $8)
     `,
     [caseId, input.caseName, input.clientName ?? null, input.startDate ?? null, input.endDate ?? null, input.status, input.summary ?? null, user.id]
-  );
+    );
 
-  await database.query(
+    await transaction.query(
     `
       insert into case_members (case_id, user_id, case_role, added_by_user_id)
       values ($1, $2, $3, $4)
       on conflict do nothing
     `,
     [caseId, user.id, "commander", user.id]
-  );
+    );
 
-  for (const member of initialMembers) {
-    await database.query(
+    for (const member of initialMembers) {
+      await transaction.query(
       `
         insert into case_members (case_id, user_id, case_role, added_by_user_id)
         values ($1, $2, $3, $4)
       `,
       [caseId, member.userId, member.caseRole ?? "analyst", user.id]
-    );
-  }
+      );
+    }
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId,
     action: "case.create",
     entityType: "case",
     entityId: caseId,
     afterJson: input
-  });
+    });
 
-  const result = await database.query("select * from cases where id = $1", [caseId]);
-  return result.rows[0];
+    const result = await transaction.query("select * from cases where id = $1", [caseId]);
+    return result.rows[0];
+  });
 }
 
 export async function updateCase(
@@ -113,10 +116,11 @@ export async function updateCase(
   input: Partial<CreateCaseInput>
 ) {
   await requireCasePermission(database, user, caseId, "case:update");
-  const existing = await database.query("select * from cases where id = $1", [caseId]);
-  if (existing.rowCount === 0) {
-    throw new AppError(404, "Case not found");
-  }
+  return withTransaction(database, async (transaction) => {
+    const existing = await transaction.query("select * from cases where id = $1", [caseId]);
+    if (existing.rowCount === 0) {
+      throw new AppError(404, "Case not found");
+    }
 
   const next = {
     ...existing.rows[0],
@@ -128,7 +132,7 @@ export async function updateCase(
     summary: input.summary ?? existing.rows[0].summary
   };
 
-  await database.query(
+    await transaction.query(
     `
       update cases
       set case_name = $2, client_name = $3, start_date = $4, end_date = $5, status = $6, summary = $7, updated_at = now()
@@ -137,7 +141,7 @@ export async function updateCase(
     [caseId, next.case_name, next.client_name, next.start_date, next.end_date, next.status, next.summary]
   );
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId,
     action: "case.update",
@@ -147,6 +151,7 @@ export async function updateCase(
     afterJson: next
   });
 
-  const result = await database.query("select * from cases where id = $1", [caseId]);
-  return result.rows[0];
+    const result = await transaction.query("select * from cases where id = $1", [caseId]);
+    return result.rows[0];
+  });
 }

@@ -126,6 +126,8 @@ interface DashboardDataset {
   recentActivity: DashboardRecentActivity[];
 }
 
+const dashboardDatasetCache = new WeakMap<AuthenticatedUser, Promise<DashboardDataset>>();
+
 export async function getDashboard(database: Database, user: AuthenticatedUser): Promise<DashboardResponse> {
   const [summary, charts, sla, activity, workload, cases] = await Promise.all([
     getDashboardSummary(database, user),
@@ -305,28 +307,26 @@ export async function getDashboardCases(database: Database, user: AuthenticatedU
 }
 
 async function loadDashboardDataset(database: Database, user: AuthenticatedUser): Promise<DashboardDataset> {
-  await requireDashboardRead(database, user);
+  const cached = dashboardDatasetCache.get(user);
+  if (cached) {
+    return cached;
+  }
+  const dataset = (async () => {
+    await requireDashboardRead(database, user);
+    const [cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity] = await Promise.all([
+      listVisibleCases(database, user.id),
+      listVisibleIncidents(database, user.id),
+      listVisibleFindings(database, user.id),
+      listVisibleTasks(database, user),
+      listVisibleTimelineEvents(database, user.id),
+      listVisibleNotifications(database, user.id),
+      listRecentActivity(database, user, 20)
+    ]);
 
-  const [cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity] = await Promise.all([
-    listVisibleCases(database, user.id),
-    listVisibleIncidents(database, user.id),
-    listVisibleFindings(database, user.id),
-    listVisibleTasks(database, user),
-    listVisibleTimelineEvents(database, user.id),
-    listVisibleNotifications(database, user.id),
-    listRecentActivity(database, user, 20)
-  ]);
-
-  return {
-    scope: getDashboardScope(user),
-    cases,
-    incidents,
-    findings,
-    tasks,
-    timelineEvents,
-    notifications,
-    recentActivity
-  };
+    return { scope: getDashboardScope(user), cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity };
+  })();
+  dashboardDatasetCache.set(user, dataset);
+  return dataset;
 }
 
 async function requireDashboardRead(database: Database, user: AuthenticatedUser) {

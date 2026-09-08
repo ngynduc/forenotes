@@ -6,6 +6,7 @@ import { requireCaseMembership, requireIncidentMembership, requirePermission } f
 import { createAuditLog } from "./auditLogService.js";
 import { createNotification, formatNotificationScope, getCaseNotificationScope } from "./notificationService.js";
 import { syncCaseMembersToIncident } from "./membershipService.js";
+import { withTransaction } from "../db/transaction.js";
 
 interface CreateIncidentInput {
   caseId: string;
@@ -38,18 +39,19 @@ export async function createIncident(database: Database, user: AuthenticatedUser
   await requirePermission(database, user, "incident:create");
   await requireCaseMembership(database, user.id, input.caseId);
 
-  const incidentId = randomUUID();
-  await database.query(
+  return withTransaction(database, async (transaction) => {
+    const incidentId = randomUUID();
+    await transaction.query(
     `
       insert into incidents (id, case_id, name, summary, severity, status, created_by_user_id)
       values ($1, $2, $3, $4, $5, $6, $7)
     `,
     [incidentId, input.caseId, input.name, input.summary ?? null, input.severity ?? null, input.status, user.id]
-  );
+    );
 
-  await syncCaseMembersToIncident(database, input.caseId, incidentId, user.id);
+    await syncCaseMembersToIncident(transaction, input.caseId, incidentId, user.id);
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId: input.caseId,
     incidentId,
@@ -57,10 +59,10 @@ export async function createIncident(database: Database, user: AuthenticatedUser
     entityType: "incident",
     entityId: incidentId,
     afterJson: input
-  });
+    });
 
-  const scope = await getCaseNotificationScope(database, input.caseId);
-  await createNotification(database, {
+    const scope = await getCaseNotificationScope(transaction, input.caseId);
+    await createNotification(transaction, {
     recipientUserId: user.id,
     incidentId,
     actorUserId: user.id,
@@ -69,14 +71,15 @@ export async function createIncident(database: Database, user: AuthenticatedUser
     body: formatNotificationScope(scope),
     entityType: "incident",
     entityId: incidentId
+    });
+
+    const result = await transaction.query("select * from incidents where id = $1", [incidentId]);
+    if (result.rowCount === 0) {
+      throw new AppError(500, "Incident creation failed");
+    }
+
+    return result.rows[0];
   });
-
-  const result = await database.query("select * from incidents where id = $1", [incidentId]);
-  if (result.rowCount === 0) {
-    throw new AppError(500, "Incident creation failed");
-  }
-
-  return result.rows[0];
 }
 
 export async function updateIncident(
@@ -88,10 +91,11 @@ export async function updateIncident(
   await requirePermission(database, user, "incident:update");
   await requireIncidentMembership(database, user.id, incidentId);
 
-  const existing = await database.query("select * from incidents where id = $1", [incidentId]);
-  if (existing.rowCount === 0) {
-    throw new AppError(404, "Incident not found");
-  }
+  return withTransaction(database, async (transaction) => {
+    const existing = await transaction.query("select * from incidents where id = $1", [incidentId]);
+    if (existing.rowCount === 0) {
+      throw new AppError(404, "Incident not found");
+    }
 
   const next = {
     ...existing.rows[0],
@@ -101,7 +105,7 @@ export async function updateIncident(
     status: input.status ?? existing.rows[0].status
   };
 
-  await database.query(
+    await transaction.query(
     `
       update incidents
       set name = $2, summary = $3, severity = $4, status = $5, updated_at = now()
@@ -110,7 +114,7 @@ export async function updateIncident(
     [incidentId, next.name, next.summary, next.severity, next.status]
   );
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId: existing.rows[0].case_id,
     incidentId,
@@ -121,6 +125,7 @@ export async function updateIncident(
     afterJson: next
   });
 
-  const result = await database.query("select * from incidents where id = $1", [incidentId]);
-  return result.rows[0];
+    const result = await transaction.query("select * from incidents where id = $1", [incidentId]);
+    return result.rows[0];
+  });
 }

@@ -1,4 +1,6 @@
-# Forenotes LiteLLM Service
+# Forenotes LiteLLM Service (dormant)
+
+This directory is retained only for historical compatibility. Production and demo Compose files use `services/report-llm-service`; do not deploy this service or add new integrations here.
 
 Small FastAPI service that owns report LLM generation for Forenotes. The Node backend calls this service instead of speaking to model providers directly.
 

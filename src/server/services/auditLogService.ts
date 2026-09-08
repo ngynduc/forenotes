@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "../db/types.js";
+import type { AuthenticatedUser } from "./authService.js";
 
 interface AuditEntryInput {
   actorUserId: string;
@@ -37,34 +38,34 @@ export async function createAuditLog(database: Database, input: AuditEntryInput)
 
 export async function listAuditLogs(
   database: Database,
+  user: AuthenticatedUser,
   filters: { caseId?: string; incidentId?: string } = {}
 ) {
+  const params: unknown[] = [user.id];
+  const conditions: string[] = [];
   if (filters.incidentId) {
-    const result = await database.query(
-      `
-        select *
-        from audit_logs
-        where incident_id = $1
-        order by created_at desc
-      `,
-      [filters.incidentId]
-    );
-    return result.rows;
+    params.push(filters.incidentId);
+    conditions.push(`al.incident_id = $${params.length}`);
   }
-
   if (filters.caseId) {
-    const result = await database.query(
-      `
-        select *
-        from audit_logs
-        where case_id = $1
-        order by created_at desc
-      `,
-      [filters.caseId]
-    );
-    return result.rows;
+    params.push(filters.caseId);
+    conditions.push(`al.case_id = $${params.length}`);
   }
-
-  const result = await database.query("select * from audit_logs order by created_at desc");
+  const visibility = user.globalRole === "admin"
+    ? "true"
+    : "(cm.user_id is not null or incident_cm.user_id is not null)";
+  const result = await database.query(
+    `
+      select distinct al.*
+      from audit_logs al
+      left join case_members cm on cm.case_id = al.case_id and cm.user_id = $1
+      left join incidents i on i.id = al.incident_id
+      left join case_members incident_cm on incident_cm.case_id = i.case_id and incident_cm.user_id = $1
+      where ${visibility}
+        ${conditions.length > 0 ? `and ${conditions.join(" and ")}` : ""}
+      order by al.created_at desc
+    `,
+    params
+  );
   return result.rows;
 }

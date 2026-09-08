@@ -9,7 +9,7 @@ import { createEvidenceLink, deleteEvidenceLink, listEvidenceLinks } from "../se
 import { createTask, createTaskLink, deleteTask, listTasks, updateTask } from "../services/taskService.js";
 import { NOTE_IMAGE_CONTENT_TYPES, readTaskNote, uploadTaskNoteImage, writeTaskNote } from "../services/noteService.js";
 import { createQuery, deleteQuery, listQueries, updateQuery } from "../services/queryService.js";
-import { addIncidentMember, listIncidentMembers, removeIncidentMember } from "../services/membershipService.js";
+import { addIncidentMember, listIncidentMembers } from "../services/membershipService.js";
 import { createSystem, deleteSystem, listSystems, updateSystem } from "../services/systemService.js";
 import { createAccount, deleteAccount, listAccounts, updateAccount } from "../services/accountService.js";
 import { updateIncident } from "../services/incidentService.js";
@@ -17,8 +17,8 @@ import { buildIncidentGraph } from "../graph/graphBuilder.js";
 import { buildMitreMatrix } from "../graph/mitreMatrixBuilder.js";
 import { createEntityLink, deleteEntityLink, listEntityLinks } from "../graph/entityLinksRepository.js";
 import {
-  addIncidentMemberSchema,
   createAccountSchema,
+  addIncidentMemberSchema,
   createEntityLinkSchema,
   createEvidenceLinkSchema,
   createFindingSchema,
@@ -54,9 +54,23 @@ export function createIncidentRoutes(database: Database) {
       response.json({
         findings: await listFindings(database, user.id, incidentId, {
           field: readFindingTimeField(request.query.field),
+          limit: readLimit(request.query.limit),
           ...parseTimeRangeQuery(request.query),
         })
       });
+    })
+  );
+
+  // Incident members are a derived case-wide view. Keep this compatibility route
+  // for older clients; it cannot grant access beyond the parent case membership.
+  router.post(
+    "/:incidentId/members",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const payload = addIncidentMemberSchema.parse(request.body);
+      await addIncidentMember(database, user, { incidentId, ...payload });
+      response.status(204).send();
     })
   );
 
@@ -91,28 +105,6 @@ export function createIncidentRoutes(database: Database) {
       const user = await getAuthenticatedUser(request, database);
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       response.json({ members: await listIncidentMembers(database, user.id, incidentId) });
-    })
-  );
-
-  router.post(
-    "/:incidentId/members",
-    asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
-      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
-      const payload = addIncidentMemberSchema.parse(request.body);
-      await addIncidentMember(database, user, { incidentId, ...payload });
-      response.status(204).send();
-    })
-  );
-
-  router.delete(
-    "/:incidentId/members/:memberUserId",
-    asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
-      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
-      const memberUserId = getRequiredParam(request.params.memberUserId, "memberUserId");
-      await removeIncidentMember(database, user, incidentId, memberUserId);
-      response.status(204).send();
     })
   );
 
@@ -575,6 +567,11 @@ function parseTimeRangeQuery(query: Record<string, unknown>) {
 
 function readFindingTimeField(raw: unknown) {
   return raw === "createdAt" || raw === "updatedAt" ? raw : undefined;
+}
+
+function readLimit(raw: unknown) {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? Math.min(Math.max(parsed, 1), 100) : 100;
 }
 
 function readTimelineTimeField(raw: unknown) {

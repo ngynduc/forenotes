@@ -14,14 +14,14 @@ uvicorn app:app --host 127.0.0.1 --port 8001
 Configure the Forenotes backend with:
 
 ```env
-REPORT_LLM_SERVICE_URL=http://localhost:8001
+LITELLM_SERVICE_URL=http://localhost:8001
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
 LLM_API_KEY=your-provider-key
 LLM_SYSTEM_PROMPT=Optional custom report-generation system prompt
 ```
 
-User LLM settings in Forenotes override the `LLM_*` provider settings. `REPORT_LLM_SERVICE_URL` always points to this service.
+User LLM settings in Forenotes override the `LLM_*` provider settings. `LITELLM_SERVICE_URL` always points to this service.
 
 Supported provider names are normalized by the backend to LiteLLM model prefixes. Examples:
 

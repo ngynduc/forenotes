@@ -327,9 +327,16 @@ describe("Forenotes API", () => {
     expect(analystResponse.status).toBe(403);
     expect(analystResponse.body.error).toBe("Missing permission: user:manage");
 
-    const adminResponse = await request(app).get("/api/users").set("x-user-id", adminId);
+    const managerId = randomUUID();
+    await insertUser(pool, {
+      id: managerId,
+      email: "manager@example.com",
+      displayName: "Manager",
+      globalRole: "admin"
+    });
+    const adminResponse = await request(app).get("/api/users").set("x-user-id", managerId);
     expect(adminResponse.status).toBe(200);
-    expect(adminResponse.body.users.map((user: { id: string }) => user.id)).toContain(adminId);
+    expect(adminResponse.body.users.map((user: { id: string }) => user.id)).toContain(managerId);
   });
 
   it("creates a case and incident for a permitted user", async () => {

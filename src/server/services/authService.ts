@@ -6,6 +6,7 @@ import type { Database } from "../db/types.js";
 import { AppError } from "../errors.js";
 import type { GlobalRole } from "../../shared/domain.js";
 import { env } from "../env.js";
+import { withTransaction } from "../db/transaction.js";
 
 const SESSION_COOKIE_NAME = "forenotes_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -102,11 +103,18 @@ export async function logout(database: Database, request: Request) {
   await database.query("delete from sessions where id = $1", [sessionId]);
 }
 
-export async function getAuthenticatedUser(request: Request, database: Database): Promise<AuthenticatedUser> {
+export async function getAuthenticatedUser(
+  request: Request,
+  database: Database,
+  options: { allowPasswordRotation?: boolean } = {}
+): Promise<AuthenticatedUser> {
   const sessionId = getSessionId(request);
   if (sessionId) {
     const sessionUser = await getUserFromSession(database, sessionId);
     if (sessionUser) {
+      if (sessionUser.mustChangePassword && !options.allowPasswordRotation) {
+        throw new AppError(403, "Password change required before accessing this resource.");
+      }
       return sessionUser;
     }
   }
@@ -130,7 +138,11 @@ export async function getAuthenticatedUser(request: Request, database: Database)
     throw new AppError(403, "User is disabled");
   }
 
-  return mapUser(user);
+  const authenticatedUser = mapUser(user);
+  if (authenticatedUser.mustChangePassword && !options.allowPasswordRotation) {
+    throw new AppError(403, "Password change required before accessing this resource.");
+  }
+  return authenticatedUser;
 }
 
 export async function requireAuth(request: Request, database: Database) {
@@ -229,10 +241,14 @@ export async function changeOwnPassword(
     throw new AppError(400, "New password must differ from the current password.");
   }
 
-  await database.query(
-    "update users set password_hash = $2, must_change_password = false, updated_at = now() where id = $1",
-    [user.id, await hashPassword(input.newPassword)]
-  );
+  const passwordHash = await hashPassword(input.newPassword);
+  await withTransaction(database, async (client) => {
+    await client.query(
+      "update users set password_hash = $2, must_change_password = false, updated_at = now() where id = $1",
+      [user.id, passwordHash]
+    );
+    await client.query("delete from sessions where user_id = $1", [user.id]);
+  });
 }
 
 export async function resetUserPassword(
@@ -250,10 +266,19 @@ export async function resetUserPassword(
     throw new AppError(404, "User not found");
   }
 
-  await database.query(
-    "update users set password_hash = $2, must_change_password = true, updated_at = now() where id = $1",
-    [targetUserId, await hashPassword(input.newPassword)]
-  );
+  await withTransaction(database, async (client) => {
+    await client.query(
+      "update users set password_hash = $2, must_change_password = true, updated_at = now() where id = $1",
+      [targetUserId, await hashPassword(input.newPassword)]
+    );
+    await client.query("delete from sessions where user_id = $1", [targetUserId]);
+  });
+}
+
+export function requirePasswordRotationComplete(user: AuthenticatedUser) {
+  if (user.mustChangePassword) {
+    throw new AppError(403, "Password change required before accessing this resource.");
+  }
 }
 
 function normalizeUsername(username: string) {

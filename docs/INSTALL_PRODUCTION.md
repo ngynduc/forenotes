@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh |
 
 It creates `forenotes-prod/` in the current directory. Use `--dir /opt/forenotes --port 8080` to customize the location and port. Existing `.env.production` files are preserved, so rerunning the command does not rotate credentials.
 
-The fast installer uses `SECURE_SESSION_COOKIES=false` so a new local HTTP install works immediately. For an HTTPS deployment, set the value to `true` in `.env.production` before starting, or run the installer with `--secure-cookies`.
+The fast installer uses `SECURE_SESSION_COOKIES=false` so a new local HTTP install works immediately. For an HTTPS deployment, set the value to `true` in `.env.production` before starting, or run the installer with `--secure-cookies`. When rerunning the installer against an existing directory, `--secure-cookies` updates the persisted environment file safely.
 
 For audited or pinned deployments, continue with the manual install below and set `FORENOTES_IMAGE` to a versioned image tag.
 
@@ -43,7 +43,7 @@ Storage: 20 GB minimum
 Published image:
 
 ```text
-ngynduc/forenotes:latest
+ngynduc/forenotes:0.2.0
 ngynduc/forenotes:main-acab558
 ```
 
@@ -142,6 +142,7 @@ LLM_PROVIDER=
 LLM_MODEL=
 LLM_API_KEY=
 LLM_API_ENDPOINT=
+FORENOTES_LLM_ALLOWED_HOSTS=
 LLM_SYSTEM_PROMPT=
 LLM_CUSTOM_HEADERS_JSON={}
 ```
@@ -166,7 +167,7 @@ services:
       retries: 10
 
   app:
-    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:latest}
+    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.0}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -314,6 +315,7 @@ LLM_PROVIDER=openai
 LLM_MODEL=gpt-4.1-mini
 LLM_API_KEY=<provider key>
 LLM_API_ENDPOINT=
+FORENOTES_LLM_ALLOWED_HOSTS=<comma-separated provider hostnames allowed for custom endpoints>
 LLM_SYSTEM_PROMPT=
 LLM_CUSTOM_HEADERS_JSON={}
 ```
@@ -358,15 +360,31 @@ Backup bundled PostgreSQL:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production exec postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > forenotes-backup.sql
+
+# Back up task notes and uploaded report images from the app data volume.
+APP_CONTAINER="$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -aq app)"
+docker run --rm --volumes-from "$APP_CONTAINER" -v "$PWD":/backup alpine \
+  tar czf /backup/forenotes-app-data.tar.gz -C /app/data .
+
+# Preserve the environment file and especially FORENOTES_LLM_SECRET_KEY.
+umask 077
+cp .env.production forenotes-env.production.backup
 ```
 
 Restore bundled PostgreSQL:
 
 ```bash
 cat forenotes-backup.sql | docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
+
+# Restore app data into the named volume after stopping the app.
+docker compose -f docker-compose.prod.yml --env-file .env.production stop app
+APP_CONTAINER="$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -aq app)"
+docker run --rm --volumes-from "$APP_CONTAINER" -v "$PWD":/backup alpine \
+  tar xzf /backup/forenotes-app-data.tar.gz -C /app/data
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
-For external PostgreSQL, use your database platform's backup and restore procedure.
+For external PostgreSQL, use your database platform's backup and restore procedure. Restore the data archive and the exact environment file as well; changing `FORENOTES_LLM_SECRET_KEY` makes stored provider credentials undecryptable. Test the procedure on a disposable host before relying on it.
 
 ## Publisher Build And Push Commands
 

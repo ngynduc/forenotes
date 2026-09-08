@@ -5,6 +5,7 @@ interface SearchInput {
   query: string;
   caseId?: string;
   incidentId?: string;
+  limit?: number;
 }
 
 export async function searchAccessibleRecords(database: Database, user: AuthenticatedUser, input: SearchInput) {
@@ -98,8 +99,9 @@ export async function searchAccessibleRecords(database: Database, user: Authenti
         from attack_tags at
         inner join accessible_incidents ai on true
         where ${attackTagMatch}
+        limit $4
       `,
-      [user.id, input.incidentId, likeQuery]
+      [user.id, input.incidentId, likeQuery, input.limit ?? 100]
     );
     return result.rows;
   }
@@ -200,8 +202,9 @@ export async function searchAccessibleRecords(database: Database, user: Authenti
           where i.case_id = $2 and (i.name ilike $3 or coalesce(i.summary, '') ilike $3)
         ) search_results
         order by case_name, incident_name, entity_type, title
+        limit $4
       `,
-      [user.id, input.caseId, likeQuery]
+      [user.id, input.caseId, likeQuery, input.limit ?? 100]
     );
     return result.rows;
   }
@@ -302,8 +305,9 @@ export async function searchAccessibleRecords(database: Database, user: Authenti
         where ${attackTagMatchGlobal}
       ) search_results
       order by case_name, incident_name, entity_type, title
+      limit $3
     `,
-    [user.id, likeQuery]
+    [user.id, likeQuery, input.limit ?? 100]
   );
   return result.rows;
 }

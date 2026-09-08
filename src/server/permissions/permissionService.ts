@@ -1,9 +1,10 @@
 import type { Database } from "../db/types.js";
 import type { PermissionKey } from "../../shared/domain.js";
-import type { AuthenticatedUser } from "../services/authService.js";
+import { requirePasswordRotationComplete, type AuthenticatedUser } from "../services/authService.js";
 import { AppError } from "../errors.js";
 
 export async function requirePermission(database: Database, user: AuthenticatedUser, key: PermissionKey) {
+  requirePasswordRotationComplete(user);
   const result = await database.query<{ permission_key: string }>(
     "select permission_key from role_permissions where role = $1 and permission_key = $2",
     [user.globalRole, key]
