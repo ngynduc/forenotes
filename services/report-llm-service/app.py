@@ -104,6 +104,10 @@ def validate_provider_config(provider: str, model: str, api_key: str | None, api
 
 def validate_api_base(provider: str, api_base: str) -> None:
     parsed = urlparse(api_base)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="LLM API base URL must use HTTP or HTTPS and include a hostname.")
+    if os.getenv("FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS") == "true":
+        return
     if parsed.scheme != "https" and not is_allowed_local_endpoint(provider, parsed):
         raise HTTPException(status_code=400, detail="LLM API base URL must use HTTPS unless using local Ollama in non-production.")
     hostname = (parsed.hostname or "").lower()

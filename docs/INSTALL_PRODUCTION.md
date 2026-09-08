@@ -316,11 +316,17 @@ LLM_MODEL=gpt-4.1-mini
 LLM_API_KEY=<provider key>
 LLM_API_ENDPOINT=
 FORENOTES_LLM_ALLOWED_HOSTS=<comma-separated provider hostnames allowed for custom endpoints>
+FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS=false
 LLM_SYSTEM_PROMPT=
 LLM_CUSTOM_HEADERS_JSON={}
 ```
 
 Users can also configure LLM settings inside the app.
+
+For a self-hosted or HTTP OpenAI-compatible gateway such as 9router, set
+`FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS=true`. This disables HTTPS, private-host,
+DNS-rebinding, and production host-allowlist checks for the configured endpoint.
+Use it only when the endpoint is trusted and reachable from the app container.
 
 ## Bootstrap Admin
 

@@ -912,6 +912,9 @@ async function assertLlmDestinationResolvesPublicly(baseUrl: string | null) {
   if (!baseUrl) {
     return;
   }
+  if (allowUnsafeLlmEndpoints()) {
+    return;
+  }
   const hostname = new URL(baseUrl).hostname;
   if (process.env.NODE_ENV === "production") {
     const allowedHosts = (process.env.FORENOTES_LLM_ALLOWED_HOSTS ?? "")
@@ -1964,11 +1967,15 @@ function normalizeLlmBaseUrl(provider: string, rawBaseUrl: string | null | undef
     throw new AppError(400, "LLM API base URL must be a valid URL.");
   }
 
-  if (parsed.protocol !== "https:" && !isAllowedLocalLlmEndpoint(provider, parsed)) {
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new AppError(400, "LLM API base URL must use HTTP or HTTPS.");
+  }
+
+  if (!allowUnsafeLlmEndpoints() && parsed.protocol !== "https:" && !isAllowedLocalLlmEndpoint(provider, parsed)) {
     throw new AppError(400, "LLM API base URL must use HTTPS unless local development endpoints are explicitly allowed.");
   }
 
-  if (isBlockedLlmHost(parsed.hostname)) {
+  if (!allowUnsafeLlmEndpoints() && isBlockedLlmHost(parsed.hostname)) {
     throw new AppError(400, "LLM API base URL cannot target local, private, link-local, or metadata hosts.");
   }
 
@@ -1977,6 +1984,10 @@ function normalizeLlmBaseUrl(provider: string, rawBaseUrl: string | null | undef
 
 function isAllowedLocalLlmEndpoint(provider: string, url: URL) {
   return provider === "ollama" && process.env.NODE_ENV !== "production" && url.protocol === "http:" && isLoopbackHost(url.hostname);
+}
+
+function allowUnsafeLlmEndpoints() {
+  return process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS === "true";
 }
 
 function isBlockedLlmHost(hostname: string) {

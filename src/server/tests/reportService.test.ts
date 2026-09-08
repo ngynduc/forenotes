@@ -392,6 +392,28 @@ describe("report service", () => {
     ).rejects.toThrow("Custom header names cannot override");
   });
 
+  it("allows explicitly enabled custom HTTP LLM endpoints", async () => {
+    const previous = process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+    process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = "true";
+
+    try {
+      const saved = await saveLlmSettings(database, user(userId), {
+        provider: "openai",
+        baseUrl: "http://9router:9000/v1",
+        model: "gpt-test",
+        apiKey: "local-router-key"
+      });
+
+      expect(saved.endpointConfigured).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+      } else {
+        process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = previous;
+      }
+    }
+  });
+
   it("allows custom LiteLLM providers without forcing a base URL", async () => {
     const response = await saveLlmSettings(database, user(userId), {
       provider: "nano-gpt",

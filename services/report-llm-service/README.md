@@ -18,6 +18,8 @@ LITELLM_SERVICE_URL=http://localhost:8001
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
 LLM_API_KEY=your-provider-key
+LLM_API_ENDPOINT=http://127.0.0.1:9000/v1
+FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS=true
 LLM_SYSTEM_PROMPT=Optional custom report-generation system prompt
 ```
 
