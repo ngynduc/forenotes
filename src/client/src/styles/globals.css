@@ -1,56 +1,71 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #f7f8f7;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f1f3f2;
-  --color-surface-subtle: #e8ecea;
-  --color-text: #17201d;
-  --color-text-muted: #66716d;
-  --color-text-soft: #87918d;
-  --color-border: #d9dfdc;
-  --color-border-strong: #b9c4bf;
-  --color-primary: #0f766e;
-  --color-primary-strong: #115e59;
-  --color-primary-soft: #e3f3f1;
-  --color-warning: #a16207;
-  --color-warning-soft: #fefce8;
-  --color-danger: #b42318;
-  --color-danger-soft: #fff1f0;
-  --color-success-soft: #edf8f1;
+  --color-bg: #07111f;
+  --color-surface: #0c1828;
+  --color-surface-muted: #122238;
+  --color-surface-subtle: #1a2d46;
+  --color-text: #e7eef8;
+  --color-text-muted: #9aaac0;
+  --color-text-soft: #71839b;
+  --color-border: #203650;
+  --color-border-strong: #345474;
+  --color-primary: #22d3ee;
+  --color-primary-strong: #67e8f9;
+  --color-primary-foreground: #04141b;
+  --color-primary-soft: #0c3444;
+  --color-primary-border: #155e75;
+  --color-warning: #fbbf24;
+  --color-warning-foreground: #1b1200;
+  --color-warning-soft: #3a2b0d;
+  --color-warning-border: #725313;
+  --color-danger: #fb7185;
+  --color-danger-foreground: #21070d;
+  --color-danger-soft: #3d1722;
+  --color-danger-border: #7f2d40;
+  --color-success: #34d399;
+  --color-success-foreground: #031b13;
+  --color-success-soft: #10362c;
+  --color-success-border: #1d6a53;
+  --color-info: #60a5fa;
+  --color-info-soft: #122e51;
+  --color-info-border: #285a91;
 
-  --color-status-todo: #475569;
-  --color-status-todo-soft: #f1f5f9;
-  --color-status-todo-border: #cbd5e1;
+  --color-chart-1: #22d3ee;
+  --color-chart-2: #fb7185;
+  --color-chart-3: #fbbf24;
+  --color-chart-4: #34d399;
+  --color-chart-5: #60a5fa;
+  --color-chart-6: #c084fc;
 
-  --color-status-open: #2563eb;
-  --color-status-open-soft: #eff6ff;
-  --color-status-open-border: #bfdbfe;
-
-  --color-status-progress: #0f766e;
-  --color-status-progress-soft: #e3f3f1;
-  --color-status-progress-border: #99d8d0;
-
-  --color-status-blocked: #b42318;
-  --color-status-blocked-soft: #fff1f0;
-  --color-status-blocked-border: #f5b5ae;
-
-  --color-status-confirmed: #b42318;
-  --color-status-confirmed-soft: #fff1f0;
-  --color-status-confirmed-border: #f5b5ae;
-
-  --color-status-done: #166534;
-  --color-status-done-soft: #edf8f1;
-  --color-status-done-border: #b7e4c7;
-
-  --color-status-false-positive: #7c3aed;
-  --color-status-false-positive-soft: #f5f3ff;
-  --color-status-false-positive-border: #ddd6fe;
+  --color-status-todo: #9aaac0;
+  --color-status-todo-soft: #122238;
+  --color-status-todo-border: #345474;
+  --color-status-open: #60a5fa;
+  --color-status-open-soft: #122e51;
+  --color-status-open-border: #285a91;
+  --color-status-progress: #22d3ee;
+  --color-status-progress-soft: #0c3444;
+  --color-status-progress-border: #155e75;
+  --color-status-blocked: #fb7185;
+  --color-status-blocked-soft: #3d1722;
+  --color-status-blocked-border: #7f2d40;
+  --color-status-confirmed: #fb7185;
+  --color-status-confirmed-soft: #3d1722;
+  --color-status-confirmed-border: #7f2d40;
+  --color-status-done: #34d399;
+  --color-status-done-soft: #10362c;
+  --color-status-done-border: #1d6a53;
+  --color-status-false-positive: #c084fc;
+  --color-status-false-positive-soft: #2d1944;
+  --color-status-false-positive-border: #65368a;
 
   --radius-sm: 6px;
   --radius-md: 10px;
 
   --font-sans: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
+  --shadow-panel: 0 16px 38px rgb(0 0 0 / 0.22);
+  --shadow-panel-hover: 0 20px 46px rgb(0 0 0 / 0.32);
 }
 
 @layer base {
@@ -63,6 +78,7 @@
   html,
   body {
     min-height: 100%;
+    color-scheme: dark;
   }
 
   body {
@@ -72,6 +88,11 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
   }
 
   button,
@@ -91,6 +112,25 @@
     cursor: not-allowed;
     opacity: 0.55;
   }
+}
+
+.night-ops-shell {
+  background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle at 76% 8%, rgb(34 211 238 / 0.09), transparent 28rem),
+    linear-gradient(rgb(34 211 238 / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 211 238 / 0.025) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+}
+
+.pdf-preview-canvas {
+  background: #ffffff;
+  color-scheme: light;
+}
+
+.pdf-preview-canvas {
+  background: #ffffff;
+  color-scheme: light;
 }
 
 /* Status badges */

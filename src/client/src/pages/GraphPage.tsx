@@ -26,7 +26,7 @@ export default function GraphPage() {
           className={cn(
             "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium transition-colors",
             graphView === "relationship"
-              ? "bg-[var(--color-primary)] text-white"
+              ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
               : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
           )}
         >
@@ -38,7 +38,7 @@ export default function GraphPage() {
           className={cn(
             "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium transition-colors",
             graphView === "mitre"
-              ? "bg-[var(--color-primary)] text-white"
+              ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
               : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
           )}
         >

@@ -31,7 +31,8 @@ const originalLlmEnv = {
   provider: process.env.LLM_PROVIDER,
   systemPrompt: process.env.LLM_SYSTEM_PROMPT,
   customHeaders: process.env.LLM_CUSTOM_HEADERS_JSON,
-  serviceUrl: process.env.LITELLM_SERVICE_URL
+  serviceUrl: process.env.LITELLM_SERVICE_URL,
+  allowUnsafeEndpoints: process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS
 };
 
 function clearLlmEnv() {
@@ -42,6 +43,7 @@ function clearLlmEnv() {
   delete process.env.LLM_SYSTEM_PROMPT;
   delete process.env.LLM_CUSTOM_HEADERS_JSON;
   delete process.env.LITELLM_SERVICE_URL;
+  delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
 }
 
 function restoreLlmEnv() {
@@ -59,6 +61,8 @@ function restoreLlmEnv() {
   else process.env.LLM_CUSTOM_HEADERS_JSON = originalLlmEnv.customHeaders;
   if (originalLlmEnv.serviceUrl === undefined) delete process.env.LITELLM_SERVICE_URL;
   else process.env.LITELLM_SERVICE_URL = originalLlmEnv.serviceUrl;
+  if (originalLlmEnv.allowUnsafeEndpoints === undefined) delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+  else process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = originalLlmEnv.allowUnsafeEndpoints;
 }
 
 async function createTestDatabase() {

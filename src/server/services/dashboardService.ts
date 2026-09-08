@@ -7,6 +7,8 @@ import type {
   DashboardCharts,
   DashboardFindingItem,
   DashboardIncidentHealth,
+  DashboardOverviewCharts,
+  DashboardOverviewSummary,
   DashboardRecentActivity,
   DashboardResponse,
   DashboardSla,
@@ -129,16 +131,51 @@ interface DashboardDataset {
 const dashboardDatasetCache = new WeakMap<AuthenticatedUser, Promise<DashboardDataset>>();
 
 export async function getDashboard(database: Database, user: AuthenticatedUser): Promise<DashboardResponse> {
-  const [summary, charts, sla, activity, workload, cases] = await Promise.all([
-    getDashboardSummary(database, user),
-    getDashboardCharts(database, user),
+  const dataset = await loadDashboardDataset(database, user);
+  const [sla, workload] = await Promise.all([
     getDashboardSla(database, user),
-    getDashboardActivity(database, user),
-    getDashboardWorkload(database, user),
-    getDashboardCases(database, user)
+    getDashboardWorkload(database, user)
   ]);
+  const now = Date.now();
+  const summary = buildDashboardOverviewSummary(dataset, now);
+  const charts = buildDashboardOverviewCharts(dataset, workload, now);
 
-  return { summary, charts, sla, activity, workload, cases };
+  return { summary, charts, sla, workload };
+}
+
+function buildDashboardOverviewSummary(dataset: DashboardDataset, now: number): DashboardOverviewSummary {
+  return {
+    scope: dataset.scope,
+    sla: buildSlaSummary(dataset, now),
+    unread: buildUnreadSummary(dataset.notifications),
+    activeIncidents: dataset.incidents.filter((entry) => entry.status !== "closed").length,
+    openTasks: dataset.tasks.filter((entry) => entry.status !== "done").length
+  };
+}
+
+function buildDashboardOverviewCharts(
+  dataset: DashboardDataset,
+  workload: DashboardWorkloadResponse,
+  now: number
+): DashboardOverviewCharts {
+  const sla = buildSlaSummary(dataset, now);
+  const openTasks = dataset.tasks.filter((task) => task.status !== "done").length;
+
+  return {
+    taskStatusDistribution: toBreakdown(dataset.tasks, "status", ["todo", "in_progress", "blocked", "done"]).map(toLabeledValue),
+    slaRiskBreakdown: [
+      { label: "Overdue", value: sla.overdueTasks },
+      { label: "Due Soon", value: sla.dueSoonTasks },
+      { label: "Blocked", value: sla.blockedTasks },
+      { label: "Healthy", value: Math.max(openTasks - sla.overdueTasks - sla.dueSoonTasks - sla.blockedTasks, 0) }
+    ],
+    workloadByAssignee: workload.workload.map((row) => ({
+      assignee: row.assignee.name,
+      openTasks: row.taskCount,
+      overdue: row.overdueCount,
+      dueSoon: row.dueSoonCount
+    }))
+  };
 }
 
 export async function getDashboardSummary(database: Database, user: AuthenticatedUser): Promise<DashboardSummary> {

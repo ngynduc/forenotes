@@ -4,21 +4,22 @@ import type { DashboardResponse } from "@shared/graph-types";
 import { formatRelativeTime } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
-type DashboardTab = "overview" | "sla" | "activity" | "workload" | "cases";
+type DashboardTab = "overview" | "sla" | "workload";
 
 interface DashboardSummaryCardsProps {
   data: DashboardResponse;
   onSelectTab: (tab: DashboardTab) => void;
+  onOpenNotifications: () => void;
 }
 
 const CARD_STYLES = {
-  rose: "border-rose-200 bg-white text-rose-700",
-  amber: "border-amber-200 bg-white text-amber-700",
-  blue: "border-blue-200 bg-white text-blue-700",
-  teal: "border-teal-200 bg-white text-teal-700"
+  rose: "border-[var(--color-danger-border)] bg-[var(--color-surface)] text-[var(--color-danger)]",
+  amber: "border-[var(--color-warning-border)] bg-[var(--color-surface)] text-[var(--color-warning)]",
+  blue: "border-[var(--color-info-border)] bg-[var(--color-surface)] text-[var(--color-info)]",
+  teal: "border-[var(--color-primary-border)] bg-[var(--color-surface)] text-[var(--color-primary)]"
 };
 
-export function DashboardSummaryCards({ data, onSelectTab }: DashboardSummaryCardsProps) {
+export function DashboardSummaryCards({ data, onSelectTab, onOpenNotifications }: DashboardSummaryCardsProps) {
   const { summary, sla } = data;
   const assignedOverdue = new Set(sla.overdueTasks.map((task) => task.assignee?.id).filter(Boolean)).size;
   const oldestOverdue = sla.overdueTasks[0]?.dueAt ? formatRelativeTime(sla.overdueTasks[0].dueAt).replace(" ago", "") : "None";
@@ -70,7 +71,7 @@ export function DashboardSummaryCards({ data, onSelectTab }: DashboardSummaryCar
         helper="Unread updates addressed to you"
         tone="blue"
         icon={Bell}
-        onClick={() => onSelectTab("activity")}
+        onClick={onOpenNotifications}
         breakdown={[
           ["Mentions", summary.unread.mentions],
           ["Case updates", summary.unread.caseUpdates],
@@ -97,13 +98,13 @@ function SummaryCard({ title, value, helper, tone, icon: Icon, breakdown, onClic
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex min-h-[172px] flex-col rounded-[8px] border p-4 text-left shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]",
+        "group flex min-h-[172px] flex-col rounded-[var(--radius-md)] border p-4 text-left shadow-[var(--shadow-panel)] transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-[var(--shadow-panel-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] active:scale-[0.98]",
         CARD_STYLES[tone]
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <span className="text-sm font-semibold text-[var(--color-text)]">{title}</span>
-        <span className="rounded-[6px] bg-[var(--color-surface-muted)] p-2">
+        <span className="rounded-[var(--radius-sm)] border border-current/20 bg-[var(--color-surface-muted)] p-2">
           <Icon className="h-4 w-4" />
         </span>
       </div>

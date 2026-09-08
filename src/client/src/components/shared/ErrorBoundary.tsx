@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <h3 className="text-sm font-semibold text-[var(--color-danger)]">Something went wrong</h3>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">{this.state.error.message}</p>
             <button
-              className="mt-2 rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-1 text-sm text-white"
+              className="mt-2 rounded-[var(--radius-sm)] bg-[var(--color-danger)] px-3 py-1 text-sm text-[var(--color-danger-foreground)]"
               onClick={() => this.setState({ error: null })}
             >
               Try again

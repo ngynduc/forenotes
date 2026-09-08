@@ -769,7 +769,7 @@ describe("Forenotes API", () => {
     ).toBe(true);
   });
 
-  it("returns permission-scoped dashboard metrics and recent activity", async () => {
+  it("returns the slim aggregate dashboard and preserves scoped summary details", async () => {
     const caseResponse = await request(app)
       .post("/api/cases")
       .set("x-user-id", commanderId)
@@ -862,23 +862,18 @@ describe("Forenotes API", () => {
       .set("x-user-id", analystId);
 
     expect(response.status).toBe(200);
-    expect(response.body.summary.metrics.totalCases).toBe(1);
-    expect(response.body.summary.metrics.openIncidents).toBe(1);
-    expect(response.body.summary.metrics.unresolvedFindings).toBe(1);
-    expect(response.body.summary.metrics.overdueTasks).toBe(1);
-    expect(response.body.summary.metrics.unreadNotifications).toBe(3);
+    expect(Object.keys(response.body).sort()).toEqual(["charts", "sla", "summary", "workload"]);
+    expect(Object.keys(response.body.summary).sort()).toEqual(["activeIncidents", "openTasks", "scope", "sla", "unread"]);
+    expect(Object.keys(response.body.charts).sort()).toEqual(["slaRiskBreakdown", "taskStatusDistribution", "workloadByAssignee"]);
+    expect(response.body).not.toHaveProperty("activity");
+    expect(response.body).not.toHaveProperty("cases");
+    expect(response.body.summary).not.toHaveProperty("metrics");
+    expect(response.body.charts).not.toHaveProperty("activityTrend");
+    expect(response.body.charts).not.toHaveProperty("unreadBreakdown");
+    expect(response.body.charts).not.toHaveProperty("caseIncidentHealth");
     expect(response.body.summary.sla.staleIncidents).toBe(1);
     expect(response.body.summary.sla.agingFindings).toBe(1);
     expect(response.body.summary.unread.taskUpdates).toBe(1);
-    expect(response.body.summary.breakdowns.incidentSeverity).toEqual([
-      { value: "critical", count: 1 }
-    ]);
-    expect(response.body.summary.breakdowns.taskStatus).toEqual([
-      { value: "todo", count: 1 }
-    ]);
-    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Hidden finding")).toBe(false);
-    expect(response.body.summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Contain affected host")).toBe(true);
-  expect(response.body.summary.activity).toHaveLength(7);
     expect(response.body.charts.taskStatusDistribution).toEqual([
       { label: "todo", value: 1 }
     ]);
@@ -888,6 +883,22 @@ describe("Forenotes API", () => {
         { label: "Due Soon", value: 0 }
       ])
     );
+
+    const summaryResponse = await request(app)
+      .get("/api/dashboard/summary")
+      .set("x-user-id", analystId);
+    const summary = summaryResponse.body.summary;
+    expect(summaryResponse.status).toBe(200);
+    expect(summary.metrics.totalCases).toBe(1);
+    expect(summary.metrics.openIncidents).toBe(1);
+    expect(summary.metrics.unresolvedFindings).toBe(1);
+    expect(summary.metrics.overdueTasks).toBe(1);
+    expect(summary.metrics.unreadNotifications).toBe(3);
+    expect(summary.breakdowns.incidentSeverity).toEqual([{ value: "critical", count: 1 }]);
+    expect(summary.breakdowns.taskStatus).toEqual([{ value: "todo", count: 1 }]);
+    expect(summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Hidden finding")).toBe(false);
+    expect(summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Contain affected host")).toBe(true);
+    expect(summary.activity).toHaveLength(7);
   });
 
   it("returns empty dashboard data for users without case membership", async () => {
@@ -918,6 +929,12 @@ describe("Forenotes API", () => {
         caseIncidentHealth: expect.any(Array)
       })
     );
+
+    const activityResponse = await request(app)
+      .get("/api/dashboard/activity")
+      .set("x-user-id", commanderId);
+    expect(activityResponse.status).toBe(200);
+    expect(activityResponse.body).toEqual({ activity: expect.any(Array) });
   });
 
   it("scopes dashboard summary, SLA, and workload by role", async () => {
@@ -1904,7 +1921,7 @@ describe("Forenotes API", () => {
     ).toBe(true);
 
     const dashboardResponse = await request(app)
-      .get("/api/dashboard")
+      .get("/api/dashboard/summary")
       .set("x-user-id", analystTwoId);
 
     expect(dashboardResponse.status).toBe(200);

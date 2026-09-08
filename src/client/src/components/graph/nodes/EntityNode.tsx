@@ -6,7 +6,7 @@ import { DEFAULT_ENTITY_ICON, ENTITY_ICON_MAP } from "../entityVisuals";
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "border-[var(--color-danger)]",
-  high: "border-orange-500",
+  high: "border-[var(--color-danger)]",
   medium: "border-[var(--color-warning)]",
   low: "border-[var(--color-primary)]",
 };

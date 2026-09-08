@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-[var(--color-danger)]",
-  high: "bg-orange-500",
+  high: "bg-[var(--color-danger)]",
   medium: "bg-[var(--color-warning)]",
   low: "bg-[var(--color-primary)]",
 };
@@ -69,7 +69,7 @@ export function KanbanCard({ task, memberNames, onClick, onOpenNotes }: KanbanCa
     >
       <div className="mb-1 flex items-start justify-between gap-2">
         <span className="text-sm font-medium leading-tight">{task.title}</span>
-        <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_COLORS[task.priority] ?? "bg-gray-400")} />
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_COLORS[task.priority] ?? "bg-[var(--color-text-soft)]")} />
       </div>
 
       {description && (

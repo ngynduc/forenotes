@@ -17,7 +17,7 @@ export default function NotificationsPage() {
       <p className="mb-4 text-sm text-[var(--color-text-muted)]">
         {tableDef.subtitle}
         {unreadCount > 0 ? (
-          <span className="ml-2 rounded bg-[var(--color-danger)] px-1.5 py-0.5 text-xs font-bold text-white">
+          <span className="ml-2 rounded bg-[var(--color-danger)] px-1.5 py-0.5 text-xs font-bold text-[var(--color-danger-foreground)]">
             {unreadCount} unread
           </span>
         ) : null}
