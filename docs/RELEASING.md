@@ -11,7 +11,7 @@ DOCKERHUB_USERNAME=your-dockerhub-username
 DOCKERHUB_TOKEN=your-dockerhub-access-token
 ```
 
-The workflow does not publish on pull requests. It publishes on pushes to `main` and on version tags.
+The workflow publishes only on version tags. Pull requests and pushes to `main` run CI without publishing a container image.
 
 ## Release a version
 
@@ -34,7 +34,7 @@ ngynduc/forenotes:sha-<short-sha>
 ngynduc/forenotes:latest
 ```
 
-Pushes to `main` publish `main`, `sha-<short-sha>`, and `latest`. Production installations should use the full semver tag or SHA tag for deliberate upgrades:
+Production installations should use the full semver tag or SHA tag for deliberate upgrades:
 
 ```dotenv
 FORENOTES_IMAGE=ngynduc/forenotes:0.2.1
