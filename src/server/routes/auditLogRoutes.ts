@@ -15,7 +15,7 @@ export function createAuditLogRoutes(database: Database) {
       await requirePermission(database, user, "audit:read");
       const caseId = typeof request.query.caseId === "string" ? request.query.caseId : undefined;
       const incidentId = typeof request.query.incidentId === "string" ? request.query.incidentId : undefined;
-      response.json({ auditLogs: await listAuditLogs(database, { caseId, incidentId }) });
+      response.json({ auditLogs: await listAuditLogs(database, user, { caseId, incidentId }) });
     })
   );
 

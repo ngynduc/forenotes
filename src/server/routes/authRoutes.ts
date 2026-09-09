@@ -22,6 +22,9 @@ const loginSchema = z.object({
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_CLEANUP_INTERVAL_MS = 60 * 1000;
+const LOGIN_MAX_TRACKED_KEYS = 10_000;
+let lastLoginCleanupAt = 0;
 
 export function createAuthRoutes(database: Database) {
   const router = Router();
@@ -30,16 +33,16 @@ export function createAuthRoutes(database: Database) {
     "/login",
     asyncHandler(async (request, response) => {
       const payload = loginSchema.parse(request.body);
-      const rateLimitKey = loginRateLimitKey(request.ip, payload.username);
-      checkLoginRateLimit(rateLimitKey);
+      const rateLimitKeys = loginRateLimitKeys(request.ip, payload.username);
+      rateLimitKeys.forEach(checkLoginRateLimit);
       let session: Awaited<ReturnType<typeof loginWithPassword>>;
       try {
         session = await loginWithPassword(database, payload);
       } catch (error) {
-        recordFailedLogin(rateLimitKey);
+        rateLimitKeys.forEach(recordFailedLogin);
         throw error;
       }
-      clearFailedLogin(rateLimitKey);
+      rateLimitKeys.forEach(clearFailedLogin);
       setSessionCookie(response, session.sessionId, session.expiresAt);
       response.json({ user: session.user });
     })
@@ -57,7 +60,7 @@ export function createAuthRoutes(database: Database) {
   router.get(
     "/me",
     asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
+      const user = await getAuthenticatedUser(request, database, { allowPasswordRotation: true });
       const permissions = await listUserPermissions(database, user);
       response.json({ user, permissions });
     })
@@ -66,7 +69,7 @@ export function createAuthRoutes(database: Database) {
   router.post(
     "/change-password",
     asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
+      const user = await getAuthenticatedUser(request, database, { allowPasswordRotation: true });
       const payload = changePasswordSchema.parse(request.body);
       await changeOwnPassword(database, user, payload);
       response.status(204).send();
@@ -76,11 +79,12 @@ export function createAuthRoutes(database: Database) {
   return router;
 }
 
-function loginRateLimitKey(ip: string | undefined, username: string) {
-  return `${ip ?? "unknown"}:${username.trim().toLowerCase()}`;
+function loginRateLimitKeys(ip: string | undefined, username: string) {
+  return [`ip:${ip ?? "unknown"}`, `username:${username.trim().toLowerCase()}`];
 }
 
 function checkLoginRateLimit(key: string) {
+  cleanupLoginAttempts();
   const record = loginAttempts.get(key);
   if (!record) {
     return;
@@ -94,10 +98,29 @@ function checkLoginRateLimit(key: string) {
   }
 }
 
+function cleanupLoginAttempts() {
+  const now = Date.now();
+  if (now - lastLoginCleanupAt < LOGIN_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+  lastLoginCleanupAt = now;
+  for (const [key, record] of loginAttempts) {
+    if (record.resetAt <= now) {
+      loginAttempts.delete(key);
+    }
+  }
+}
+
 function recordFailedLogin(key: string) {
   const now = Date.now();
   const record = loginAttempts.get(key);
   if (!record || now >= record.resetAt) {
+    if (loginAttempts.size >= LOGIN_MAX_TRACKED_KEYS) {
+      const oldestKey = loginAttempts.keys().next().value;
+      if (oldestKey) {
+        loginAttempts.delete(oldestKey);
+      }
+    }
     loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
     return;
   }

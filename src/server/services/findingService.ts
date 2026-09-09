@@ -22,6 +22,7 @@ interface FindingTimeFilter {
   field?: "createdAt" | "updatedAt";
   start?: string;
   end?: string;
+  limit?: number;
 }
 
 export async function listFindings(
@@ -32,38 +33,51 @@ export async function listFindings(
 ) {
   await requireIncidentMembership(database, userId, incidentId);
   const result = await database.query(buildFindingListQuery(filter), buildFindingListParams(incidentId, filter));
-  return Promise.all(
-    result.rows.map(async (row) => {
-      const [attackTagsResult, customTagsResult] = await Promise.all([
-        database.query(
-          `
-            select at.id, at.attack_id, at.name, at.type, at.tactic
-            from finding_attack_tags fat
-            inner join attack_tags at on at.id = fat.attack_tag_id
-            where fat.incident_id = $1 and fat.finding_id = $2
-            order by at.attack_id asc
-          `,
-          [incidentId, row.id]
-        ),
-        database.query(
-          `
-            select ct.id, ct.name, ct.color
-            from finding_custom_tags fct
-            inner join custom_tags ct on ct.id = fct.custom_tag_id
-            where fct.incident_id = $1 and fct.finding_id = $2
-            order by ct.name asc
-          `,
-          [incidentId, row.id]
-        )
-      ]);
+  if (result.rows.length === 0) {
+    return [];
+  }
+  const findingIds = result.rows.map((row) => row.id);
+  const [attackTagsResult, customTagsResult] = await Promise.all([
+    database.query<{ finding_id: string }>(
+      `
+        select fat.finding_id, at.id, at.attack_id, at.name, at.type, at.tactic
+        from finding_attack_tags fat
+        inner join attack_tags at on at.id = fat.attack_tag_id
+        where fat.incident_id = $1 and fat.finding_id = any($2)
+        order by at.attack_id asc
+      `,
+      [incidentId, findingIds]
+    ),
+    database.query<{ finding_id: string }>(
+      `
+        select fct.finding_id, ct.id, ct.name, ct.color
+        from finding_custom_tags fct
+        inner join custom_tags ct on ct.id = fct.custom_tag_id
+        where fct.incident_id = $1 and fct.finding_id = any($2)
+        order by ct.name asc
+      `,
+      [incidentId, findingIds]
+    )
+  ]);
+  const attackTagsByFinding = groupRowsById(attackTagsResult.rows);
+  const customTagsByFinding = groupRowsById(customTagsResult.rows);
+  return result.rows.map((row) => ({
+    ...row,
+    attack_tags: attackTagsByFinding.get(row.id) ?? [],
+    custom_tags: customTagsByFinding.get(row.id) ?? []
+  }));
+}
 
-      return {
-        ...row,
-        attack_tags: attackTagsResult.rows,
-        custom_tags: customTagsResult.rows
-      };
-    })
-  );
+function groupRowsById(rows: Array<{ finding_id: string }>) {
+  const grouped = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of rows) {
+    const values = { ...row } as Record<string, unknown>;
+    delete values.finding_id;
+    const entries = grouped.get(row.finding_id) ?? [];
+    entries.push(values);
+    grouped.set(row.finding_id, entries);
+  }
+  return grouped;
 }
 
 function buildFindingListQuery(filter?: FindingTimeFilter) {
@@ -77,8 +91,9 @@ function buildFindingListQuery(filter?: FindingTimeFilter) {
   if (filter?.end) {
     clauses.push(`${column} <= $${clauses.length + 1}`);
   }
+  clauses.push(`true`);
 
-  return `select * from findings where ${clauses.join(" and ")} order by created_at desc`;
+  return `select * from findings where ${clauses.slice(0, -1).join(" and ")} order by created_at desc limit $${clauses.length}`;
 }
 
 function buildFindingListParams(incidentId: string, filter?: FindingTimeFilter) {
@@ -89,6 +104,7 @@ function buildFindingListParams(incidentId: string, filter?: FindingTimeFilter) 
   if (filter?.end) {
     params.push(filter.end);
   }
+  params.push(String(filter?.limit ?? 100));
   return params;
 }
 

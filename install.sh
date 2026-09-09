@@ -77,7 +77,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   umask 077
   cat >"$ENV_FILE" <<EOF
 NODE_ENV=production
-FORENOTES_IMAGE=ngynduc/forenotes:latest
+FORENOTES_IMAGE=ngynduc/forenotes:0.2.0
 
 APP_HOST=0.0.0.0
 APP_PORT=3000
@@ -102,6 +102,7 @@ LLM_PROVIDER=
 LLM_MODEL=
 LLM_API_KEY=
 LLM_API_ENDPOINT=
+FORENOTES_LLM_ALLOWED_HOSTS=
 LLM_SYSTEM_PROMPT=
 LLM_CUSTOM_HEADERS_JSON={}
 EOF
@@ -109,6 +110,14 @@ EOF
   chmod 600 "$ENV_FILE" "$PASSWORD_FILE"
 else
   echo "Keeping existing $ENV_FILE"
+  if [[ "$SECURE_SESSION_COOKIES" == "true" ]]; then
+    if grep -q '^SECURE_SESSION_COOKIES=' "$ENV_FILE"; then
+      sed -i 's/^SECURE_SESSION_COOKIES=.*/SECURE_SESSION_COOKIES=true/' "$ENV_FILE"
+    else
+      printf '\nSECURE_SESSION_COOKIES=true\n' >>"$ENV_FILE"
+    fi
+    echo "Enabled SECURE_SESSION_COOKIES in existing $ENV_FILE"
+  fi
 fi
 
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull

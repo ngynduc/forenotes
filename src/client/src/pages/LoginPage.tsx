@@ -1,7 +1,9 @@
 import { FormEvent, useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useLogin } from "@/hooks/use-auth";
+import { useTheme } from "@/providers/ThemeProvider";
 import logo from "@/assets/forenotes_logo.png";
 
 interface LoginPageProps {
@@ -22,6 +24,7 @@ const NODE_SPEED = 0.3;
 const SHOW_DEMO_CREDENTIALS = import.meta.env.VITE_FORENOTES_DEMO_MODE === "1";
 
 function ParticleCanvas() {
+  const { theme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<Node[]>([]);
   const rafRef = useRef<number>(0);
@@ -31,6 +34,10 @@ function ParticleCanvas() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const primaryRgb = getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-primary-rgb")
+      .trim()
+      .replace(/\s+/g, ",");
 
     function resize() {
       if (!canvas) return;
@@ -67,7 +74,7 @@ function ParticleCanvas() {
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < MAX_DIST * devicePixelRatio) {
             const alpha = 1 - dist / (MAX_DIST * devicePixelRatio);
-            ctx.strokeStyle = `rgba(15,118,110,${alpha * 0.15})`;
+            ctx.strokeStyle = `rgba(${primaryRgb},${alpha * 0.16})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(nodes[i].x, nodes[i].y);
@@ -78,7 +85,7 @@ function ParticleCanvas() {
       }
 
       for (const n of nodes) {
-        ctx.fillStyle = "rgba(15,118,110,0.35)";
+        ctx.fillStyle = `rgba(${primaryRgb},0.38)`;
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.radius * devicePixelRatio, 0, Math.PI * 2);
         ctx.fill();
@@ -92,7 +99,7 @@ function ParticleCanvas() {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [theme]);
 
   return (
     <canvas
@@ -121,13 +128,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0d1512] px-4 py-10 text-[#17201d]">
+    <main className="night-ops-shell relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--color-bg)] px-4 py-10 text-[var(--color-text)]">
       <ParticleCanvas />
-      <section className="relative z-10 w-full max-w-[420px] rounded-[24px] border border-[#1e3530] bg-white/95 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.4)] backdrop-blur-sm">
+      <ThemeToggle className="absolute right-4 top-4 z-20" />
+      <section className="relative z-10 w-full max-w-[420px] rounded-[24px] border border-[var(--color-border-strong)] bg-[var(--color-surface)]/95 p-6 shadow-[0_24px_60px_rgb(0_0_0/0.48)] backdrop-blur-sm">
         <div className="mb-6 flex flex-col items-center">
           <img src={logo} alt="Forenotes" className="mb-2 h-32 w-auto" />
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-          <p className="mt-1 text-sm text-[#66716d]">
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
             Use your incident workspace credentials to continue.
           </p>
         </div>
@@ -163,7 +171,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           </div>
 
           {error && (
-            <p className="rounded-[12px] border border-[#f2c8c2] bg-[#fff1f0] px-3 py-2 text-sm text-[#b42318]">
+            <p className="rounded-[12px] border border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
               {error}
             </p>
           )}
@@ -174,8 +182,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         </form>
 
         {SHOW_DEMO_CREDENTIALS && (
-          <p className="mt-5 rounded-[14px] bg-[#f7f9f7] px-3 py-2 text-xs text-[#66716d]">
-            Demo users include <span className="font-mono text-[#40514d]">lead / lead123</span>.
+          <p className="mt-5 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
+            Demo users include <span className="font-mono text-[var(--color-text)]">lead / lead123</span>.
           </p>
         )}
       </section>

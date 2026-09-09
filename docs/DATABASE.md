@@ -404,6 +404,10 @@ Links tasks to evidence entities.
 | metadata_json | jsonb | Additional context |
 | created_at | timestamptz | |
 
+### schema_migrations
+
+The migration runner records each applied SQL filename in `schema_migrations` and skips it on later startups. Existing databases are baselined once when this ledger is first introduced; verify the backup before applying future migration files.
+
 ### report_templates
 
 Markdown report templates scoped to an incident.

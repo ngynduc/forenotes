@@ -31,7 +31,8 @@ const originalLlmEnv = {
   provider: process.env.LLM_PROVIDER,
   systemPrompt: process.env.LLM_SYSTEM_PROMPT,
   customHeaders: process.env.LLM_CUSTOM_HEADERS_JSON,
-  serviceUrl: process.env.LITELLM_SERVICE_URL
+  serviceUrl: process.env.LITELLM_SERVICE_URL,
+  allowUnsafeEndpoints: process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS
 };
 
 function clearLlmEnv() {
@@ -42,6 +43,7 @@ function clearLlmEnv() {
   delete process.env.LLM_SYSTEM_PROMPT;
   delete process.env.LLM_CUSTOM_HEADERS_JSON;
   delete process.env.LITELLM_SERVICE_URL;
+  delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
 }
 
 function restoreLlmEnv() {
@@ -59,6 +61,8 @@ function restoreLlmEnv() {
   else process.env.LLM_CUSTOM_HEADERS_JSON = originalLlmEnv.customHeaders;
   if (originalLlmEnv.serviceUrl === undefined) delete process.env.LITELLM_SERVICE_URL;
   else process.env.LITELLM_SERVICE_URL = originalLlmEnv.serviceUrl;
+  if (originalLlmEnv.allowUnsafeEndpoints === undefined) delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+  else process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = originalLlmEnv.allowUnsafeEndpoints;
 }
 
 async function createTestDatabase() {
@@ -390,6 +394,28 @@ describe("report service", () => {
         customHeaders: [{ name: "Authorization", value: "Bearer leaked" }]
       })
     ).rejects.toThrow("Custom header names cannot override");
+  });
+
+  it("allows explicitly enabled custom HTTP LLM endpoints", async () => {
+    const previous = process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+    process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = "true";
+
+    try {
+      const saved = await saveLlmSettings(database, user(userId), {
+        provider: "openai",
+        baseUrl: "http://9router:9000/v1",
+        model: "gpt-test",
+        apiKey: "local-router-key"
+      });
+
+      expect(saved.endpointConfigured).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
+      } else {
+        process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = previous;
+      }
+    }
   });
 
   it("allows custom LiteLLM providers without forcing a base URL", async () => {

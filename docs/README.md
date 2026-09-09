@@ -14,6 +14,7 @@
 | [Database Schema](./DATABASE.md) | Database tables, relationships, and migrations |
 | [Authentication & Authorization](./AUTHENTICATION.md) | Auth flow, RBAC roles, and permissions |
 | [Features](./FEATURES.md) | Feature documentation and domain concepts |
+| [Codebase Audit](./CODEBASE-AUDIT-2026-09-07.md) | Security, quality, performance, and shipping audit |
 
 ## Tech Stack
 

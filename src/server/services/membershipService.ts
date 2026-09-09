@@ -10,6 +10,7 @@ import {
   getCaseNotificationScope,
   getIncidentNotificationScope
 } from "./notificationService.js";
+import { withTransaction } from "../db/transaction.js";
 
 interface AddCaseMemberInput {
   caseId: string;
@@ -53,35 +54,36 @@ export async function addCaseMember(database: Database, user: AuthenticatedUser,
     throw new AppError(404, "User not found");
   }
 
-  try {
-    await database.query(
+  return withTransaction(database, async (transaction) => {
+    try {
+      await transaction.query(
       `
         insert into case_members (case_id, user_id, case_role, added_by_user_id)
         values ($1, $2, $3, $4)
       `,
       [input.caseId, input.userId, input.caseRole, user.id]
-    );
-  } catch (error) {
-    if ((error as { code?: string }).code === "23505") {
-      throw new AppError(409, "User is already a case member");
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new AppError(409, "User is already a case member");
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  await syncCaseMemberToIncidents(database, input.caseId, input.userId, input.caseRole, user.id);
+    await syncCaseMemberToIncidents(transaction, input.caseId, input.userId, input.caseRole, user.id);
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId: input.caseId,
     action: "case.member_add",
     entityType: "case_member",
     entityId: input.userId,
     afterJson: input
-  });
+    });
 
-  if (input.userId !== user.id) {
-    const scope = await getCaseNotificationScope(database, input.caseId);
-    await createNotification(database, {
+    if (input.userId !== user.id) {
+      const scope = await getCaseNotificationScope(transaction, input.caseId);
+      await createNotification(transaction, {
       recipientUserId: input.userId,
       actorUserId: user.id,
       eventType: "case.member_added",
@@ -89,8 +91,9 @@ export async function addCaseMember(database: Database, user: AuthenticatedUser,
       body: `You were added to ${formatNotificationScope(scope)}`,
       entityType: "case",
       entityId: input.caseId
-    });
-  }
+      });
+    }
+  });
 }
 
 export async function updateCaseMemberRole(
@@ -103,25 +106,26 @@ export async function updateCaseMemberRole(
   await requirePermission(database, user, "case:member_manage");
   await requireCaseMembership(database, user.id, caseId);
 
-  const existing = await database.query<{ case_role: string }>(
-    "select * from case_members where case_id = $1 and user_id = $2",
-    [caseId, memberUserId]
-  );
-  if (existing.rowCount === 0) {
-    throw new AppError(404, "Case member not found");
-  }
-  if (existing.rows[0].case_role === "commander" && caseRole !== "commander") {
-    await ensureNotLastCaseCommander(database, caseId);
-  }
+  return withTransaction(database, async (transaction) => {
+    const existing = await transaction.query<{ case_role: string }>(
+      "select * from case_members where case_id = $1 and user_id = $2",
+      [caseId, memberUserId]
+    );
+    if (existing.rowCount === 0) {
+      throw new AppError(404, "Case member not found");
+    }
+    if (existing.rows[0].case_role === "commander" && caseRole !== "commander") {
+      await ensureNotLastCaseCommander(transaction, caseId);
+    }
 
-  await database.query("update case_members set case_role = $3 where case_id = $1 and user_id = $2", [
-    caseId,
-    memberUserId,
-    caseRole
-  ]);
-  await syncCaseMemberToIncidents(database, caseId, memberUserId, caseRole, user.id);
+    await transaction.query("update case_members set case_role = $3 where case_id = $1 and user_id = $2", [
+      caseId,
+      memberUserId,
+      caseRole
+    ]);
+    await syncCaseMemberToIncidents(transaction, caseId, memberUserId, caseRole, user.id);
 
-  await createAuditLog(database, {
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId,
     action: "case.member_role_update",
@@ -129,6 +133,7 @@ export async function updateCaseMemberRole(
     entityId: memberUserId,
     beforeJson: existing.rows[0],
     afterJson: { caseId, userId: memberUserId, caseRole }
+    });
   });
 }
 
@@ -136,16 +141,17 @@ export async function removeCaseMember(database: Database, user: AuthenticatedUs
   await requirePermission(database, user, "case:member_manage");
   await requireCaseMembership(database, user.id, caseId);
 
-  const existing = await database.query("select * from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
-  if (existing.rowCount === 0) {
-    throw new AppError(404, "Case member not found");
-  }
-  if (existing.rows[0].case_role === "commander") {
-    await ensureNotLastCaseCommander(database, caseId);
-  }
+  return withTransaction(database, async (transaction) => {
+    const existing = await transaction.query("select * from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
+    if (existing.rowCount === 0) {
+      throw new AppError(404, "Case member not found");
+    }
+    if (existing.rows[0].case_role === "commander") {
+      await ensureNotLastCaseCommander(transaction, caseId);
+    }
 
-  await database.query("delete from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
-  await database.query(
+    await transaction.query("delete from case_members where case_id = $1 and user_id = $2", [caseId, memberUserId]);
+    await transaction.query(
     `
       delete from incident_members
       where user_id = $2
@@ -154,14 +160,15 @@ export async function removeCaseMember(database: Database, user: AuthenticatedUs
         )
     `,
     [caseId, memberUserId]
-  );
-  await createAuditLog(database, {
+    );
+    await createAuditLog(transaction, {
     actorUserId: user.id,
     caseId,
     action: "case.member_remove",
     entityType: "case_member",
     entityId: memberUserId,
     beforeJson: existing.rows[0]
+    });
   });
 }
 

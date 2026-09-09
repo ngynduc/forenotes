@@ -26,7 +26,7 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f8f6] text-sm text-[var(--color-text-muted)]">
+      <main className="night-ops-shell flex min-h-screen items-center justify-center bg-[var(--color-bg)] text-sm text-[var(--color-text-muted)]">
         Loading session...
       </main>
     );

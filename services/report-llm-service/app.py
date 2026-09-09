@@ -1,6 +1,7 @@
 import json
 import os
 import ipaddress
+import socket
 from typing import Any
 from urllib.parse import urlparse
 
@@ -103,11 +104,25 @@ def validate_provider_config(provider: str, model: str, api_key: str | None, api
 
 def validate_api_base(provider: str, api_base: str) -> None:
     parsed = urlparse(api_base)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="LLM API base URL must use HTTP or HTTPS and include a hostname.")
+    if os.getenv("FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS") == "true":
+        return
     if parsed.scheme != "https" and not is_allowed_local_endpoint(provider, parsed):
         raise HTTPException(status_code=400, detail="LLM API base URL must use HTTPS unless using local Ollama in non-production.")
     hostname = (parsed.hostname or "").lower()
     if not hostname or is_blocked_host(hostname):
         raise HTTPException(status_code=400, detail="LLM API base URL cannot target local, private, link-local, or metadata hosts.")
+    if os.getenv("NODE_ENV") == "production":
+        allowed_hosts = {host.strip().lower() for host in os.getenv("FORENOTES_LLM_ALLOWED_HOSTS", "").split(",") if host.strip()}
+        if hostname not in allowed_hosts:
+            raise HTTPException(status_code=400, detail="LLM API base URL is not in the configured production allowlist.")
+    try:
+        resolved = {item[4][0] for item in socket.getaddrinfo(hostname, parsed.port or 443, type=socket.SOCK_STREAM)}
+    except socket.gaierror:
+        resolved = set()
+    if any(is_blocked_host(address) for address in resolved):
+        raise HTTPException(status_code=400, detail="LLM API base URL resolves to a local or private address.")
 
 
 def is_allowed_local_endpoint(provider: str, parsed: Any) -> bool:
@@ -156,6 +171,8 @@ def validate_custom_headers(headers: dict[str, str]) -> dict[str, str]:
 
 @app.post("/generate-report")
 def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
+    if req.apiBase and not req.apiKey:
+        raise HTTPException(status_code=400, detail="A custom LLM endpoint requires a provider API key.")
     api_key = req.apiKey or os.getenv("LLM_API_KEY")
     api_base = req.apiBase or os.getenv("LLM_API_ENDPOINT")
     system_prompt = (req.systemPrompt or os.getenv("LLM_SYSTEM_PROMPT") or SYSTEM_PROMPT).strip()

@@ -13,9 +13,10 @@ stack_name="demo"
 for arg in "$@"; do
   case "${arg}" in
     --prod|--production)
-      compose_file="docker-compose.yml"
+      compose_file="docker-compose.prod.yml"
       env_file=".env.production"
       stack_name="production"
+      services=("app")
       ;;
     --demo|--dev)
       compose_file="docker-compose.demo.yml"

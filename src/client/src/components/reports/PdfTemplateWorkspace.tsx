@@ -684,7 +684,7 @@ export function PdfTemplateWorkspace() {
               <iframe
                 title="HTML template preview"
                 srcDoc={previewPdfTemplate.data.html}
-                className="h-[620px] w-full rounded border border-[var(--color-border)] bg-white"
+                className="pdf-preview-canvas h-[620px] w-full rounded border border-[var(--color-border)] bg-white"
               />
             ) : (
               <div className="rounded border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">

@@ -15,7 +15,7 @@ export function TechniqueCard({ technique, onClick }: TechniqueCardProps) {
       className={cn(
         "group w-full rounded px-2 py-1.5 text-left text-xs transition-colors",
         hasEvidence
-          ? "bg-[var(--color-primary-soft)] hover:bg-[var(--color-primary)] hover:text-white"
+          ? "bg-[var(--color-primary-soft)] hover:bg-[var(--color-primary)] hover:text-[var(--color-primary-foreground)]"
           : "bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]"
       )}
     >
@@ -24,7 +24,7 @@ export function TechniqueCard({ technique, onClick }: TechniqueCardProps) {
         {hasEvidence && (
           <span className={cn(
             "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
-            hasEvidence ? "bg-[var(--color-primary)] text-white" : ""
+            hasEvidence ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]" : ""
           )}>
             {technique.counts.total}
           </span>
@@ -33,7 +33,7 @@ export function TechniqueCard({ technique, onClick }: TechniqueCardProps) {
       <p
         className={cn(
           "truncate text-[10px] text-[var(--color-text-muted)] transition-colors",
-          hasEvidence ? "group-hover:text-white" : ""
+          hasEvidence ? "group-hover:text-[var(--color-primary-foreground)]" : ""
         )}
       >
         {technique.name}

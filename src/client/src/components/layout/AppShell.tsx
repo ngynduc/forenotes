@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; permission?: string }> = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -51,11 +52,11 @@ export function AppShell() {
   const unreadLabel = unreadNotifications > 99 ? "99+" : String(unreadNotifications);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
+    <div className="night-ops-shell flex h-screen overflow-hidden bg-[var(--color-bg)]">
       {/* Sidebar rail */}
       <aside
         className={cn(
-          "hidden flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-150 md:flex",
+          "hidden flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]/95 shadow-[12px_0_32px_rgb(0_0_0/0.18)] backdrop-blur transition-all duration-150 md:flex",
           expanded ? "w-52" : "w-14"
         )}
       >
@@ -86,14 +87,14 @@ export function AppShell() {
               <span className="relative inline-flex shrink-0">
                 <item.icon className="h-4 w-4" />
                 {!expanded && item.to === "/notifications" && unreadNotifications > 0 && (
-                  <span className="absolute -right-2 -top-2 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-white">
+                  <span className="absolute -right-2 -top-2 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-[var(--color-danger-foreground)]">
                     {unreadLabel}
                   </span>
                 )}
               </span>
               {expanded && <span>{item.label}</span>}
               {expanded && item.to === "/notifications" && unreadNotifications > 0 && (
-                <span className="ml-auto rounded bg-[var(--color-danger)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                <span className="ml-auto rounded bg-[var(--color-danger)] px-1.5 py-0.5 text-[10px] font-bold leading-none text-[var(--color-danger-foreground)]">
                   {unreadLabel}
                 </span>
               )}
@@ -105,11 +106,12 @@ export function AppShell() {
       {/* Main area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex min-h-12 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 sm:px-4">
+        <header className="flex min-h-12 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)]/92 px-3 py-2 backdrop-blur sm:px-4">
           <ContextBar />
+          <ThemeToggle className="ml-2 shrink-0" />
         </header>
 
-        <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 md:hidden" aria-label="Primary navigation">
+        <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)]/92 px-2 py-2 backdrop-blur md:hidden" aria-label="Primary navigation">
           {NAV_ITEMS.filter((item) => can(item.permission)).map((item) => (
             <NavLink
               key={item.to}
@@ -128,7 +130,7 @@ export function AppShell() {
             >
               <item.icon className="h-4 w-4" />
               {item.to === "/notifications" && unreadNotifications > 0 && (
-                <span className="absolute right-0.5 top-0.5 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-white">
+                <span className="absolute right-0.5 top-0.5 rounded bg-[var(--color-danger)] px-1 text-[10px] font-bold leading-4 text-[var(--color-danger-foreground)]">
                   {unreadLabel}
                 </span>
               )}

@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
@@ -777,8 +778,12 @@ export async function saveLlmSettings(
   const baseUrl = input.baseUrl?.trim()
     ? normalizeLlmBaseUrl(provider, input.baseUrl)
     : (existing?.baseUrl ?? null);
+  if (baseUrl && !hasNewApiKey && !existing?.apiKey && (!existing?.apiKeyMask || existing.apiKeyMask === "****")) {
+    throw new AppError(400, "A custom LLM endpoint requires a provider API key.");
+  }
   const systemPrompt = input.systemPrompt?.trim() ?? "";
   const encrypted = encryptSecret(apiKey);
+  await assertLlmDestinationResolvesPublicly(baseUrl);
   const mask = maskApiKey(apiKey);
   const hasCustomHeaderInput = (input.customHeaders ?? []).some((header) => header.name.trim() || header.value);
   const customHeaders = hasCustomHeaderInput
@@ -903,6 +908,38 @@ export async function exportReportPdf(
   };
 }
 
+async function assertLlmDestinationResolvesPublicly(baseUrl: string | null) {
+  if (!baseUrl) {
+    return;
+  }
+  if (allowUnsafeLlmEndpoints()) {
+    return;
+  }
+  const hostname = new URL(baseUrl).hostname;
+  if (process.env.NODE_ENV === "production") {
+    const allowedHosts = (process.env.FORENOTES_LLM_ALLOWED_HOSTS ?? "")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+    if (allowedHosts.length === 0 || !allowedHosts.includes(hostname.toLowerCase())) {
+      throw new AppError(400, "Custom LLM endpoints must be listed in FORENOTES_LLM_ALLOWED_HOSTS in production.");
+    }
+  }
+  if (isIP(hostname)) {
+    return;
+  }
+  try {
+    const addresses = await lookup(hostname, { all: true, verbatim: true });
+    if (addresses.some(({ address }) => isBlockedLlmHost(address))) {
+      throw new AppError(400, "LLM API base URL resolves to a local or private address.");
+    }
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+  }
+}
+
 export async function exportReportHtml(
   database: Database,
   user: AuthenticatedUser,
@@ -952,25 +989,37 @@ export async function inlineReportUploadImagesForPdf(html: string, incidentId: s
     return html;
   }
 
-  const replacements = await Promise.all(matches.map(async (match) => {
-    const [fullMatch, beforeSrc, _url, storedFilename, afterSrc] = match;
-    if (!isSafeStoredImageFilename(storedFilename)) {
-      return [fullMatch, fullMatch] as const;
+  const replacements = new Map<string, string>();
+  let embeddedBytes = 0;
+  const maxEmbeddedBytes = 25 * 1024 * 1024;
+  for (const match of matches) {
+    const storedFilename = match[3];
+    if (replacements.has(storedFilename) || !isSafeStoredImageFilename(storedFilename)) {
+      continue;
     }
-
     try {
       const buffer = await readFile(path.join(reportUploadDir(incidentId), storedFilename));
+      if (embeddedBytes + buffer.byteLength > maxEmbeddedBytes) {
+        replacements.set(storedFilename, "");
+        continue;
+      }
+      embeddedBytes += buffer.byteLength;
       const contentType = contentTypeForStoredFilename(storedFilename);
-      const dataUrl = `data:${contentType};base64,${buffer.toString("base64")}`;
-      return [fullMatch, `<img${beforeSrc}src="${dataUrl}"${afterSrc}>`] as const;
+      replacements.set(storedFilename, `data:${contentType};base64,${buffer.toString("base64")}`);
     } catch {
-      return [fullMatch, fullMatch] as const;
+      replacements.set(storedFilename, "");
     }
-  }));
+  }
 
   let nextHtml = html;
-  for (const [source, replacement] of replacements) {
-    nextHtml = nextHtml.replace(source, replacement);
+  for (const match of matches) {
+    const [fullMatch, beforeSrc, _url, storedFilename, afterSrc] = match;
+    const dataUrl = replacements.get(storedFilename);
+    if (dataUrl === undefined) {
+      continue;
+    }
+    const replacement = dataUrl ? `<img${beforeSrc}src="${dataUrl}"${afterSrc}>` : `<img${beforeSrc}${afterSrc}>`;
+    nextHtml = nextHtml.replace(fullMatch, replacement);
   }
   return nextHtml;
 }
@@ -1678,10 +1727,12 @@ async function readLlmSettings(database: Database, userId: string, options: { to
   const model = String(row.model);
   const provider = normalizeLlmProvider(row.provider_name ? String(row.provider_name) : null, model);
   // validateLlmProvider(provider);
+  const baseUrl = normalizeLlmBaseUrl(provider, row.base_url ? String(row.base_url) : null);
+  await assertLlmDestinationResolvesPublicly(baseUrl);
   const decryptedApiKey = decryptLlmApiKey(String(row.encrypted_api_key), options);
   return {
     provider,
-    baseUrl: normalizeLlmBaseUrl(provider, row.base_url ? String(row.base_url) : null),
+    baseUrl,
     serviceUrl: resolveLiteLlmServiceUrl(),
     model,
     systemPrompt: row.system_prompt ? String(row.system_prompt) : "",
@@ -1717,6 +1768,9 @@ async function resolveLlmConfig(
 ): Promise<LlmProviderConfig | null> {
   const userSettings = await readLlmSettings(database, userId, options);
   if (userSettings) {
+    if (userSettings.baseUrl && !userSettings.apiKey && !userSettings.apiKeyDecryptionFailed) {
+      throw new AppError(400, "A custom LLM endpoint requires a provider API key.");
+    }
     return userSettings;
   }
 
@@ -1729,6 +1783,7 @@ async function resolveLlmConfig(
   const provider = normalizeLlmProvider(process.env.LLM_PROVIDER, model);
   // validateLlmProvider(provider);
   const baseUrl = normalizeLlmBaseUrl(provider, process.env.LLM_API_ENDPOINT?.trim() || null);
+  await assertLlmDestinationResolvesPublicly(baseUrl);
 
   return {
     provider,
@@ -1912,11 +1967,15 @@ function normalizeLlmBaseUrl(provider: string, rawBaseUrl: string | null | undef
     throw new AppError(400, "LLM API base URL must be a valid URL.");
   }
 
-  if (parsed.protocol !== "https:" && !isAllowedLocalLlmEndpoint(provider, parsed)) {
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new AppError(400, "LLM API base URL must use HTTP or HTTPS.");
+  }
+
+  if (!allowUnsafeLlmEndpoints() && parsed.protocol !== "https:" && !isAllowedLocalLlmEndpoint(provider, parsed)) {
     throw new AppError(400, "LLM API base URL must use HTTPS unless local development endpoints are explicitly allowed.");
   }
 
-  if (isBlockedLlmHost(parsed.hostname)) {
+  if (!allowUnsafeLlmEndpoints() && isBlockedLlmHost(parsed.hostname)) {
     throw new AppError(400, "LLM API base URL cannot target local, private, link-local, or metadata hosts.");
   }
 
@@ -1925,6 +1984,10 @@ function normalizeLlmBaseUrl(provider: string, rawBaseUrl: string | null | undef
 
 function isAllowedLocalLlmEndpoint(provider: string, url: URL) {
   return provider === "ollama" && process.env.NODE_ENV !== "production" && url.protocol === "http:" && isLoopbackHost(url.hostname);
+}
+
+function allowUnsafeLlmEndpoints() {
+  return process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS === "true";
 }
 
 function isBlockedLlmHost(hostname: string) {

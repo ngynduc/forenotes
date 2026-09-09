@@ -9,7 +9,7 @@ describe("DashboardSummaryCards", () => {
   });
 
   it("renders empty dashboard metrics", () => {
-    const html = renderToStaticMarkup(<DashboardSummaryCards data={buildDashboard()} onSelectTab={() => undefined} />);
+    const html = renderToStaticMarkup(<DashboardSummaryCards data={buildDashboard()} onSelectTab={() => undefined} onOpenNotifications={() => undefined} />);
 
     expect(html).toContain("SLA Watch");
     expect(html).toContain("Overdue Tasks");
@@ -33,6 +33,7 @@ describe("DashboardSummaryCards", () => {
           unreadTaskUpdates: 2
         })}
         onSelectTab={() => undefined}
+        onOpenNotifications={() => undefined}
       />
     );
 
@@ -81,19 +82,6 @@ function buildDashboard(
   return {
     summary: {
       scope: "team",
-      metrics: {
-        totalCases: 0,
-        openCases: 0,
-        totalIncidents: 0,
-        openIncidents: 0,
-        criticalIncidents: 0,
-        unresolvedFindings: 0,
-        totalTasks: 0,
-        openTasks: 0,
-        overdueTasks: slaSummary.overdueTasks,
-        dueSoonTasks: slaSummary.dueSoonTasks,
-        unreadNotifications: slaSummary.unreadNotifications
-      },
       sla: slaSummary,
       unread: {
         total: overrides.unreadTotal ?? 0,
@@ -101,30 +89,13 @@ function buildDashboard(
         caseUpdates: Math.max((overrides.unreadTotal ?? 0) - (overrides.unreadTaskUpdates ?? 0), 0),
         taskUpdates: overrides.unreadTaskUpdates ?? 0
       },
-      activeCases: 0,
       activeIncidents: 0,
-      openTasks: 0,
-      openFindings: 0,
-      breakdowns: {
-        caseStatus: [],
-        incidentSeverity: [],
-        findingStatus: [],
-        taskStatus: []
-      },
-      activity: [],
-      recentActivity: [],
-      highPriorityTasks: [],
-      recentFindings: [],
-      activeIncidentSnapshot: [],
-      unreadUpdates: []
+      openTasks: 0
     },
     charts: {
       taskStatusDistribution: [],
       slaRiskBreakdown: [],
-      workloadByAssignee: [],
-      activityTrend: [],
-      unreadBreakdown: [],
-      caseIncidentHealth: []
+      workloadByAssignee: []
     },
     sla: {
       summary: slaSummary,
@@ -132,8 +103,6 @@ function buildDashboard(
       dueSoonTasks: [],
       attentionItems: []
     },
-    activity: { activity: [] },
-    workload: { scope: "team", workload: [] },
-    cases: { cases: [], incidents: [] }
+    workload: { scope: "team", workload: [] }
   };
 }

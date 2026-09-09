@@ -273,6 +273,12 @@ export interface DashboardCharts {
   caseIncidentHealth: DashboardLabeledValue[];
 }
 
+export interface DashboardOverviewCharts {
+  taskStatusDistribution: DashboardLabeledValue[];
+  slaRiskBreakdown: DashboardLabeledValue[];
+  workloadByAssignee: DashboardWorkloadChartItem[];
+}
+
 export interface DashboardSummary {
   scope: "team" | "self";
   metrics: DashboardMetrics;
@@ -294,6 +300,14 @@ export interface DashboardSummary {
   recentFindings: DashboardFindingItem[];
   activeIncidentSnapshot: DashboardIncidentHealth[];
   unreadUpdates: DashboardUnreadUpdate[];
+}
+
+export interface DashboardOverviewSummary {
+  scope: "team" | "self";
+  sla: DashboardSla;
+  unread: DashboardUnread;
+  activeIncidents: number;
+  openTasks: number;
 }
 
 export interface DashboardSlaResponse {
@@ -318,12 +332,10 @@ export interface DashboardCasesResponse {
 }
 
 export interface DashboardResponse {
-  summary: DashboardSummary;
-  charts: DashboardCharts;
+  summary: DashboardOverviewSummary;
+  charts: DashboardOverviewCharts;
   sla: DashboardSlaResponse;
-  activity: DashboardActivityResponse;
   workload: DashboardWorkloadResponse;
-  cases: DashboardCasesResponse;
 }
 
 export interface SearchResult {

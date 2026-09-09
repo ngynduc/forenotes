@@ -20,7 +20,7 @@ export function WorkloadTab({ data }: WorkloadTabProps) {
   }
 
   return (
-    <section className="rounded-[8px] border border-[var(--color-border)] bg-white shadow-sm">
+    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-panel)]">
       <div className="border-b border-[var(--color-border)] px-4 py-3">
         <h3 className="text-sm font-semibold text-[var(--color-text)]">Workload</h3>
         <p className="mt-1 text-xs text-[var(--color-text-muted)]">
@@ -41,13 +41,13 @@ export function WorkloadTab({ data }: WorkloadTabProps) {
                   <span className="truncate text-sm font-semibold text-[var(--color-text)]">{row.assignee.name}</span>
                   <span className="font-mono text-xs font-semibold text-[var(--color-text-muted)]">{row.taskCount} open</span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]">
                   <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.max(4, (row.taskCount / maxTasks) * 100)}%` }} />
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                  <Stat label="Overdue" value={row.overdueCount} tone="text-rose-700" />
-                  <Stat label="Due soon" value={row.dueSoonCount} tone="text-amber-700" />
-                  <Stat label="Completed" value={row.completedCount} tone="text-emerald-700" />
+                  <Stat label="Overdue" value={row.overdueCount} tone="text-[var(--color-danger)]" />
+                  <Stat label="Due soon" value={row.dueSoonCount} tone="text-[var(--color-warning)]" />
+                  <Stat label="Completed" value={row.completedCount} tone="text-[var(--color-success)]" />
                 </div>
               </div>
             ))
@@ -77,9 +77,9 @@ export function WorkloadTab({ data }: WorkloadTabProps) {
                   <tr key={row.assignee.id} className="border-t border-[var(--color-border)]">
                     <td className="max-w-[220px] px-4 py-3 font-medium text-[var(--color-text)]"><span className="block truncate" title={row.assignee.name}>{row.assignee.name}</span></td>
                     <td className="px-4 py-3 font-mono text-[var(--color-text)]">{row.taskCount}</td>
-                    <td className="px-4 py-3 font-mono text-rose-700">{row.overdueCount}</td>
-                    <td className="px-4 py-3 font-mono text-amber-700">{row.dueSoonCount}</td>
-                    <td className="px-4 py-3 font-mono text-emerald-700">{row.completedCount}</td>
+                    <td className="px-4 py-3 font-mono text-[var(--color-danger)]">{row.overdueCount}</td>
+                    <td className="px-4 py-3 font-mono text-[var(--color-warning)]">{row.dueSoonCount}</td>
+                    <td className="px-4 py-3 font-mono text-[var(--color-success)]">{row.completedCount}</td>
                   </tr>
                 ))
               )}
@@ -94,7 +94,7 @@ export function WorkloadTab({ data }: WorkloadTabProps) {
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <div className="rounded-[6px] bg-white px-2 py-2">
+    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2">
       <div className={`font-mono text-base font-semibold ${tone}`}>{value}</div>
       <div className="truncate text-[var(--color-text-muted)]">{label}</div>
     </div>

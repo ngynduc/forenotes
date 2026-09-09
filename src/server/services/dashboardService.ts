@@ -7,6 +7,8 @@ import type {
   DashboardCharts,
   DashboardFindingItem,
   DashboardIncidentHealth,
+  DashboardOverviewCharts,
+  DashboardOverviewSummary,
   DashboardRecentActivity,
   DashboardResponse,
   DashboardSla,
@@ -126,17 +128,54 @@ interface DashboardDataset {
   recentActivity: DashboardRecentActivity[];
 }
 
-export async function getDashboard(database: Database, user: AuthenticatedUser): Promise<DashboardResponse> {
-  const [summary, charts, sla, activity, workload, cases] = await Promise.all([
-    getDashboardSummary(database, user),
-    getDashboardCharts(database, user),
-    getDashboardSla(database, user),
-    getDashboardActivity(database, user),
-    getDashboardWorkload(database, user),
-    getDashboardCases(database, user)
-  ]);
+const dashboardDatasetCache = new WeakMap<AuthenticatedUser, Promise<DashboardDataset>>();
 
-  return { summary, charts, sla, activity, workload, cases };
+export async function getDashboard(database: Database, user: AuthenticatedUser): Promise<DashboardResponse> {
+  const dataset = await loadDashboardDataset(database, user);
+  const [sla, workload] = await Promise.all([
+    getDashboardSla(database, user),
+    getDashboardWorkload(database, user)
+  ]);
+  const now = Date.now();
+  const summary = buildDashboardOverviewSummary(dataset, now);
+  const charts = buildDashboardOverviewCharts(dataset, workload, now);
+
+  return { summary, charts, sla, workload };
+}
+
+function buildDashboardOverviewSummary(dataset: DashboardDataset, now: number): DashboardOverviewSummary {
+  return {
+    scope: dataset.scope,
+    sla: buildSlaSummary(dataset, now),
+    unread: buildUnreadSummary(dataset.notifications),
+    activeIncidents: dataset.incidents.filter((entry) => entry.status !== "closed").length,
+    openTasks: dataset.tasks.filter((entry) => entry.status !== "done").length
+  };
+}
+
+function buildDashboardOverviewCharts(
+  dataset: DashboardDataset,
+  workload: DashboardWorkloadResponse,
+  now: number
+): DashboardOverviewCharts {
+  const sla = buildSlaSummary(dataset, now);
+  const openTasks = dataset.tasks.filter((task) => task.status !== "done").length;
+
+  return {
+    taskStatusDistribution: toBreakdown(dataset.tasks, "status", ["todo", "in_progress", "blocked", "done"]).map(toLabeledValue),
+    slaRiskBreakdown: [
+      { label: "Overdue", value: sla.overdueTasks },
+      { label: "Due Soon", value: sla.dueSoonTasks },
+      { label: "Blocked", value: sla.blockedTasks },
+      { label: "Healthy", value: Math.max(openTasks - sla.overdueTasks - sla.dueSoonTasks - sla.blockedTasks, 0) }
+    ],
+    workloadByAssignee: workload.workload.map((row) => ({
+      assignee: row.assignee.name,
+      openTasks: row.taskCount,
+      overdue: row.overdueCount,
+      dueSoon: row.dueSoonCount
+    }))
+  };
 }
 
 export async function getDashboardSummary(database: Database, user: AuthenticatedUser): Promise<DashboardSummary> {
@@ -305,28 +344,26 @@ export async function getDashboardCases(database: Database, user: AuthenticatedU
 }
 
 async function loadDashboardDataset(database: Database, user: AuthenticatedUser): Promise<DashboardDataset> {
-  await requireDashboardRead(database, user);
+  const cached = dashboardDatasetCache.get(user);
+  if (cached) {
+    return cached;
+  }
+  const dataset = (async () => {
+    await requireDashboardRead(database, user);
+    const [cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity] = await Promise.all([
+      listVisibleCases(database, user.id),
+      listVisibleIncidents(database, user.id),
+      listVisibleFindings(database, user.id),
+      listVisibleTasks(database, user),
+      listVisibleTimelineEvents(database, user.id),
+      listVisibleNotifications(database, user.id),
+      listRecentActivity(database, user, 20)
+    ]);
 
-  const [cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity] = await Promise.all([
-    listVisibleCases(database, user.id),
-    listVisibleIncidents(database, user.id),
-    listVisibleFindings(database, user.id),
-    listVisibleTasks(database, user),
-    listVisibleTimelineEvents(database, user.id),
-    listVisibleNotifications(database, user.id),
-    listRecentActivity(database, user, 20)
-  ]);
-
-  return {
-    scope: getDashboardScope(user),
-    cases,
-    incidents,
-    findings,
-    tasks,
-    timelineEvents,
-    notifications,
-    recentActivity
-  };
+    return { scope: getDashboardScope(user), cases, incidents, findings, tasks, timelineEvents, notifications, recentActivity };
+  })();
+  dashboardDatasetCache.set(user, dataset);
+  return dataset;
 }
 
 async function requireDashboardRead(database: Database, user: AuthenticatedUser) {

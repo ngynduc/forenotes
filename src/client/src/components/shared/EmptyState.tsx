@@ -13,7 +13,7 @@ export function EmptyState({ message, action }: EmptyStateProps) {
       {action && (
         <button
           onClick={action.onClick}
-          className="mt-3 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm text-white hover:bg-[var(--color-primary-strong)]"
+          className="mt-3 rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-strong)]"
         >
           {action.label}
         </button>

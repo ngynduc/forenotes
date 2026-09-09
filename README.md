@@ -23,7 +23,7 @@ The installer defaults to HTTP-friendly cookies for first boot. Put the app behi
 Copy `.env.production.example` to `.env.production` and replace every placeholder secret before first boot. Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing `FORENOTES_LLM_SECRET_KEY`.
 
 ```bash
-docker pull ngynduc/forenotes:latest
+docker pull ngynduc/forenotes:0.2.1
 ```
 
 The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.
@@ -68,13 +68,13 @@ viewer / viewer123
 npm install
 npm --prefix src/client install
 npm run db:migrate
-npm run db:seed
+npm run seed:demo
 npm run lint
 npm run test
 npm run build
 ```
 
-`npm run db:seed` runs migrations and seeds demo users, cases, incidents, findings, timeline events, tasks, queries, notes, and reports into the configured database. Do not run it against production.
+`npm run seed:demo` runs migrations and seeds demo users, cases, incidents, findings, timeline events, tasks, queries, notes, and reports into the configured database. Do not run it against production.
 
 ## Security Notes
 

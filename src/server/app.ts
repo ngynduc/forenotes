@@ -7,6 +7,7 @@ import type { Database } from "./db/types.js";
 import { pool } from "./db/pool.js";
 import { isAppError } from "./errors.js";
 import { createRoutes } from "./routes/index.js";
+import { createRequestScopedDatabase, runRequestTransaction } from "./db/transaction.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const clientDistDir = path.resolve(currentDir, "../client");
@@ -20,7 +21,30 @@ export function createApp(database: Database = pool) {
     response.json({ ok: true });
   });
 
-  app.use(createRoutes(database));
+  const requestDatabase = createRequestScopedDatabase(database);
+  app.use(async (request, response, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      next();
+      return;
+    }
+    try {
+      await runRequestTransaction(database, next, (commit, rollback) => {
+        let settled = false;
+        const complete = (shouldCommit: boolean) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          void (shouldCommit ? commit() : rollback());
+        };
+        response.once("finish", () => complete(response.statusCode < 400));
+        response.once("close", () => complete(false));
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.use(createRoutes(requestDatabase));
   app.use(express.static(clientDistDir));
   app.get("/{*path}", (_request, response) => {
     response.sendFile(path.join(clientDistDir, "index.html"));
