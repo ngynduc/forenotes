@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #07111f;
-  --color-surface: #0c1828;
-  --color-surface-muted: #122238;
-  --color-surface-subtle: #1a2d46;
-  --color-text: #e7eef8;
-  --color-text-muted: #9aaac0;
-  --color-text-soft: #71839b;
-  --color-border: #203650;
-  --color-border-strong: #345474;
-  --color-primary: #22d3ee;
-  --color-primary-strong: #67e8f9;
-  --color-primary-foreground: #04141b;
-  --color-primary-soft: #0c3444;
-  --color-primary-border: #155e75;
+  --color-bg: #07110d;
+  --color-surface: #0c1814;
+  --color-surface-muted: #13231d;
+  --color-surface-subtle: #1b3027;
+  --color-text: #e8f2ed;
+  --color-text-muted: #9bb0a6;
+  --color-text-soft: #71887d;
+  --color-border: #203c31;
+  --color-border-strong: #35604e;
+  --color-primary: #3ddc97;
+  --color-primary-rgb: 61 220 151;
+  --color-primary-strong: #6ee7b7;
+  --color-primary-foreground: #04140d;
+  --color-primary-soft: #0c332b;
+  --color-primary-border: #176b58;
   --color-warning: #fbbf24;
   --color-warning-foreground: #1b1200;
   --color-warning-soft: #3a2b0d;
@@ -31,7 +32,7 @@
   --color-info-soft: #122e51;
   --color-info-border: #285a91;
 
-  --color-chart-1: #22d3ee;
+  --color-chart-1: #3ddc97;
   --color-chart-2: #fb7185;
   --color-chart-3: #fbbf24;
   --color-chart-4: #34d399;
@@ -44,9 +45,9 @@
   --color-status-open: #60a5fa;
   --color-status-open-soft: #122e51;
   --color-status-open-border: #285a91;
-  --color-status-progress: #22d3ee;
-  --color-status-progress-soft: #0c3444;
-  --color-status-progress-border: #155e75;
+  --color-status-progress: #3ddc97;
+  --color-status-progress-soft: #0c332b;
+  --color-status-progress-border: #176b58;
   --color-status-blocked: #fb7185;
   --color-status-blocked-soft: #3d1722;
   --color-status-blocked-border: #7f2d40;
@@ -68,6 +69,68 @@
   --shadow-panel-hover: 0 20px 46px rgb(0 0 0 / 0.32);
 }
 
+:root[data-theme="light"] {
+  --color-bg: #f3f7f4;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eaf1ed;
+  --color-surface-subtle: #dfe9e3;
+  --color-text: #14231c;
+  --color-text-muted: #51665b;
+  --color-text-soft: #708279;
+  --color-border: #cfddd5;
+  --color-border-strong: #9eb5aa;
+  --color-primary: #0f766e;
+  --color-primary-rgb: 15 118 110;
+  --color-primary-strong: #0b5f58;
+  --color-primary-foreground: #f7fffb;
+  --color-primary-soft: #d9f2e9;
+  --color-primary-border: #82c8af;
+  --color-warning: #a16207;
+  --color-warning-foreground: #ffffff;
+  --color-warning-soft: #fef3c7;
+  --color-warning-border: #f3c565;
+  --color-danger: #be123c;
+  --color-danger-foreground: #ffffff;
+  --color-danger-soft: #fff1f2;
+  --color-danger-border: #fda4af;
+  --color-success: #047857;
+  --color-success-foreground: #ffffff;
+  --color-success-soft: #dff7ea;
+  --color-success-border: #86d5ae;
+  --color-info: #2563eb;
+  --color-info-soft: #e7efff;
+  --color-info-border: #93b4f7;
+  --color-chart-1: #0f766e;
+  --color-chart-2: #be123c;
+  --color-chart-3: #a16207;
+  --color-chart-4: #047857;
+  --color-chart-5: #2563eb;
+  --color-chart-6: #7e22ce;
+  --color-status-todo: #51665b;
+  --color-status-todo-soft: #eaf1ed;
+  --color-status-todo-border: #9eb5aa;
+  --color-status-open: #2563eb;
+  --color-status-open-soft: #e7efff;
+  --color-status-open-border: #93b4f7;
+  --color-status-progress: #0f766e;
+  --color-status-progress-soft: #d9f2e9;
+  --color-status-progress-border: #82c8af;
+  --color-status-blocked: #be123c;
+  --color-status-blocked-soft: #fff1f2;
+  --color-status-blocked-border: #fda4af;
+  --color-status-confirmed: #be123c;
+  --color-status-confirmed-soft: #fff1f2;
+  --color-status-confirmed-border: #fda4af;
+  --color-status-done: #047857;
+  --color-status-done-soft: #dff7ea;
+  --color-status-done-border: #86d5ae;
+  --color-status-false-positive: #7e22ce;
+  --color-status-false-positive-soft: #f3e8ff;
+  --color-status-false-positive-border: #d8b4fe;
+  --shadow-panel: 0 14px 34px rgb(24 52 39 / 0.1);
+  --shadow-panel-hover: 0 18px 42px rgb(24 52 39 / 0.15);
+}
+
 @layer base {
   *,
   *::before,
@@ -78,7 +141,14 @@
   html,
   body {
     min-height: 100%;
+  }
+
+  html {
     color-scheme: dark;
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 
   body {
@@ -117,15 +187,10 @@
 .night-ops-shell {
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(circle at 76% 8%, rgb(34 211 238 / 0.09), transparent 28rem),
-    linear-gradient(rgb(34 211 238 / 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(34 211 238 / 0.025) 1px, transparent 1px);
+    radial-gradient(circle at 76% 8%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 28rem),
+    linear-gradient(color-mix(in srgb, var(--color-primary) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 3%, transparent) 1px, transparent 1px);
   background-size: auto, 32px 32px, 32px 32px;
-}
-
-.pdf-preview-canvas {
-  background: #ffffff;
-  color-scheme: light;
 }
 
 .pdf-preview-canvas {

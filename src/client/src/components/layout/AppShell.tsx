@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; permission?: string }> = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -107,6 +108,7 @@ export function AppShell() {
         {/* Top bar */}
         <header className="flex min-h-12 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)]/92 px-3 py-2 backdrop-blur sm:px-4">
           <ContextBar />
+          <ThemeToggle className="ml-2 shrink-0" />
         </header>
 
         <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)]/92 px-2 py-2 backdrop-blur md:hidden" aria-label="Primary navigation">

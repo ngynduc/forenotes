@@ -3,8 +3,13 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
+import { applyTheme, getInitialTheme } from "./lib/theme";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import { TimezoneProvider } from "./providers/TimezoneProvider";
 import "./styles/globals.css";
+
+const initialTheme = getInitialTheme();
+applyTheme(initialTheme);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,11 +24,13 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <TimezoneProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </TimezoneProvider>
+      <ThemeProvider initialTheme={initialTheme}>
+        <TimezoneProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </TimezoneProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>
 );
