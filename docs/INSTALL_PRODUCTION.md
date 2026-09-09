@@ -43,7 +43,7 @@ Storage: 20 GB minimum
 Published image:
 
 ```text
-ngynduc/forenotes:0.2.0
+ngynduc/forenotes:0.2.1
 ngynduc/forenotes:main-acab558
 ```
 
@@ -167,7 +167,7 @@ services:
       retries: 10
 
   app:
-    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.0}
+    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.1}
     restart: unless-stopped
     environment:
       NODE_ENV: production

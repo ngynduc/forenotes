@@ -23,7 +23,7 @@ The installer defaults to HTTP-friendly cookies for first boot. Put the app behi
 Copy `.env.production.example` to `.env.production` and replace every placeholder secret before first boot. Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing `FORENOTES_LLM_SECRET_KEY`.
 
 ```bash
-docker pull ngynduc/forenotes:0.2.0
+docker pull ngynduc/forenotes:0.2.1
 ```
 
 The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.
