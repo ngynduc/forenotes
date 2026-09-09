@@ -2,7 +2,7 @@ import { useMemo, useReducer } from "react";
 import type { DashboardSlaResponse } from "@shared/graph-types";
 import { Badge } from "@/components/ui/Badge";
 import { DashboardTablePagination, paginateDashboardRows } from "@/components/dashboard/DashboardTablePagination";
-import { formatDateTimeForTimezone, formatDueStatus } from "@/lib/timezone";
+import { formatUtcDate } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import {
   applySlaFilters,
@@ -23,13 +23,6 @@ const SLA_STATE_STYLES: Record<SlaState, string> = {
   overdue: "border-[var(--color-danger-border)] bg-[var(--color-danger-soft)] text-[var(--color-danger)]",
   due_soon: "border-[var(--color-warning-border)] bg-[var(--color-warning-soft)] text-[var(--color-warning)]",
   attention: "border-[var(--color-primary-border)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-};
-
-const DUE_STATUS_STYLES = {
-  none: "border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]",
-  overdue: SLA_STATE_STYLES.overdue,
-  due_soon: SLA_STATE_STYLES.due_soon,
-  upcoming: "border-[var(--color-success-border)] bg-[var(--color-success-soft)] text-[var(--color-success)]"
 };
 
 export function SlaWatchTab({ data, timezone }: SlaWatchTabProps) {
@@ -94,12 +87,18 @@ export function SlaWatchTab({ data, timezone }: SlaWatchTabProps) {
           <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 font-mono text-xs text-[var(--color-text-muted)]">{filteredRows.length}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[880px] table-fixed border-collapse text-left text-sm 2xl:min-w-[1120px]">
             <thead className="bg-[var(--color-surface-muted)] text-[11px] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
               <tr>
-                {['Task title', 'SLA state', 'Status', 'Priority', 'Due', 'Assignee', 'Case', 'Incident', 'Linked entity'].map((label) => (
-                  <th key={label} className="px-4 py-3 font-semibold">{label}</th>
-                ))}
+                <th className="w-[22%] px-3 py-3 font-semibold xl:px-4">Task title</th>
+                <th className="w-[12%] px-3 py-3 font-semibold xl:px-4">SLA state</th>
+                <th className="w-[12%] px-3 py-3 font-semibold xl:px-4">Status</th>
+                <th className="w-[11%] px-3 py-3 font-semibold xl:px-4">Priority</th>
+                <th className="w-[14%] px-3 py-3 font-semibold xl:px-4">Due</th>
+                <th className="w-[14%] px-3 py-3 font-semibold xl:px-4">Assignee</th>
+                <th className="w-[15%] px-3 py-3 font-semibold xl:px-4">Case</th>
+                <th className="hidden px-4 py-3 font-semibold 2xl:table-cell">Incident</th>
+                <th className="hidden px-4 py-3 font-semibold 2xl:table-cell">Linked entity</th>
               </tr>
             </thead>
             <tbody>
@@ -139,18 +138,17 @@ function FilterSelect({ label, value, options, onChange }: {
 }
 
 function TaskRow({ task, timezone }: { task: SlaWatchRow; timezone: string }) {
-  const dueStatus = formatDueStatus(task.dueAt, timezone);
   return (
     <tr className="border-t border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface-muted)]/60">
-      <td className="max-w-[280px] px-4 py-3"><span className="block truncate font-medium text-[var(--color-text)]" title={task.title}>{task.title}</span></td>
-      <td className="px-4 py-3"><Badge variant="outline" className={SLA_STATE_STYLES[task.slaState]}>{formatSlaState(task.slaState)}</Badge></td>
-      <td className="px-4 py-3"><Badge variant="secondary" className="capitalize">{task.status.replace(/_/g, " ")}</Badge></td>
-      <td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
-      <td className="whitespace-nowrap px-4 py-3"><div className="font-mono text-xs text-[var(--color-text)]">{formatDateTimeForTimezone(task.dueAt, timezone)}</div><span className={cn("mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold", DUE_STATUS_STYLES[dueStatus.status])}>{dueStatus.label}</span></td>
-      <td className="max-w-[180px] px-4 py-3 text-[var(--color-text-muted)]"><span className="block truncate">{task.assignee?.name ?? "Unassigned"}</span></td>
-      <td className="max-w-[220px] px-4 py-3 text-[var(--color-text-muted)]"><span className="block truncate">{task.case.name}</span></td>
-      <td className="max-w-[220px] px-4 py-3 text-[var(--color-text-muted)]"><span className="block truncate">{task.incident.name}</span></td>
-      <td className="max-w-[320px] px-4 py-3 text-[var(--color-text-muted)]"><span className="block truncate">{task.linkedEntity ? `${task.linkedEntity.type.replace(/_/g, " ")}: ${task.linkedEntity.name}` : "—"}</span></td>
+      <td className="px-3 py-3 xl:px-4"><span className="block truncate font-medium text-[var(--color-text)]" title={task.title}>{task.title}</span></td>
+      <td className="px-3 py-3 xl:px-4"><Badge variant="outline" className={cn("whitespace-nowrap", SLA_STATE_STYLES[task.slaState])}>{formatSlaState(task.slaState)}</Badge></td>
+      <td className="px-3 py-3 xl:px-4"><Badge variant="secondary" className="whitespace-nowrap capitalize">{task.status.replace(/_/g, " ")}</Badge></td>
+      <td className="px-3 py-3 xl:px-4"><PriorityBadge priority={task.priority} /></td>
+      <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-[var(--color-text)] xl:px-4">{formatUtcDate(task.dueAt, timezone)}</td>
+      <td className="px-3 py-3 text-[var(--color-text-muted)] xl:px-4"><span className="block truncate">{task.assignee?.name ?? "Unassigned"}</span></td>
+      <td className="px-3 py-3 text-[var(--color-text-muted)] xl:px-4"><span className="block truncate">{task.case.name}</span></td>
+      <td className="hidden px-4 py-3 text-[var(--color-text-muted)] 2xl:table-cell"><span className="block truncate">{task.incident.name}</span></td>
+      <td className="hidden px-4 py-3 text-[var(--color-text-muted)] 2xl:table-cell"><span className="block truncate">{task.linkedEntity ? `${task.linkedEntity.type.replace(/_/g, " ")}: ${task.linkedEntity.name}` : "—"}</span></td>
     </tr>
   );
 }
