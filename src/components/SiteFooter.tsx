@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import { Container } from "./Container";
 
 const githubUrl = "https://github.com/ngynduc/forenotes";
@@ -19,15 +18,15 @@ export function SiteFooter() {
               Project
             </p>
             <div className="mt-3 flex flex-col gap-2">
-              <Link to="/#product" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              <a href="/#product" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Features
-              </Link>
-              <Link to="/docs" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              </a>
+              <a href="/docs/" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Docs
-              </Link>
-              <Link to="/donate" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              </a>
+              <a href="/donate" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Donate
-              </Link>
+              </a>
             </div>
           </div>
           <div>
@@ -35,9 +34,9 @@ export function SiteFooter() {
               Resources
             </p>
             <div className="mt-3 flex flex-col gap-2">
-              <Link to="/docs" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+              <a href="/docs/" className="text-[0.8125rem] text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
                 Documentation
-              </Link>
+              </a>
               <a
                 href={githubUrl}
                 target="_blank"

@@ -53,7 +53,7 @@ export function DonatePage() {
                     Support me on Ko-fi
                   </a>
                   <a
-                    href="/docs"
+                    href="/docs/"
                     className="glass glass-hover inline-flex h-10 items-center rounded-[var(--radius-sm)] px-6 text-[0.875rem] font-medium text-[var(--color-text)] transition-colors"
                   >
                     Read docs

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .vite/
+.astro/
 *.tsbuildinfo
 *.log
 *.tgz
@@ -13,5 +14,5 @@ Thumbs.db
 AGENTS.md
 CLAUDE.md
 data/
-docs/
+/docs/
 package/

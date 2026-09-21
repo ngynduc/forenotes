@@ -1,0 +1,52 @@
+---
+title: Forenotes documentation
+description: Install, operate, and use Forenotes for structured DFIR investigations.
+template: splash
+hero:
+  tagline: Turn incident evidence into a traceable case record and a clear final report.
+  actions:
+    - text: Install Forenotes
+      link: /docs/start/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: Follow an investigation
+      link: /docs/investigate/case-to-report/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Forenotes is an open-source workspace for incident response and digital forensics teams. It keeps cases, incidents, findings, timelines, entities, tasks, evidence links, and reports in one permission-aware system.
+
+<CardGrid>
+  <Card title="I need to deploy it" icon="rocket">
+    Start with the production quickstart, then review configuration, backups, and upgrades before inviting a team.
+  </Card>
+  <Card title="I need to investigate" icon="magnifier">
+    Follow the case-to-report workflow and use the focused guides for evidence, entities, tasks, and reports.
+  </Card>
+  <Card title="I need to administer it" icon="setting">
+    Configure users, access boundaries, authentication, and optional LLM-backed report generation.
+  </Card>
+  <Card title="I need to extend it" icon="puzzle">
+    Set up the full application locally, learn the request flow, and use the API and data-model references.
+  </Card>
+</CardGrid>
+
+## A useful first session
+
+After opening a new Forenotes installation:
+
+1. Sign in with the bootstrap administrator and change the temporary password.
+2. Create a case and add the people who should see it.
+3. Create an incident inside the case.
+4. Record a timeline event and a finding.
+5. Link the finding to its supporting evidence.
+6. Assign follow-up work and generate a report draft.
+
+The [case-to-report guide](/docs/investigate/case-to-report/) walks through that sequence.
+
+## Documentation scope
+
+Production examples use placeholders for release and image tags so the same instructions work for future versions. Always substitute a published, pinned version rather than a moving tag. The website is deployed independently from the full application; application code and release artifacts remain in the [Forenotes repository](https://github.com/ngynduc/forenotes).
