@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router";
 import { Github, Menu, X } from "lucide-react";
 import { Container } from "./Container";
 
 const navLinks = [
   { label: "Product", href: "/#product" },
-  { label: "Docs", href: "/docs" },
+  { label: "Docs", href: "/docs/" },
   { label: "Donate", href: "/donate" },
 ];
 
@@ -17,7 +16,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[rgba(10,15,14,0.7)] backdrop-blur-xl">
       <Container className="flex h-14 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
+        <a href="/" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
           <img
             src="/forenotes_logo_no_text.png"
             alt="Forenotes"
@@ -27,17 +26,17 @@ export function SiteHeader() {
             }}
           />
           <span>Forenotes</span>
-        </Link>
+        </a>
 
         <nav className="hidden items-center gap-7 md:flex">
           {navLinks.map((link) => (
-            <Link
+            <a
               key={link.href}
-              to={link.href}
+              href={link.href}
               className="text-[0.8125rem] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
             >
               {link.label}
-            </Link>
+            </a>
           ))}
           <a
             href={githubUrl}
@@ -49,7 +48,7 @@ export function SiteHeader() {
             GitHub
           </a>
           <a
-            href="/docs"
+            href="/docs/"
             className="inline-flex h-8 items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 text-[0.8125rem] font-medium text-[var(--color-bg)] transition-colors hover:bg-[var(--color-primary-strong)]"
           >
             Read docs
@@ -69,14 +68,14 @@ export function SiteHeader() {
       {mobileOpen && (
         <nav className="border-t border-[var(--color-border)] bg-[rgba(10,15,14,0.9)] px-6 pb-4 backdrop-blur-xl md:hidden">
           {navLinks.map((link) => (
-            <Link
+            <a
               key={link.href}
-              to={link.href}
+              href={link.href}
               className="block py-2.5 text-[0.8125rem] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
               onClick={() => setMobileOpen(false)}
             >
               {link.label}
-            </Link>
+            </a>
           ))}
           <a
             href={githubUrl}
@@ -89,7 +88,7 @@ export function SiteHeader() {
             GitHub
           </a>
           <a
-            href="/docs"
+            href="/docs/"
             className="mt-2 inline-flex h-8 items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 text-[0.8125rem] font-medium text-[var(--color-bg)]"
           >
             Read docs

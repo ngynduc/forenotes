@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import { Github } from "lucide-react";
 import { Container } from "./Container";
 import { GraphCanvas } from "./GraphCanvas";
@@ -23,12 +22,12 @@ export function HeroSection() {
           >
             Read docs
           </a>
-          <Link
-            to="/donate"
+          <a
+            href="/donate/"
             className="glass glass-hover inline-flex h-10 items-center rounded-[var(--radius-sm)] px-6 text-[0.875rem] font-medium text-[var(--color-text)] transition-colors"
           >
             Donate
-          </Link>
+          </a>
           <a
             href={githubUrl}
             target="_blank"
