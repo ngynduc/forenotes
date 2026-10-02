@@ -27,6 +27,7 @@ const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
 const AuditPage = lazy(() => import("@/pages/AuditPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const InvestigationPage = lazy(() => import("@/pages/InvestigationPage"));
 
 export const routes: RouteObject[] = [
   {
@@ -48,6 +49,7 @@ export const routes: RouteObject[] = [
       { path: "audit", element: <LazyPage Component={AuditPage} /> },
       { path: "settings", element: <LazyPage Component={SettingsPage} /> },
       { path: "admin", element: <LazyPage Component={AdminPage} /> },
+      { path: "investigation", element: <LazyPage Component={InvestigationPage} /> },
     ],
   },
 ];

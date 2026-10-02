@@ -107,9 +107,14 @@ FORENOTES_BOOTSTRAP_ADMIN_PASSWORD=<long random temporary admin password>
 FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY=true
 FORENOTES_LLM_SECRET_KEY=<32+ random characters>
 SECURE_SESSION_COOKIES=true
+FORENOTES_MCP_ENABLED=false
+FORENOTES_MCP_PUBLIC_URL=
+FORENOTES_MCP_ALLOWED_ORIGINS=
 ```
 
 Use `SECURE_SESSION_COOKIES=false` only for local HTTP testing. Keep it `true` behind HTTPS.
+
+MCP is disabled by default. To enable it, set `FORENOTES_MCP_ENABLED=true`, set the externally reachable HTTPS endpoint such as `FORENOTES_MCP_PUBLIC_URL=https://forenotes.example.com/mcp`, and optionally provide comma-separated additional browser origins in `FORENOTES_MCP_ALLOWED_ORIGINS`. The public URL is also used to validate the request Host and Origin.
 
 Forenotes uses database-backed opaque session cookies in this release. `SESSION_SECRET` and `JWT_SECRET` are not used.
 
@@ -136,6 +141,10 @@ FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY=true
 
 FORENOTES_LLM_SECRET_KEY=replace_with_at_least_32_random_characters
 SECURE_SESSION_COOKIES=true
+
+FORENOTES_MCP_ENABLED=false
+FORENOTES_MCP_PUBLIC_URL=
+FORENOTES_MCP_ALLOWED_ORIGINS=
 
 LITELLM_SERVICE_URL=
 LLM_PROVIDER=
@@ -182,6 +191,9 @@ services:
       FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY: ${FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY:-true}
       FORENOTES_LLM_SECRET_KEY: ${FORENOTES_LLM_SECRET_KEY:?set FORENOTES_LLM_SECRET_KEY}
       SECURE_SESSION_COOKIES: ${SECURE_SESSION_COOKIES:-true}
+      FORENOTES_MCP_ENABLED: ${FORENOTES_MCP_ENABLED:-false}
+      FORENOTES_MCP_PUBLIC_URL: ${FORENOTES_MCP_PUBLIC_URL:-}
+      FORENOTES_MCP_ALLOWED_ORIGINS: ${FORENOTES_MCP_ALLOWED_ORIGINS:-}
       LITELLM_SERVICE_URL: ${LITELLM_SERVICE_URL:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_MODEL: ${LLM_MODEL:-}

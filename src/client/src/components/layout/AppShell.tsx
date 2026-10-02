@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Fingerprint,
   type LucideIcon,
 } from "lucide-react";
 import { ContextBar } from "./ContextBar";
@@ -35,6 +36,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: LucideIcon; permission
   { to: "/entities", label: "Entities", icon: Boxes },
   { to: "/queries", label: "Queries", icon: Code2 },
   { to: "/graph", label: "Graph", icon: Network },
+  { to: "/investigation", label: "Investigation", icon: Fingerprint, permission: "investigation:read" },
   { to: "/tags", label: "Tags", icon: Tags },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },

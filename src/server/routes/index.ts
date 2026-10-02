@@ -11,6 +11,7 @@ import { createDashboardRoutes } from "./dashboardRoutes.js";
 import { createUserRoutes } from "./userRoutes.js";
 import { createReportRoutes } from "./reportRoutes.js";
 import { createUploadRoutes } from "./uploadRoutes.js";
+import { createInvestigationRoutes } from "./investigationRoutes.js";
 
 export function createRoutes(database: Database) {
   const router = Router();
@@ -26,5 +27,6 @@ export function createRoutes(database: Database) {
   router.use("/api", createReportRoutes(database));
   router.use("/api/dashboard", createDashboardRoutes(database));
   router.use("/api/notifications", createNotificationRoutes(database));
+  router.use(createInvestigationRoutes(database));
   return router;
 }

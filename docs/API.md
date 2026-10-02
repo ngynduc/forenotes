@@ -17,6 +17,29 @@ Production API requests use the `forenotes_session` HTTP-only cookie created by 
 
 `x-user-id` header auth is available only in tests or explicitly enabled non-production development. It is disabled in production.
 
+MCP bearer tokens authenticate only the separate `/mcp` endpoint. They are not accepted by `/api` routes.
+
+## MCP Token And Investigation Review
+
+These routes use the normal session cookie. Newly issued token secrets appear only in the create response.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/mcp-tokens` | List the current user's token metadata |
+| `POST` | `/api/mcp-tokens` | Create a read-only or read-write token |
+| `DELETE` | `/api/mcp-tokens/:tokenId` | Revoke one current-user token |
+| `GET` | `/api/cases/:caseId/investigation/runs` | List case investigation runs |
+| `GET` | `/api/cases/:caseId/investigation/evidence` | List evidence metadata |
+| `GET` | `/api/cases/:caseId/investigation/observations` | List observations and support links |
+| `GET` | `/api/cases/:caseId/investigation/hypotheses` | List hypotheses and support links |
+| `GET` | `/api/cases/:caseId/investigation/findings` | List agent-created findings |
+| `GET` | `/api/cases/:caseId/investigation/actions` | List agent actions |
+| `PATCH` | `/api/investigation/evidence/:evidenceId` | Edit evidence with audit history |
+| `PATCH` | `/api/investigation/observations/:observationId` | Edit an observation with audit history |
+| `PATCH` | `/api/investigation/hypotheses/:hypothesisId` | Edit a hypothesis with audit history |
+
+List routes accept optional `incidentId`, `runId`, `limit`, and `offset` parameters where applicable. See the [MCP guide](./MCP.md) for the protocol endpoint and tool catalog.
+
 ## Response Shape
 
 Successful list responses usually return a named array such as `{ "cases": [...] }` or `{ "findings": [...] }`. Create/update responses usually return the mutated record under its domain name.

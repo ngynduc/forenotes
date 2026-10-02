@@ -8,14 +8,25 @@ import { pool } from "./db/pool.js";
 import { isAppError } from "./errors.js";
 import { createRoutes } from "./routes/index.js";
 import { createRequestScopedDatabase, runRequestTransaction } from "./db/transaction.js";
+import { env } from "./env.js";
+import { createMcpHttpHandler, type McpHttpConfig } from "./mcp/mcpHttpHandler.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const clientDistDir = path.resolve(currentDir, "../client");
 
-export function createApp(database: Database = pool) {
+export function createApp(
+  database: Database = pool,
+  options: { mcp?: McpHttpConfig } = {}
+) {
   const app = express();
   app.disable("x-powered-by");
   app.use(securityHeaders);
+  const mcpConfig = options.mcp ?? {
+    enabled: env.FORENOTES_MCP_ENABLED,
+    publicUrl: env.FORENOTES_MCP_PUBLIC_URL,
+    allowedOrigins: env.FORENOTES_MCP_ALLOWED_ORIGINS
+  };
+  app.all("/mcp", createMcpHttpHandler(database, mcpConfig));
   app.use(express.json());
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });

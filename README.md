@@ -2,6 +2,8 @@
 
 Forenotes is a DFIR case notebook for incident records, findings, timelines, tasks, hunt queries, notes, notifications, and report/PDF generation.
 
+Forenotes can also expose an optional, stateless MCP investigation interface for authorized agents. It is disabled by default; see [the MCP guide](docs/MCP.md) for secure setup and client configuration.
+
 ## Production Docker
 
 ### One-command install

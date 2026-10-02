@@ -9,6 +9,7 @@ React/Vite client
         | HTTP JSON + forenotes_session cookie
         v
 Express app
+  /mcp (optional stateless Streamable HTTP + bearer token)
   /api/health
   /api/auth
   /api/cases
@@ -29,7 +30,7 @@ Services
         |
         v
 PostgreSQL
-  migrations, sessions, users, cases, incidents, entities, reports, tags
+  migrations, sessions, users, cases, incidents, entities, provenance, agent actions, reports, tags
 ```
 
 ## Runtime Layout
@@ -54,6 +55,8 @@ PostgreSQL
 9. JSON responses are returned to the client.
 
 `x-user-id` header auth remains available only for tests or explicitly enabled non-production development. It is ignored in production.
+
+MCP requests take a separate path before JSON parsing and the browser request transaction middleware. The MCP boundary validates Host, Origin, and a manually issued bearer token, then the official SDK creates a fresh server for each request. Every mutation owns its transaction. Tokens resolve their owner's current account, role, password-rotation state, permissions, and case memberships on every request. MCP credentials are never accepted by browser API routes.
 
 ## Frontend Architecture
 
@@ -94,6 +97,7 @@ Services encapsulate business logic and database access.
 | `reportService` | Markdown reports and PDF export |
 | `notificationService` | Notification records and event stream |
 | `auditLogService` | Mutation history |
+| MCP token and investigation services | Token lifecycle, runs, provenance records, idempotency, and agent action history |
 
 ## Deployment Architecture
 

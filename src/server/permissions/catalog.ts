@@ -27,6 +27,7 @@ export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
     "timeline:update",
     "indicator:create",
     "indicator:update",
+    "task:create",
     "query:create",
     "query:update",
     "report_template:create",
@@ -40,7 +41,9 @@ export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
     "llm_settings:manage",
     "tag:custom_create",
     "tag:custom_update",
-    "notification:read"
+    "notification:read",
+    "investigation:read",
+    "investigation:write"
   ],
   viewer: [
     "entity_link:read",
@@ -48,6 +51,7 @@ export const ROLE_PERMISSIONS: Record<GlobalRole, PermissionKey[]> = {
     "mitre_matrix:read",
     "report:read",
     "report:export",
-    "notification:read"
+    "notification:read",
+    "investigation:read"
   ]
 };

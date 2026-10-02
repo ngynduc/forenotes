@@ -5,6 +5,7 @@ import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
 import { createNotification, formatNotificationScope, getIncidentNotificationScope } from "./notificationService.js";
+import { requireSupportedAgentFindingConfirmation } from "./findingProvenanceService.js";
 
 interface CreateFindingInput {
   incidentId: string;
@@ -205,6 +206,10 @@ export async function updateFinding(
     recommendation: input.recommendation ?? existing.rows[0].recommendation,
     owner_user_id: existing.rows[0].owner_user_id
   };
+
+  if (next.status === "confirmed" && existing.rows[0].status !== "confirmed") {
+    await requireSupportedAgentFindingConfirmation(database, findingId);
+  }
 
   await database.query(
     `
