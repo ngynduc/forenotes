@@ -1,0 +1,162 @@
+.main-pane:has(.api-explorer) .sl-container {
+  max-width: min(100%, 96rem);
+  margin-inline: auto;
+}
+
+.api-explorer {
+  --api-explorer-text: var(--sl-color-white);
+  --api-explorer-endpoint: var(--sl-color-white);
+
+  margin: 2rem 0;
+  overflow: hidden;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.75rem;
+  background: var(--sl-color-bg);
+  color: var(--api-explorer-text);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] .api-explorer {
+  --api-explorer-text: var(--sl-color-text);
+  --api-explorer-endpoint: var(--sl-color-text);
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] .api-explorer .swagger-ui *:not(
+    .opblock-summary-method,
+    .opblock-summary-method *
+  ) {
+  color: var(--api-explorer-text) !important;
+}
+
+:root[data-theme="dark"] .api-explorer .swagger-ui .info a,
+:root[data-theme="dark"] .api-explorer .swagger-ui .opblock-tag small a {
+  color: var(--sl-color-text-accent) !important;
+}
+
+:root[data-theme="dark"] .api-explorer .swagger-ui .btn.execute {
+  color: var(--sl-color-black) !important;
+}
+
+:root[data-theme="dark"] .api-explorer .swagger-ui input::placeholder,
+:root[data-theme="dark"] .api-explorer .swagger-ui textarea::placeholder {
+  color: var(--sl-color-gray-2);
+}
+
+.api-explorer .swagger-ui {
+  color: var(--api-explorer-text);
+  font-family: var(--sl-font);
+}
+
+.api-explorer .swagger-ui .info .title,
+.api-explorer .swagger-ui .info li,
+.api-explorer .swagger-ui .info p,
+.api-explorer .swagger-ui .opblock-tag,
+.api-explorer .swagger-ui .opblock-tag small,
+.api-explorer .swagger-ui .opblock .opblock-summary-description,
+.api-explorer .swagger-ui .opblock .opblock-description-wrapper p,
+.api-explorer .swagger-ui .opblock .opblock-summary-operation-id,
+.api-explorer .swagger-ui .opblock .opblock-summary-path,
+.api-explorer .swagger-ui .opblock .opblock-summary-path__deprecated,
+.api-explorer .swagger-ui .parameter__name,
+.api-explorer .swagger-ui .parameter__type,
+.api-explorer .swagger-ui .response-col_description,
+.api-explorer .swagger-ui .model-title,
+.api-explorer .swagger-ui .property,
+.api-explorer .swagger-ui .prop-type {
+  color: var(--api-explorer-text);
+}
+
+.api-explorer .swagger-ui .opblock .opblock-summary-operation-id,
+.api-explorer .swagger-ui .opblock .opblock-summary-path,
+.api-explorer .swagger-ui .opblock .opblock-summary-path__deprecated {
+  color: var(--api-explorer-endpoint);
+}
+
+.api-explorer .swagger-ui .info a,
+.api-explorer .swagger-ui .opblock-tag small a {
+  color: var(--sl-color-text-accent);
+}
+
+.api-explorer .swagger-ui .scheme-container,
+.api-explorer .swagger-ui .opblock .opblock-section-header,
+.api-explorer .swagger-ui section.models,
+.api-explorer .swagger-ui .model-container,
+.api-explorer .swagger-ui .model-box,
+.api-explorer .swagger-ui .responses-inner,
+.api-explorer .swagger-ui .response-col_description__inner div.markdown,
+.api-explorer .swagger-ui .dialog-ux .modal-ux {
+  background: var(--sl-color-bg-nav);
+  color: var(--api-explorer-text);
+}
+
+.api-explorer .swagger-ui .opblock .opblock-section-header,
+.api-explorer .swagger-ui section.models,
+.api-explorer .swagger-ui .model-container,
+.api-explorer .swagger-ui .model-box,
+.api-explorer .swagger-ui table tbody tr td,
+.api-explorer .swagger-ui table thead tr th,
+.api-explorer .swagger-ui .responses-table,
+.api-explorer .swagger-ui .response-col_links,
+.api-explorer .swagger-ui .opblock .opblock-body,
+.api-explorer .swagger-ui .opblock .opblock-summary {
+  border-color: var(--sl-color-hairline);
+}
+
+.api-explorer .swagger-ui .scheme-container,
+.api-explorer .swagger-ui .opblock,
+.api-explorer .swagger-ui section.models,
+.api-explorer .swagger-ui .model-container,
+.api-explorer .swagger-ui .model-box,
+.api-explorer .swagger-ui .dialog-ux .modal-ux {
+  box-shadow: none;
+}
+
+.api-explorer .swagger-ui input,
+.api-explorer .swagger-ui select,
+.api-explorer .swagger-ui textarea {
+  border-color: var(--sl-color-hairline);
+  background: var(--sl-color-bg);
+  color: var(--api-explorer-text);
+  font-family: var(--sl-font);
+}
+
+.api-explorer .swagger-ui input::placeholder,
+.api-explorer .swagger-ui textarea::placeholder {
+  color: var(--sl-color-gray-3);
+}
+
+.api-explorer .swagger-ui .btn {
+  border-color: var(--sl-color-hairline);
+  background: var(--sl-color-bg);
+  color: var(--api-explorer-text);
+}
+
+.api-explorer .swagger-ui .wrapper {
+  max-width: none;
+  padding: 0 1.25rem;
+}
+
+.api-explorer .swagger-ui .topbar {
+  display: none;
+}
+
+.api-explorer .swagger-ui .info {
+  margin: 1.5rem 0;
+}
+
+.api-explorer .swagger-ui .scheme-container {
+  margin: 0 0 1.5rem;
+  padding: 1rem 0;
+}
+
+@media (max-width: 640px) {
+  .api-explorer .swagger-ui .wrapper {
+    padding: 0 0.75rem;
+  }
+
+  .api-explorer .swagger-ui .opblock-tag {
+    font-size: 1rem;
+  }
+}
