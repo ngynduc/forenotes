@@ -49,6 +49,28 @@ The endpoint uses Streamable HTTP with JSON responses and supports current reque
 
 ## Investigation workflow
 
+### Discover IDs from names
+
+Users describe cases, incidents, and records using names. Agents obtain UUIDs from tool results and pass them to later calls; never invent UUIDs or require the user to look them up.
+
+1. Call `list_cases` with `query` (case name, client name, or summary).
+2. Select a matching item using `caseName`, `clientName`, `status`, and `summary`. Its `id` is the `caseId`.
+3. Call `list_incidents` with that `caseId` and optional `query` (incident name or summary). Its selected item's `id` is the `incidentId`.
+4. Use those IDs with `get_tasks`, `get_entities`, `get_timeline`, or the provenance list tools. Reuse each record's returned `id` for edits and support links.
+5. For assignment, call `list_case_members` with `caseId` and optional display-name/email `query`; use `userId` as `assigneeUserId`. The user must also belong to the target incident.
+
+For example, “Show tasks for the phishing incident in the Acme case” becomes:
+
+```text
+list_cases({ query: "Acme" }) → items[].id as caseId
+list_incidents({ caseId, query: "phishing" }) → items[].id as incidentId
+get_tasks({ caseId, incidentId })
+```
+
+These discovery tools match literal text, ignoring case and surrounding whitespace. Omit `query` or use empty text to list all accessible matches. They return `items`, `limit`, `offset`, `total`, and `hasMore`; search is applied before pagination. Follow additional pages while `hasMore` is true. No matches means refine the search; multiple plausible matches means inspect context or ask the user before writing. Names are not unique identifiers.
+
+`search_case` searches evidence, observations, and hypotheses within a known case; use the other list tools to discover incidents, entities, tasks, or findings. Write tools return created record IDs, including the run ID from `start_investigation_run`.
+
 Agent mutations require a read-write token and an active case-level run:
 
 1. Use `list_cases`, then `start_investigation_run` with an idempotency key.
@@ -67,6 +89,7 @@ Read tools:
 
 ```text
 list_cases              get_case                 search_case
+list_incidents          list_case_members
 list_investigation_runs get_investigation_run    get_evidence
 get_observations        get_hypotheses            get_timeline
 get_entities            get_relationships         get_findings

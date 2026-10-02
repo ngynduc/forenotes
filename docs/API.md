@@ -73,6 +73,22 @@ Requires `user:manage`.
 
 ## Cases
 
+### Discover identifiers
+
+UUIDs come from list/search/create responses. Start with names, then reuse returned IDs:
+
+```bash
+# COOKIE_FILE contains the session cookie from /api/auth/login.
+curl -b "$COOKIE_FILE" --get http://localhost:8787/api/cases --data-urlencode 'q=Acme'
+# Select a case from cases[] and copy its id into CASE_ID.
+curl -b "$COOKIE_FILE" --get "http://localhost:8787/api/cases/$CASE_ID/incidents" --data-urlencode 'q=phishing'
+# Select an incident from incidents[]; its id is the incidentId for later routes.
+```
+
+Both list routes accept optional `q`: literal, case-insensitive text matching case name/client/summary or incident name/summary. Empty or omitted `q` lists all accessible records. Responses retain their existing `{ "cases": [...] }` and `{ "incidents": [...] }` shapes, including UUIDs and readable context. Duplicate names remain separate records; choose using context before updating.
+
+Use `/api/cases/:caseId/members` to obtain member `user_id` values for assignment. Other record list/create responses provide their respective IDs. For agents using bearer tokens, the [MCP discovery workflow](./MCP.md#discover-ids-from-names) exposes equivalent discovery tools with camelCase fields.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/cases` | List cases visible to the current user |

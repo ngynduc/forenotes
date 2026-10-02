@@ -121,6 +121,86 @@ describe("MCP Streamable HTTP endpoint", () => {
     expect(revoked.body.accessToken.revokedAt).toBeTruthy();
   });
 
+  it("discovers IDs from names with pagination and membership isolation over MCP and REST", async () => {
+    await pool.query("update cases set client_name='Acme 100%', summary='Phishing response' where id=$1", [caseId]);
+    const duplicateCaseId = randomUUID();
+    const hiddenCaseId = randomUUID();
+    for (const id of [duplicateCaseId, hiddenCaseId]) {
+      await pool.query("insert into cases (id,case_name,client_name,status,created_by_user_id) values ($1,'MCP Case','Acme 100%','open',$2)", [id, userId]);
+    }
+    await pool.query("insert into case_members (case_id,user_id,case_role,added_by_user_id) values ($1,$2,'analyst',$2)", [duplicateCaseId, userId]);
+    await pool.query("update incidents set name='Phishing', summary='Mailbox compromise', severity='high' where id=$1", [incidentId]);
+    const duplicateIncidentId = randomUUID();
+    const hiddenIncidentId = randomUUID();
+    for (const id of [duplicateIncidentId, hiddenIncidentId]) {
+      await pool.query("insert into incidents (id,case_id,name,status,created_by_user_id) values ($1,$2,'Phishing','open',$3)", [id, caseId, userId]);
+    }
+    await pool.query("insert into incident_members (incident_id,user_id,incident_role,added_by_user_id) values ($1,$2,'analyst',$2)", [duplicateIncidentId, userId]);
+    const taskId = randomUUID();
+    await pool.query("insert into tasks (id,incident_id,title,status,priority,created_by_user_id) values ($1,$2,'Review mailbox','todo','high',$3)", [taskId, incidentId, userId]);
+
+    const cases = await request(app).get("/api/cases").query({ q: " acME 100% " }).set("x-user-id", userId);
+    expect(cases.status).toBe(200);
+    expect(cases.body.cases.map((item: { id: string }) => item.id).sort()).toEqual([caseId, duplicateCaseId].sort());
+    const incidents = await request(app).get(`/api/cases/${caseId}/incidents`).query({ q: " PHISH " }).set("x-user-id", userId);
+    expect(incidents.status).toBe(200);
+    expect(incidents.body.incidents.map((item: { id: string }) => item.id).sort()).toEqual([incidentId, duplicateIncidentId].sort());
+    expect((await request(app).get(`/api/cases/${hiddenCaseId}/incidents`).set("x-user-id", userId)).status).toBe(404);
+    expect((await request(app).get("/api/cases").query({ q: "no match" }).set("x-user-id", userId)).body.cases).toEqual([]);
+    expect((await request(app).get("/api/cases").query({ q: "_" }).set("x-user-id", userId)).body.cases).toEqual([]);
+
+    const readOnly = await createMcpToken(pool, userId, { label: "Discovery reader", scope: "read_only" });
+    const httpServer = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => httpServer.once("listening", resolve));
+    const address = httpServer.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port");
+    const client = new Client({ name: "discovery-reader", version: "1" });
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${address.port}/mcp`), {
+        authProvider: { token: async () => readOnly.token },
+        requestInit: { headers: { Origin: "http://agent.local" } }
+      }));
+      const tools = await client.listTools();
+      const tasksTool = tools.tools.find((tool) => tool.name === "get_tasks");
+      expect(JSON.stringify(tasksTool?.inputSchema)).toContain("list_incidents");
+      expect(JSON.stringify(tasksTool?.inputSchema)).toContain("list_cases");
+      const first = await client.callTool({ name: "list_cases", arguments: { query: " acME 100% ", limit: 1 } });
+      expect(first.isError).not.toBe(true);
+      expect(first.structuredContent).toMatchObject({ items: [expect.objectContaining({ caseName: "MCP Case", clientName: "Acme 100%" })], total: 2, hasMore: true });
+      const second = await client.callTool({ name: "list_cases", arguments: { query: "Acme 100%", limit: 1, offset: 1 } });
+      expect(second.structuredContent).toMatchObject({ total: 2, hasMore: false });
+      const caseItems = [first, second].flatMap((result) => (result.structuredContent as { items: Array<{ id: string }> }).items);
+      expect(caseItems.map((item) => item.id).sort()).toEqual([caseId, duplicateCaseId].sort());
+      const discoveredCase = await client.callTool({ name: "list_cases", arguments: { query: "response" } });
+      const discoveredCaseId = (discoveredCase.structuredContent as { items: Array<{ id: string }> }).items[0].id;
+      const discovered = await client.callTool({ name: "list_incidents", arguments: { caseId: discoveredCaseId, query: "mailbox" } });
+      expect(discovered.structuredContent).toMatchObject({ items: [{ id: incidentId, caseId, name: "Phishing", summary: "Mailbox compromise", severity: "high" }], total: 1, hasMore: false });
+      const discoveredIncidentId = (discovered.structuredContent as { items: Array<{ id: string }> }).items[0].id;
+      const tasks = await client.callTool({ name: "get_tasks", arguments: { caseId: discoveredCaseId, incidentId: discoveredIncidentId } });
+      expect(tasks.structuredContent).toMatchObject({ items: [{ id: taskId, title: "Review mailbox" }] });
+      const members = await client.callTool({ name: "list_case_members", arguments: { caseId: discoveredCaseId, query: "MCP@EXAMPLE" } });
+      expect(members.structuredContent).toMatchObject({ items: [{ userId, displayName: "MCP User" }], total: 1 });
+      const allIncidents = await client.callTool({ name: "list_incidents", arguments: { caseId, query: "phish", limit: 1 } });
+      expect(allIncidents.structuredContent).toMatchObject({ total: 2, hasMore: true });
+      for (const name of ["list_incidents", "list_case_members"]) {
+        const denied = await client.callTool({ name, arguments: { caseId: hiddenCaseId } });
+        expect(denied.isError).toBe(true);
+        expect(denied.structuredContent).toMatchObject({ error: { code: "not_found" } });
+      }
+      for (const query of ["no match", "_"]) {
+        expect((await client.callTool({ name: "list_cases", arguments: { query } })).structuredContent).toMatchObject({ items: [], total: 0, hasMore: false });
+      }
+      expect((await client.callTool({ name: "list_cases", arguments: { query: " " } })).structuredContent).toMatchObject({ total: 2 });
+      await pool.query("delete from incident_members where incident_id=$1 and user_id=$2", [incidentId, userId]);
+      await pool.query("delete from case_members where case_id=$1 and user_id=$2", [caseId, userId]);
+      expect((await client.callTool({ name: "list_cases", arguments: {} })).structuredContent).toMatchObject({ items: [{ id: duplicateCaseId }], total: 1 });
+      expect((await client.callTool({ name: "list_incidents", arguments: { caseId } })).isError).toBe(true);
+    } finally {
+      await client.close().catch(() => undefined);
+      await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+    }
+  }, 20_000);
+
   it("supports modern and legacy official clients with discovery, logging, and idempotency", async () => {
     const httpServer = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => httpServer.once("listening", resolve));
@@ -128,7 +208,7 @@ describe("MCP Streamable HTTP endpoint", () => {
     if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port");
     const url = new URL(`http://127.0.0.1:${address.port}/mcp`);
     const expectedTools = [
-      "list_cases", "get_case", "search_case", "list_investigation_runs", "get_investigation_run", "get_evidence",
+      "list_cases", "list_incidents", "list_case_members", "get_case", "search_case", "list_investigation_runs", "get_investigation_run", "get_evidence",
       "get_observations", "get_hypotheses", "get_timeline", "get_entities", "get_relationships", "get_findings", "get_tasks",
       "start_investigation_run", "complete_investigation_run", "register_evidence", "update_evidence", "create_observation",
       "update_observation", "create_hypothesis", "update_hypothesis", "add_timeline_event", "update_timeline_event", "create_entity",
