@@ -1,13 +1,85 @@
 ---
 title: API reference
-description: Explore and try the Forenotes REST API with Swagger UI.
-tableOfContents: false
+description: Discover record IDs, explore the REST API, and connect investigation agents through MCP.
 ---
 
 import ApiExplorer from "../../../../components/documentation/ApiExplorer";
 
 Browse endpoints by tag, inspect parameters and schemas, and expand an operation to see its documented request and response examples. Download the [OpenAPI specification](/openapi.json) to use it with another client.
 
-The API runs with the full Forenotes application. Swagger UI defaults to `http://localhost:8787`; select or edit the server to match your deployment. Sign in through `POST /api/auth/login` before trying endpoints that require the `forenotes_session` cookie.
+The API runs with the full Forenotes application. Swagger UI defaults to `http://localhost:8787`; select or edit the server to match your deployment. Sign in through `POST /api/auth/login` before trying endpoints that require the `forenotes_session` cookie. MCP bearer tokens authenticate only `/mcp`; REST routes, including token management, require the session cookie.
+
+## Discover IDs from names
+
+Start with names or client information, then reuse the UUIDs returned by the API. Users and agents do not need to know UUIDs in advance.
+
+```bash
+BASE_URL=http://localhost:8787/api
+
+curl -b cookies.txt --get "$BASE_URL/cases" --data-urlencode 'q=Acme'
+# Choose a case from cases[] using case_name, client_name, status, and summary.
+CASE_ID='REPLACE_WITH_CASE_UUID'
+curl -b cookies.txt --get "$BASE_URL/cases/$CASE_ID/incidents" --data-urlencode 'q=phishing'
+# Choose an incident from incidents[] using name, summary, severity, and status.
+INCIDENT_ID='REPLACE_WITH_INCIDENT_UUID'
+curl -b cookies.txt "$BASE_URL/incidents/$INCIDENT_ID/tasks"
+```
+
+Set the two ID variables to the chosen response values before running their following commands. Both discovery lists accept optional `q`: literal, case-insensitive text, trimmed before matching. Cases match case name, client name, or summary; incidents match name or summary. Empty or omitted `q` returns the accessible list. The response shapes stay `{ "cases": [...] }` and `{ "incidents": [...] }`.
+
+No matches means refine the search. Duplicate names are separate records: use context or ask the user before making changes. IDs come from each selected record's `id`. Member lists provide `user_id` for assignment; the assignee must belong to the target incident. Other record lists and create responses provide the IDs needed for edits and links.
+
+Case and incident list fields use snake_case (for example, `case_name` and `case_id`). MCP results and REST provenance/token responses use camelCase. The MCP discovery flow is documented below. Obtain `cookies.txt` by signing in through `POST /api/auth/login` as shown in the explorer.
+
+## REST API explorer
 
 <ApiExplorer client:only="react" />
+
+## Investigation provenance and tokens
+
+Use `GET /api/mcp-tokens`, `POST /api/mcp-tokens`, and `DELETE /api/mcp-tokens/{tokenId}` to manage the signed-in user's own tokens. Creation requires a trimmed, nonempty `label` (at most 120 characters), a `read_only` or `read_write` scope, and optional nullable `expiresAt`. Omitted/null expiry defaults to 90 days; an explicit UTC expiry must be in the future and at most 365 days away. The creation response contains `token` and `accessToken`; copy the secret once. Later reads return only metadata. Secrets are stored as hashes. Tokens inherit current owner permissions and memberships; revocation, account disablement, and required password rotation take effect immediately.
+
+Read provenance with `GET /api/cases/{caseId}/investigation/{collection}`. Collections are `runs`, `evidence`, `observations`, `hypotheses`, `findings`, and `actions`; responses contain `items`, `limit`, and `offset`. Reads require case-level `investigation:read`; provenance PATCH requests require `investigation:write`. The findings collection contains agent-created findings only.
+
+`limit` defaults to 50 and must be 1–100; `offset` defaults to 0 and must be nonnegative. `incidentId` filters every collection. `runId` is ignored by runs; `status` applies only to runs (`active`, `completed`, `failed`, `cancelled`). Read successive pages until `items` is shorter than `limit`. Explore the provenance PATCH schemas above for all optional fields, nullable values, and support-ID arrays. Human provenance edits do not require an active run and preserve audit history. Missing or cross-case support records return `409`; empty support arrays return `400`.
+
+## MCP discovery and investigation
+
+Enable the optional transport on the application service, then restart:
+
+```text
+FORENOTES_MCP_ENABLED=true
+FORENOTES_MCP_PUBLIC_URL=https://forenotes.example.com/mcp
+FORENOTES_MCP_ALLOWED_ORIGINS=https://agent.example.com
+```
+
+Production requires an HTTPS public URL. The server checks Host and Origin; the endpoint is disabled by default and returns `404` when disabled. Connect an MCP client using Streamable HTTP at `/mcp` with `Authorization: Bearer fnmcp_REPLACE_WITH_TOKEN`. Browser cookies do not authenticate this endpoint. Clients discover available tool schemas through MCP `tools/list`.
+
+```text
+list_cases({ query: "Acme" }) → selected items[].id as caseId
+list_incidents({ caseId, query: "phishing" }) → selected items[].id as incidentId
+get_tasks({ caseId, incidentId })
+list_case_members({ caseId, query: "Analyst" }) → items[].userId as assigneeUserId
+```
+
+Discovery tools search literal text before pagination, ignore case, and return `items`, `limit`, `offset`, `total`, and `hasMore`. `query` is optional, trimmed, and at most 200 characters; empty text lists all accessible matches. `limit` defaults to 50 and is capped at 100. Follow `hasMore` using `offset`; inspect ambiguous matches before writing. Case search matches name/client/summary, incident search matches name/summary, and member search matches display name/email. UUID input descriptions identify the tool that supplies each ID.
+
+Other read tools are `get_case`, `search_case`, `list_investigation_runs`, `get_investigation_run`, `get_evidence`, `get_observations`, `get_hypotheses`, `get_timeline`, `get_entities`, `get_relationships`, and `get_findings`. `search_case` searches evidence, observations, and hypotheses within a known case; use the other lists for incidents, entities, tasks, and findings.
+
+Writes require a `read_write` token. Start a case-level run with `start_investigation_run`, register evidence, create supported observations and hypotheses, then create a draft finding and complete the run. Every write requires `idempotencyKey`; reuse with the same payload returns the original result, while a different payload returns a conflict. Subsequent writes require the active `runId` returned by the start tool. Creation results return record IDs for later calls.
+
+Write tools:
+
+```text
+start_investigation_run  complete_investigation_run
+register_evidence       update_evidence
+create_observation      update_observation
+create_hypothesis       update_hypothesis
+add_timeline_event      update_timeline_event
+create_entity           update_entity
+link_entities           create_task
+update_task             create_draft_finding
+update_draft_finding
+```
+
+Observations need same-case evidence support; hypotheses and draft findings need same-case observation support. Agent findings stay draft until a human confirms a complete support chain. MCP exposes no delete, membership-management, credential-management, arbitrary-command, or finding-confirmation tools. Evidence locators are opaque metadata; Forenotes never fetches them. Tool results use camelCase; errors set `isError` and provide `error.code`, `error.message`, and `error.details` in structured content. Codes are `validation`, `authentication`, `permission`, `not_found`, `conflict`, or `internal`.

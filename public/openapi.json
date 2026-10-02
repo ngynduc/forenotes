@@ -3,7 +3,7 @@
   "info": {
     "title": "Forenotes REST API",
     "version": "0.2.1",
-    "description": "Interactive REST API definition for the Forenotes application, including documented parameters, request schemas, and examples."
+    "description": "Forenotes REST API route catalog, including name-based discovery, user-owned MCP token management, and investigation provenance review. REST uses the session cookie. The separate /mcp Streamable HTTP endpoint uses bearer tokens and MCP tool schemas; see the API Reference page for its workflow."
   },
   "servers": [
     {
@@ -941,7 +941,9 @@
         "properties": {
           "label": {
             "type": "string",
-            "maxLength": 120
+            "maxLength": 120,
+            "minLength": 1,
+            "description": "Trimmed nonempty label, at most 120 characters."
           },
           "scope": {
             "type": "string",
@@ -955,7 +957,8 @@
               "string",
               "null"
             ],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Omitted or null defaults to 90 days. Explicit expiry must be in the future and at most 365 days away."
           }
         },
         "required": [
@@ -1219,6 +1222,324 @@
         },
         "required": [],
         "minProperties": 1
+      },
+      "CaseListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "case_name",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_name": {
+            "type": "string"
+          },
+          "client_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user_case_role": {
+            "type": "string",
+            "enum": [
+              "commander",
+              "analyst",
+              "viewer"
+            ]
+          },
+          "active_incidents": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "IncidentListItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "case_id",
+          "name",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "case_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InvestigationPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "CamelCase record fields depend on collection. Each record includes its UUID in id.",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "McpTokenItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "label",
+          "scope",
+          "tokenPrefix",
+          "expiresAt",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "read_only",
+              "read_write"
+            ]
+          },
+          "tokenPrefix": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "EvidenceUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "evidenceType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceLocator": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque metadata; Forenotes never fetches this locator."
+          },
+          "hashes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "mimeType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "collectedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ObservationUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Existing same-case evidence UUIDs from the evidence collection."
+          }
+        }
+      },
+      "HypothesisUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "supported",
+              "rejected"
+            ]
+          },
+          "observationIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Existing same-case observation UUIDs from the observations collection."
+          }
+        }
       }
     }
   },
@@ -1338,18 +1659,20 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Limit records to a case"
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "incidentId",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Limit records to an incident"
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       }
@@ -1658,9 +1981,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ],
         "requestBody": {
@@ -1734,9 +2058,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ]
       },
@@ -1798,9 +2123,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ],
         "requestBody": {
@@ -1874,9 +2200,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "customTagId",
@@ -1957,9 +2284,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "customTagId",
@@ -1979,11 +2307,29 @@
         "tags": [
           "case"
         ],
-        "summary": "GET /api/cases/{caseId}/incidents",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "summary": "Discover accessible incidents",
+        "description": "Search incident name or summary with optional q. Matches literal text, ignoring case and surrounding whitespace; empty or omitted q lists accessible records. Returns UUIDs with readable context. Names may be duplicated; inspect context before writes. Response fields use snake_case.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "incidents"
+                  ],
+                  "properties": {
+                    "incidents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/IncidentListItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2032,9 +2378,20 @@
             "in": "path",
             "required": true,
             "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
               "type": "string"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Optional literal, case-insensitive text in incident name or summary. Empty text lists accessible records.",
+            "example": "phishing"
           }
         ]
       },
@@ -2056,9 +2413,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ],
         "requestBody": {
@@ -2079,11 +2437,18 @@
         "tags": [
           "investigation"
         ],
-        "summary": "GET /api/cases/{caseId}/investigation/{collection}",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "summary": "List case investigation provenance or agent actions",
+        "description": "Requires investigation:read in the case. Returns camelCase records. incidentId filters all collections; runId is ignored by runs; status applies only to runs. findings returns agent-created findings only. Request successive pages until items is shorter than limit.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestigationPage"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -2132,9 +2497,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "collection",
@@ -2151,25 +2517,27 @@
                 "actions"
               ]
             },
-            "description": "Resource identifier or path segment."
+            "description": "Collection to read: runs, evidence, observations, hypotheses, agent-created findings, or actions."
           },
           {
             "name": "incidentId",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Filter by incident UUID"
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "runId",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Filter by run UUID"
+            "description": "Run UUID returned as items[].id by GET /api/cases/{caseId}/investigation/runs or id by MCP start_investigation_run. Ignored for the runs collection."
           },
           {
             "name": "status",
@@ -2184,14 +2552,17 @@
                 "cancelled"
               ]
             },
-            "description": "Filter by run status"
+            "description": "Run-status filter, applied only to runs; other collections ignore it."
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
             },
             "description": "Page size, 1\u2013100"
           },
@@ -2200,7 +2571,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
             },
             "description": "Zero-based offset"
           }
@@ -2266,9 +2639,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ]
       },
@@ -2330,9 +2704,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           }
         ],
         "requestBody": {
@@ -2406,9 +2781,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "memberUserId",
@@ -2479,9 +2855,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "memberUserId",
@@ -2564,24 +2941,6 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer"
-            },
-            "description": "Page number"
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page size, capped at 50"
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
               "type": "integer",
               "minimum": 1,
               "default": 1
@@ -2657,24 +3016,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page number"
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page size, capped at 50"
-          },
           {
             "name": "page",
             "in": "query",
@@ -2810,24 +3151,6 @@
           }
         },
         "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page number"
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Page size, capped at 50"
-          },
           {
             "name": "page",
             "in": "query",
@@ -3169,9 +3492,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -3245,9 +3569,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -3309,9 +3634,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -3386,9 +3712,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "accountId",
@@ -3470,9 +3797,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "accountId",
@@ -3545,9 +3873,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -3609,9 +3938,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -3686,9 +4016,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "linkId",
@@ -3761,9 +4092,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "field",
@@ -3873,9 +4205,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "field",
@@ -3991,9 +4324,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4074,9 +4408,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4149,9 +4484,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4234,9 +4570,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4319,9 +4656,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4392,9 +4730,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4477,9 +4816,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4561,9 +4901,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "findingId",
@@ -4636,9 +4977,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "mode",
@@ -4787,9 +5129,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -4851,9 +5194,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -4927,9 +5271,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "indicatorId",
@@ -5010,9 +5355,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "indicatorId",
@@ -5085,9 +5431,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -5159,9 +5506,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       }
@@ -5225,9 +5573,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "includeSubtechniques",
@@ -5340,9 +5689,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -5404,9 +5754,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -5480,9 +5831,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "queryId",
@@ -5563,9 +5915,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "queryId",
@@ -5638,9 +5991,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "queryId",
@@ -5723,9 +6077,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "queryId",
@@ -5798,9 +6153,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -5875,9 +6231,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -5939,9 +6296,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -6015,9 +6373,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "templateId",
@@ -6098,9 +6457,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "templateId",
@@ -6173,9 +6533,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "templateId",
@@ -6258,9 +6619,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -6322,9 +6684,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -6398,9 +6761,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "type",
@@ -6455,9 +6819,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -6532,9 +6897,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "reportId",
@@ -6605,9 +6971,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "reportId",
@@ -6688,9 +7055,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "reportId",
@@ -6763,9 +7131,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "reportId",
@@ -6849,9 +7218,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "reportId",
@@ -6935,9 +7305,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -6999,9 +7370,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -7076,9 +7448,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "systemId",
@@ -7160,9 +7533,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "systemId",
@@ -7235,9 +7609,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -7299,9 +7674,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -7375,9 +7751,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7458,9 +7835,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7533,9 +7911,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7618,9 +7997,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7691,9 +8071,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7776,9 +8157,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "taskId",
@@ -7862,9 +8244,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "field",
@@ -7953,9 +8336,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "field",
@@ -8056,9 +8440,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "timelineEventId",
@@ -8139,9 +8524,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "timelineEventId",
@@ -8214,9 +8600,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "timelineEventId",
@@ -8299,9 +8686,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "timelineEventId",
@@ -8384,9 +8772,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "timelineEventId",
@@ -8407,10 +8796,35 @@
           "investigation"
         ],
         "summary": "PATCH /api/investigation/evidence/{evidenceId}",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "Human provenance edit using session authentication and case investigation:write permission. Partial object accepted; no active run required. Support must remain valid in the same case. Full before/after audit history is stored.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "evidence"
+                  ],
+                  "properties": {
+                    "evidence": {
+                      "type": "object",
+                      "description": "Updated camelCase provenance record.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -8459,18 +8873,18 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Evidence UUID returned as items[].id by GET /api/cases/{caseId}/investigation/evidence or id by MCP register_evidence."
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true
+                "$ref": "#/components/schemas/EvidenceUpdateRequest"
               }
             }
           }
@@ -8484,10 +8898,35 @@
           "investigation"
         ],
         "summary": "PATCH /api/investigation/hypotheses/{hypothesisId}",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "Human provenance edit using session authentication and case investigation:write permission. Partial object accepted; no active run required. Support must remain valid in the same case. Full before/after audit history is stored.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "hypothesis"
+                  ],
+                  "properties": {
+                    "hypothesis": {
+                      "type": "object",
+                      "description": "Updated camelCase provenance record.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -8521,6 +8960,16 @@
           },
           "404": {
             "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invalid or missing same-case provenance support",
             "content": {
               "application/json": {
                 "schema": {
@@ -8536,18 +8985,18 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Hypothesis UUID returned as items[].id by GET /api/cases/{caseId}/investigation/hypotheses or id by MCP create_hypothesis."
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true
+                "$ref": "#/components/schemas/HypothesisUpdateRequest"
               }
             }
           }
@@ -8561,10 +9010,35 @@
           "investigation"
         ],
         "summary": "PATCH /api/investigation/observations/{observationId}",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "Human provenance edit using session authentication and case investigation:write permission. Partial object accepted; no active run required. Support must remain valid in the same case. Full before/after audit history is stored.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "observation"
+                  ],
+                  "properties": {
+                    "observation": {
+                      "type": "object",
+                      "description": "Updated camelCase provenance record.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -8605,6 +9079,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Invalid or missing same-case provenance support",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -8613,18 +9097,18 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Observation UUID returned as items[].id by GET /api/cases/{caseId}/investigation/observations or id by MCP create_observation."
           }
         ],
         "requestBody": {
-          "required": false,
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true
+                "$ref": "#/components/schemas/ObservationUpdateRequest"
               }
             }
           }
@@ -8835,10 +9319,28 @@
           "investigation"
         ],
         "summary": "GET /api/mcp-tokens",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "List the signed-in user's token metadata using the session cookie. Token secrets are never included.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "tokens"
+                  ],
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/McpTokenItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -8888,10 +9390,51 @@
           "investigation"
         ],
         "summary": "POST /api/mcp-tokens",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "Create a user-owned MCP bearer token using the session cookie. Secret is returned only once and stored as a hash. Defaults to 90-day expiry, maximum 365 days. Token inherits current owner permissions and memberships. Bearer token authenticates /mcp only, not /api routes.",
         "responses": {
           "201": {
-            "description": "Resource created"
+            "description": "Token created; bearer secret returned once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "accessToken"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "Copy once; only returned on creation.",
+                      "pattern": "^fnmcp_"
+                    },
+                    "accessToken": {
+                      "$ref": "#/components/schemas/McpTokenItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid label, scope, or expiry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -8913,10 +9456,45 @@
           "investigation"
         ],
         "summary": "DELETE /api/mcp-tokens/{tokenId}",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "description": "Revoke one token owned by the signed-in user. Idempotent for an already revoked token; live MCP authentication immediately rejects revoked tokens.",
         "responses": {
           "200": {
-            "description": "Token revoked"
+            "description": "Token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "accessToken"
+                  ],
+                  "properties": {
+                    "accessToken": {
+                      "$ref": "#/components/schemas/McpTokenItem"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Token not found for current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -8925,9 +9503,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Token UUID returned as tokens[].id by GET /api/mcp-tokens or accessToken.id by POST /api/mcp-tokens. This is not the bearer secret."
           }
         ]
       }
@@ -9309,9 +9888,10 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Optional incident scope"
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ]
       },
@@ -9373,9 +9953,10 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Optional incident scope"
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           }
         ],
         "requestBody": {
@@ -9700,18 +10281,20 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Limit results to a case"
+            "description": "Case UUID returned as cases[].id by GET /api/cases; use q to search case/client/summary first."
           },
           {
             "name": "incidentId",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Limit results to an incident"
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "limit",
@@ -9784,9 +10367,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "filename",
@@ -10010,9 +10594,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
-            "description": "Resource identifier or path segment."
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
           },
           {
             "name": "filename",
@@ -10107,11 +10692,29 @@
         "tags": [
           "case"
         ],
-        "summary": "GET /api/cases/",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
+        "summary": "Discover accessible cases",
+        "description": "Search case name, client name, or summary with optional q. Matches literal text, ignoring case and surrounding whitespace; empty or omitted q lists accessible records. Returns UUIDs with readable context. Names may be duplicated; inspect context before writes. Response fields use snake_case.",
         "responses": {
           "200": {
-            "description": "Successful response"
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "cases"
+                  ],
+                  "properties": {
+                    "cases": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseListItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -10153,7 +10756,19 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional literal, case-insensitive text in case name, client name, or summary. Empty text lists accessible records.",
+            "example": "Acme"
+          }
+        ]
       },
       "post": {
         "operationId": "post_api_cases",
