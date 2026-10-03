@@ -10,6 +10,29 @@ docker compose -f docker-compose.prod.yml --env-file .env.production ps
 docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=200 app postgres report-llm-service
 ```
 
+## HTTP access logs
+
+App builds containing HTTP access logging write one JSON line per request to stdout. The published `0.2.2` image predates this feature; use a subsequent image containing the change or rebuild the app.
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f app
+# Or use the actual app container name:
+APP_CONTAINER='<app-container>'
+docker logs -f --tail 100 "$APP_CONTAINER"
+```
+
+```json
+{"timestamp":"2026-10-03T12:00:00.000Z","event":"http_request","method":"GET","path":"/api/cases","status":200,"durationMs":18.42,"outcome":"completed"}
+```
+
+Logs cover API, MCP, static assets, and health requests. They omit query strings, headers, cookies, and request/response bodies. Paths retain resource IDs and filenames. An interrupted response has `outcome: "aborted"` and `status: null`, so it is distinguishable from a completed response.
+
+The `/api/health` probe appears every 30 seconds in app access logs. Docker stores healthcheck results separately:
+
+```bash
+docker inspect --format '{{json .State.Health}}' "$APP_CONTAINER"
+```
+
 ## A required variable is missing
 
 Compose reports messages such as `set DATABASE_URL` before containers start. Confirm the required values exist:
