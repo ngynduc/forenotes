@@ -196,6 +196,18 @@ View app logs:
 docker compose -f docker-compose.prod.yml --env-file .env.production logs -f app
 ```
 
+### HTTP access logs
+
+App builds containing HTTP access logging write one JSON line per completed request to stdout, visible through the command above or `docker logs -f <app-container>`. The published `0.2.2` image predates this feature; use a subsequent image containing the change or rebuild the app.
+
+```json
+{"timestamp":"2026-10-03T12:00:00.000Z","event":"http_request","method":"GET","path":"/api/cases","status":200,"durationMs":18.42,"outcome":"completed"}
+```
+
+API, MCP, static assets, and health requests are logged automatically. Query strings, headers, cookies, and request/response bodies are excluded. If a connection closes before the response finishes, `outcome` is `aborted` and `status` is `null`; no completed HTTP status is implied. Paths retain resource IDs and filenames.
+
+The Docker healthcheck still probes `/api/health` every 30 seconds. Its request appears in app access logs; Docker stores its health result separately in `docker inspect --format '{{json .State.Health}}' <app-container>`.
+
 Open the app:
 
 ```text

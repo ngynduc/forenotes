@@ -10,16 +10,18 @@ import { createRoutes } from "./routes/index.js";
 import { createRequestScopedDatabase, runRequestTransaction } from "./db/transaction.js";
 import { env } from "./env.js";
 import { createMcpHttpHandler, type McpHttpConfig } from "./mcp/mcpHttpHandler.js";
+import { createAccessLogger, type AccessLogWriter } from "./middleware/accessLog.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const clientDistDir = path.resolve(currentDir, "../client");
 
 export function createApp(
   database: Database = pool,
-  options: { mcp?: McpHttpConfig } = {}
+  options: { mcp?: McpHttpConfig; accessLogWriter?: AccessLogWriter } = {}
 ) {
   const app = express();
   app.disable("x-powered-by");
+  app.use(createAccessLogger(options.accessLogWriter));
   app.use(securityHeaders);
   const mcpConfig = options.mcp ?? {
     enabled: env.FORENOTES_MCP_ENABLED,
