@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
 import { getAuthenticatedUser } from "../services/authService.js";
@@ -17,6 +18,7 @@ import {
   attachCustomTagToFinding,
   createCustomTag,
   deleteCustomTag,
+  detachEntityTag,
   listAttackTags,
   listCustomTags,
   listFindingTags,
@@ -167,6 +169,24 @@ export function createTagRoutes(database: Database) {
       response.json(await listQueryTags(database, user.id, incidentId, queryId));
     })
   );
+
+  const tagEntities = { findings: "finding", "timeline-events": "timeline_event", queries: "query" } as const;
+  for (const [collection, entityType] of Object.entries(tagEntities)) {
+    const kinds = entityType === "query" ? ["attack"] as const : ["attack", "custom"] as const;
+    for (const kind of kinds) {
+      router.delete(
+        `/incidents/:incidentId/${collection}/:entityId/${kind}-tags/:tagId`,
+        asyncHandler(async (request, response) => {
+          const user = await getAuthenticatedUser(request, database);
+          const incidentId = z.uuid().parse(getRequiredParam(request.params.incidentId, "incidentId"));
+          const entityId = z.uuid().parse(getRequiredParam(request.params.entityId, "entityId"));
+          const tagId = z.uuid().parse(getRequiredParam(request.params.tagId, "tagId"));
+          await detachEntityTag(database, user, { incidentId, entityType, entityId, kind, tagId });
+          response.status(204).send();
+        })
+      );
+    }
+  }
 
   return router;
 }

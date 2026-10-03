@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from "./authService.js";
 import type { CaseMemberRole } from "../../shared/domain.js";
 import { AppError } from "../errors.js";
 import { requireCasePermission, requirePermission } from "../permissions/permissionService.js";
+import { createNotification } from "./notificationService.js";
 import { createAuditLog } from "./auditLogService.js";
 import { withTransaction } from "../db/transaction.js";
 
@@ -103,6 +104,14 @@ export async function createCase(database: Database, user: AuthenticatedUser, in
     entityId: caseId,
     afterJson: input
     });
+
+    for (const member of initialMembers) {
+      await createNotification(transaction, {
+        recipientUserId: member.userId, actorUserId: user.id, caseId,
+        eventType: "case.member_added", title: "Added to case",
+        body: `You were added to Case: ${input.caseName}`, entityType: "case", entityId: caseId
+      });
+    }
 
     const result = await transaction.query("select * from cases where id = $1", [caseId]);
     return result.rows[0];

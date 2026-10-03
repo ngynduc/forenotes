@@ -85,6 +85,7 @@ export async function addCaseMember(database: Database, user: AuthenticatedUser,
       const scope = await getCaseNotificationScope(transaction, input.caseId);
       await createNotification(transaction, {
       recipientUserId: input.userId,
+      caseId: input.caseId,
       actorUserId: user.id,
       eventType: "case.member_added",
       title: "Added to case",
@@ -134,6 +135,11 @@ export async function updateCaseMemberRole(
     beforeJson: existing.rows[0],
     afterJson: { caseId, userId: memberUserId, caseRole }
     });
+    await createNotification(transaction, {
+      recipientUserId: memberUserId, actorUserId: user.id, caseId,
+      eventType: "case.member_role_updated", title: "Case role updated",
+      entityType: "case", entityId: caseId
+    });
   });
 }
 
@@ -168,6 +174,11 @@ export async function removeCaseMember(database: Database, user: AuthenticatedUs
     entityType: "case_member",
     entityId: memberUserId,
     beforeJson: existing.rows[0]
+    });
+    await createNotification(transaction, {
+      recipientUserId: memberUserId, actorUserId: user.id, caseId,
+      eventType: "case.member_removed", title: "Removed from case",
+      entityType: "case", entityId: caseId
     });
   });
 }
@@ -254,6 +265,7 @@ export async function addIncidentMember(database: Database, user: AuthenticatedU
     const scope = await getIncidentNotificationScope(database, input.incidentId);
     await createNotification(database, {
       recipientUserId: input.userId,
+      caseId: caseScope.rows[0].case_id,
       actorUserId: user.id,
       incidentId: input.incidentId,
       eventType: "incident.member_added",
@@ -274,23 +286,11 @@ export async function removeIncidentMember(
   await requirePermission(database, user, "incident:member_manage");
   await requireIncidentMembership(database, user.id, incidentId);
 
-  const existing = await database.query("select * from incident_members where incident_id = $1 and user_id = $2", [
-    incidentId,
-    memberUserId
-  ]);
-  if (existing.rowCount === 0) {
-    throw new AppError(404, "Incident member not found");
-  }
-
-  await database.query("delete from incident_members where incident_id = $1 and user_id = $2", [incidentId, memberUserId]);
-  await createAuditLog(database, {
-    actorUserId: user.id,
-    incidentId,
-    action: "incident.member_remove",
-    entityType: "incident_member",
-    entityId: memberUserId,
-    beforeJson: existing.rows[0]
-  });
+  // Incident membership is derived from case membership. Removing only the
+  // derived row would hide a selector entry while leaving API access intact.
+  const scope = await getIncidentNotificationScope(database, incidentId);
+  if (!scope) throw new AppError(404, "Incident not found");
+  await removeCaseMember(database, user, scope.caseId, memberUserId);
 }
 
 async function syncCaseMemberToIncidents(

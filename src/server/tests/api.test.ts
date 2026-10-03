@@ -727,10 +727,11 @@ describe("Forenotes API", () => {
       .set("x-user-id", analystId);
 
     expect(notificationsResponse.status).toBe(200);
-    expect(notificationsResponse.body.notifications).toHaveLength(1);
-    expect(notificationsResponse.body.notifications[0].event_type).toBe("finding.created");
-    expect(notificationsResponse.body.notifications[0].body).toBe("Case: Notify Case; Incident: Notify Incident");
-    expect(notificationsResponse.body.notifications[0].unseen).toBe(true);
+    expect(notificationsResponse.body.notifications).toHaveLength(2);
+    expect(notificationsResponse.body.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event_type: "incident.created", unseen: true }),
+      expect.objectContaining({ event_type: "finding.created", body: "Case: Notify Case; Incident: Notify Incident", unseen: true })
+    ]));
   });
 
   it("creates notifications for other incident members when a timeline event is created", async () => {
@@ -893,7 +894,7 @@ describe("Forenotes API", () => {
     expect(summary.metrics.openIncidents).toBe(1);
     expect(summary.metrics.unresolvedFindings).toBe(1);
     expect(summary.metrics.overdueTasks).toBe(1);
-    expect(summary.metrics.unreadNotifications).toBe(3);
+    expect(summary.metrics.unreadNotifications).toBe(4);
     expect(summary.breakdowns.incidentSeverity).toEqual([{ value: "critical", count: 1 }]);
     expect(summary.breakdowns.taskStatus).toEqual([{ value: "todo", count: 1 }]);
     expect(summary.recentActivity.some((entry: { entityTitle: string }) => entry.entityTitle === "Hidden finding")).toBe(false);

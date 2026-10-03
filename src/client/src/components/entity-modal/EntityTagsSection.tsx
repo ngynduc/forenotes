@@ -4,12 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TagManagement } from "@/components/entity-modal/TagManagement";
+import { usePermissions } from "@/hooks/use-auth";
 import { useAttackTags, useCustomTags } from "@/hooks/use-entities";
 import { api, type AttackTagItem, type TagItem } from "@/lib/api";
 import { useScopeStore } from "@/stores/scope-store";
 import type { GraphNodeType } from "@shared/domain";
 
-type TaggableEntityType = Extract<GraphNodeType, "finding" | "timeline_event">;
+type TaggableEntityType = Extract<GraphNodeType, "finding" | "timeline_event" | "query">;
 
 interface EntityTagsSectionProps {
   sourceType: TaggableEntityType;
@@ -29,6 +30,8 @@ export function EntityTagsSection({
   initialCustomTags,
   initialAttackTags,
 }: EntityTagsSectionProps) {
+  const { can } = usePermissions();
+  const canEdit = can({ finding: "finding:update", timeline_event: "timeline:update", query: "query:update" }[sourceType]);
   const incidentId = useScopeStore((s) => s.selectedIncidentId);
   const [customTagId, setCustomTagId] = useState("");
   const [attackTagId, setAttackTagId] = useState("");
@@ -57,12 +60,43 @@ export function EntityTagsSection({
     [attackCatalog.data?.attackTags, attached.attackTags]
   );
 
+  const tagsKey = ["incidents", incidentId, sourceType, sourceId, "tags"];
+  const refreshTags = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ["incidents", incidentId] }),
+    qc.invalidateQueries({ queryKey: ["graph", incidentId] }),
+    qc.invalidateQueries({ queryKey: ["mitre-matrix", incidentId] }),
+    qc.invalidateQueries({ queryKey: ["investigation"] }),
+  ]);
+  const removeTag = useMutation({
+    mutationFn: (input: { kind: "custom" | "attack"; tagId: string }) => {
+      if (!incidentId || !sourceId) throw new Error("Save this record before removing tags.");
+      return api.detachEntityTag(incidentId, sourceType, sourceId, input.kind, input.tagId);
+    },
+    onMutate: async ({ kind, tagId }) => {
+      setError(null);
+      await qc.cancelQueries({ queryKey: tagsKey });
+      const previous = qc.getQueryData<AttachedTags>(tagsKey);
+      qc.setQueryData<AttachedTags>(tagsKey, (current) => current ? {
+        ...current,
+        [kind === "attack" ? "attackTags" : "customTags"]:
+          (kind === "attack" ? current.attackTags : current.customTags).filter((tag) => tag.id !== tagId),
+      } : current);
+      return { previous };
+    },
+    onError: (e, _input, context) => {
+      if (context?.previous) qc.setQueryData(tagsKey, context.previous);
+      setError(e instanceof Error ? e.message : "Tag removal failed");
+    },
+    onSettled: refreshTags,
+  });
+
   const attachTag = useMutation({
     mutationFn: async (input: { kind: "custom" | "attack"; tagId: string }) => {
       if (!incidentId || !sourceId) {
         throw new Error("Save this record before adding tags.");
       }
 
+      if (sourceType === "query") return api.attachAttackTagToQuery(incidentId, sourceId, input.tagId);
       if (sourceType === "finding") {
         return input.kind === "custom"
           ? api.attachCustomTagToFinding(incidentId, sourceId, input.tagId)
@@ -77,10 +111,7 @@ export function EntityTagsSection({
       setError(null);
       setCustomTagId("");
       setAttackTagId("");
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["incidents", incidentId] }),
-        qc.invalidateQueries({ queryKey: ["incidents", incidentId, sourceType, sourceId, "tags"] }),
-      ]);
+      await refreshTags();
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Tag attach failed"),
   });
@@ -90,37 +121,43 @@ export function EntityTagsSection({
       <div>
         <h3 className="text-sm font-semibold text-[var(--color-text)]">Tags</h3>
         <div className="mt-2">
-          <TagManagement customTags={attached.customTags} attackTags={attached.attackTags} />
+          <TagManagement customTags={attached.customTags} attackTags={attached.attackTags}
+            disabled={attachTag.isPending || removeTag.isPending || tagsQuery.isFetching}
+            onRemoveCustomTag={canEdit && sourceId ? (tagId) => removeTag.mutate({ kind: "custom", tagId }) : undefined}
+            onRemoveAttackTag={canEdit && sourceId ? (tagId) => removeTag.mutate({ kind: "attack", tagId }) : undefined}
+          />
         </div>
       </div>
 
-      {error && <div className="text-sm text-[var(--color-danger)]">{error}</div>}
+      {sourceId && canEdit && <p className="text-xs text-[var(--color-text-muted)]">Tag changes are saved immediately.</p>}
+      {tagsQuery.error && <p role="alert" className="text-sm text-[var(--color-danger)]">{tagsQuery.error.message}</p>}
+      {error && <div role="alert" className="text-sm text-[var(--color-danger)]">{error}</div>}
 
       {!sourceId ? (
         <p className="text-sm text-[var(--color-text-muted)]">Save this record before adding tags.</p>
-      ) : (
+      ) : canEdit ? (
         <div className="grid gap-2 md:grid-cols-2">
-          <TagAttachControl
+          {sourceType !== "query" && <TagAttachControl
             label="Custom Tag"
             value={customTagId}
             options={customOptions}
             placeholder="Select custom tag"
-            disabled={attachTag.isPending || customOptions.length === 0}
+            disabled={attachTag.isPending || removeTag.isPending || tagsQuery.isFetching || customOptions.length === 0}
             onChange={setCustomTagId}
             onAttach={() => attachTag.mutate({ kind: "custom", tagId: customTagId })}
-          />
+          />}
           <TagAttachControl
             label="ATT&CK Tag"
             value={attackTagId}
             options={attackOptions}
             placeholder="Select ATT&CK tag"
-            disabled={attachTag.isPending || attackOptions.length === 0}
+            disabled={attachTag.isPending || removeTag.isPending || tagsQuery.isFetching || attackOptions.length === 0}
             onChange={setAttackTagId}
             onAttach={() => attachTag.mutate({ kind: "attack", tagId: attackTagId })}
             getLabel={(tag) => (tag.attackId ? `${tag.attackId} - ${tag.name}` : tag.name)}
           />
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -229,5 +266,6 @@ function loadAttachedTags(sourceType: TaggableEntityType, incidentId: string, so
   if (sourceType === "finding") {
     return api.listFindingTags(incidentId, sourceId);
   }
+  if (sourceType === "query") return api.listQueryTags(incidentId, sourceId);
   return api.listTimelineEventTags(incidentId, sourceId);
 }

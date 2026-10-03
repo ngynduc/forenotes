@@ -139,6 +139,13 @@ Explicitly created by investigators:
 
 Visual representation of relationships between all entities in an incident.
 
+Nodes initially use a hierarchical layout based on directed relationships,
+then spacing is refined once React Flow measures their rendered dimensions.
+**Auto layout** reapplies placement and fits the canvas. Dragging changes edge
+attachment sides live without running layout. Data refreshes preserve current
+positions; newly inserted nodes are placed outside occupied space. Positions
+remain local to the current incident/mode view and are not saved to the database.
+
 ### Graph Modes
 
 | Mode | Shows |
@@ -232,3 +239,7 @@ Admins and commanders can manage operational configuration from the app.
 - **Session-cookie authentication** with password login/logout
 - **Timezone settings** for local-day filtering and display
 - **Audit log review** for mutation history
+
+### Session and access freshness
+
+Password changes sign the user out, clear browser session state and cached application data, and require a new login. Roles and profile fields refresh through the existing realtime stream. Membership additions refresh case/incident selectors and dashboards; removals clear cached scope data and exit an open revoked scope with an explanatory message. A reconnected stream reconciles access lists to catch changes missed while disconnected. Case membership continues to govern incident access.

@@ -9,13 +9,14 @@ interface Tag {
 }
 
 interface TagManagementProps {
+  disabled?: boolean;
   customTags?: Tag[];
   attackTags?: Tag[];
   onRemoveCustomTag?: (tagId: string) => void;
   onRemoveAttackTag?: (tagId: string) => void;
 }
 
-export function TagManagement({ customTags, attackTags, onRemoveCustomTag, onRemoveAttackTag }: TagManagementProps) {
+export function TagManagement({ disabled, customTags, attackTags, onRemoveCustomTag, onRemoveAttackTag }: TagManagementProps) {
   const custom = customTags ?? [];
   const attack = attackTags ?? [];
 
@@ -34,7 +35,7 @@ export function TagManagement({ customTags, attackTags, onRemoveCustomTag, onRem
         >
           {tag.name}
           {onRemoveCustomTag && (
-            <button onClick={() => onRemoveCustomTag(tag.id)} className="ml-1 hover:opacity-70">
+            <button type="button" disabled={disabled} aria-label={`Remove ${tag.name}`} onClick={() => onRemoveCustomTag(tag.id)} className="ml-1 hover:opacity-70">
               <X className="h-3 w-3" />
             </button>
           )}
@@ -44,7 +45,7 @@ export function TagManagement({ customTags, attackTags, onRemoveCustomTag, onRem
         <Badge key={tag.id} variant="outline" className="gap-1">
           {tag.attackId ? `${tag.attackId} · ${tag.name}` : tag.name}
           {onRemoveAttackTag && (
-            <button onClick={() => onRemoveAttackTag(tag.id)} className="ml-1 hover:opacity-70">
+            <button type="button" disabled={disabled} aria-label={`Remove ${tag.attackId ?? tag.name}`} onClick={() => onRemoveAttackTag(tag.id)} className="ml-1 hover:opacity-70">
               <X className="h-3 w-3" />
             </button>
           )}

@@ -13,6 +13,7 @@ import {
   updateCaseSchema
 } from "../schemas/schemas.js";
 import { getRequiredParam } from "./params.js";
+import { caseSearchFields, filterDiscoveryRows, incidentSearchFields } from "../services/discovery.js";
 
 export function createCaseRoutes(database: Database) {
   const router = Router();
@@ -21,7 +22,8 @@ export function createCaseRoutes(database: Database) {
     "/",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
-      response.json({ cases: await listCases(database, user.id) });
+      const query = typeof request.query.q === "string" ? request.query.q : undefined;
+      response.json({ cases: filterDiscoveryRows(await listCases(database, user.id), query, caseSearchFields) });
     })
   );
 
@@ -94,8 +96,9 @@ export function createCaseRoutes(database: Database) {
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
       const caseId = getRequiredParam(request.params.caseId, "caseId");
+      const query = typeof request.query.q === "string" ? request.query.q : undefined;
       response.json({
-        incidents: await listIncidentsForCase(database, user.id, caseId)
+        incidents: filterDiscoveryRows(await listIncidentsForCase(database, user.id, caseId), query, incidentSearchFields)
       });
     })
   );

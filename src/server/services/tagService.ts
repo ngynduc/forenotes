@@ -500,3 +500,38 @@ export async function attachAttackTagToQuery(database: Database, user: Authentic
     throw error;
   }
 }
+
+// Table names come only from this closed mapping, never from request values.
+const TAG_ENTITY_TABLES = {
+  finding: { table: "findings", joinPrefix: "finding", column: "finding_id", permission: "finding:update" },
+  timeline_event: { table: "timeline_events", joinPrefix: "timeline_event", column: "timeline_event_id", permission: "timeline:update" },
+  query: { table: "queries", joinPrefix: "query", column: "query_id", permission: "query:update" }
+} as const;
+
+export async function detachEntityTag(
+  database: Database,
+  user: AuthenticatedUser,
+  input: { incidentId: string; entityType: keyof typeof TAG_ENTITY_TABLES; entityId: string; kind: "attack" | "custom"; tagId: string }
+) {
+  const config = TAG_ENTITY_TABLES[input.entityType];
+  await requireIncidentMembership(database, user.id, input.incidentId);
+  await requirePermission(database, user, config.permission);
+  if (input.entityType === "query" && input.kind === "custom") throw new AppError(400, "Queries support ATT&CK tags only");
+  const entity = await database.query(
+    `select id from ${config.table} where id = $1 and incident_id = $2`, [input.entityId, input.incidentId]
+  );
+  if (entity.rowCount === 0) throw new AppError(404, "Record not found");
+
+  const removed = await database.query(
+    `delete from ${config.joinPrefix}_${input.kind}_tags
+     where ${config.column} = $1 and incident_id = $2 and ${input.kind}_tag_id = $3 returning *`,
+    [input.entityId, input.incidentId, input.tagId]
+  );
+  if (removed.rowCount) {
+    await createAuditLog(database, {
+      actorUserId: user.id, incidentId: input.incidentId,
+      action: `${input.entityType}.${input.kind}_tag_detach`, entityType: input.entityType,
+      entityId: input.entityId, beforeJson: removed.rows[0]
+    });
+  }
+}

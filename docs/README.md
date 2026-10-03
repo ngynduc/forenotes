@@ -11,6 +11,7 @@
 | [Getting Started](./GETTING-STARTED.md) | Local development and demo setup |
 | [Architecture](./ARCHITECTURE.md) | System architecture, tech stack, and project structure |
 | [API Reference](./API.md) | Complete REST API documentation |
+| [MCP Investigation Interface](./MCP.md) | Enable agent access, issue tokens, and run provenance workflows |
 | [Database Schema](./DATABASE.md) | Database tables, relationships, and migrations |
 | [Authentication & Authorization](./AUTHENTICATION.md) | Auth flow, RBAC roles, and permissions |
 | [Features](./FEATURES.md) | Feature documentation and domain concepts |

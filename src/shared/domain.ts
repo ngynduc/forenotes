@@ -111,6 +111,8 @@ export const PERMISSION_KEYS = [
   "mitre_matrix:read",
   "notification:read",
   "audit:read",
+  "investigation:read",
+  "investigation:write",
   "user:manage"
 ] as const;
 

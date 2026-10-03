@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { TimeFilterRequest } from "@/lib/timeFilters";
 import { useScopeStore } from "@/stores/scope-store";
+import { useCurrentUser } from "@/hooks/use-auth";
+import { useNavigate } from "react-router";
+import { notifySessionEnded } from "@/lib/session-state";
+import { handleRealtimeNotification, reconcileRealtimeAccess, refreshCurrentUser } from "@/lib/realtime-cache";
 import { useUIStore } from "@/stores/ui-store";
 
 function useIncidentId() {
@@ -224,27 +228,35 @@ export function useNotifications() {
 }
 
 export function useNotificationStream() {
+  const { data: session } = useCurrentUser();
+  const canStream = Boolean(session?.user && !session.user.mustChangePassword);
   const activeUserId = useScopeStore((s) => s.activeUserId);
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!activeUserId) {
-      return;
-    }
-
+    if (!activeUserId || !canStream) return;
     const stream = api.openNotificationStream();
-    const refreshNotifications = () => {
-      void qc.invalidateQueries({ queryKey: ["notifications", activeUserId] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+    const navigateAway = () => navigate("/cases", { replace: true });
+    const onNotification = (event: MessageEvent<string>) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.notification && payload.recipientUserId === activeUserId) {
+          void handleRealtimeNotification(qc, activeUserId, payload, navigateAway).catch(() => undefined);
+        }
+      } catch { /* Ignore malformed messages; reconnect revalidates access. */ }
     };
-
-    stream.addEventListener("notification.created", refreshNotifications);
-
-    return () => {
-      stream.removeEventListener("notification.created", refreshNotifications);
-      stream.close();
-    };
-  }, [activeUserId, qc]);
+    const onUserUpdated = () => { void refreshCurrentUser(qc).catch(() => undefined); };
+    const onSessionEnded = () => { stream.close(); notifySessionEnded(); };
+    const onConnected = () => { void reconcileRealtimeAccess(qc, activeUserId, navigateAway).catch(() => undefined); };
+    const onError = () => { void qc.invalidateQueries({ queryKey: ["auth", "me"] }); };
+    stream.addEventListener("notification.created", onNotification as EventListener);
+    stream.addEventListener("user.updated", onUserUpdated);
+    stream.addEventListener("session.ended", onSessionEnded);
+    stream.addEventListener("connected", onConnected);
+    stream.addEventListener("error", onError);
+    return () => stream.close();
+  }, [activeUserId, canStream, qc, navigate]);
 }
 
 export function useMarkNotificationRead() {

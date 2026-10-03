@@ -2,6 +2,8 @@
 
 Forenotes is a DFIR case notebook for incident records, findings, timelines, tasks, hunt queries, notes, notifications, and report/PDF generation.
 
+Forenotes can also expose an optional, stateless MCP investigation interface for authorized agents. It is disabled by default; see [the MCP guide](docs/MCP.md) for secure setup and client configuration.
+
 ## Production Docker
 
 ### One-command install
@@ -11,6 +13,8 @@ For a fresh Docker host, install Forenotes with generated secrets and a generate
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh | bash
 ```
+
+The production stack runs the app, PostgreSQL, and a separate report LLM service. Configure provider credentials in user settings or `LLM_*` environment variables to enable AI reports.
 
 Open `http://localhost:3000`. The installer prints the admin password and saves it in `forenotes-prod/.bootstrap-admin-password`. For a non-default directory or port:
 
@@ -23,7 +27,8 @@ The installer defaults to HTTP-friendly cookies for first boot. Put the app behi
 Copy `.env.production.example` to `.env.production` and replace every placeholder secret before first boot. Production startup refuses checked-in database credentials, demo mode, header authentication, the default bootstrap admin password, and missing `FORENOTES_LLM_SECRET_KEY`.
 
 ```bash
-docker pull ngynduc/forenotes:0.2.1
+RELEASE_TAG="<release-tag>" # Replace with a published version.
+docker pull "ngynduc/forenotes:$RELEASE_TAG"
 ```
 
 The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.

@@ -3,7 +3,7 @@ import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
 import { AppError } from "../errors.js";
 import { getAuthenticatedUser } from "../services/authService.js";
-import { listNotifications, markNotificationRead, subscribeToNotificationEvents } from "../services/notificationService.js";
+import { listNotifications, markNotificationRead, subscribeToNotificationEvents, subscribeToUserStateEvents } from "../services/notificationService.js";
 import { requirePermission } from "../permissions/permissionService.js";
 import { getRequiredParam } from "./params.js";
 
@@ -33,18 +33,50 @@ export function createNotificationRoutes(database: Database) {
       });
       response.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
+      let closed = false;
+      const endSession = () => {
+        if (!closed) {
+          response.write(`event: session.ended\ndata: {}\n\n`);
+          cleanup();
+        }
+      };
+      const isSessionCurrent = async () => {
+        try {
+          const currentUser = await getAuthenticatedUser(request, database);
+          await requirePermission(database, currentUser, "notification:read");
+          return !closed;
+        } catch {
+          endSession();
+          return false;
+        }
+      };
       const unsubscribe = subscribeToNotificationEvents(user.id, (event) => {
-        response.write(`event: notification.created\ndata: ${JSON.stringify(event)}\n\n`);
+        void isSessionCurrent().then((current) => {
+          if (current) response.write(`event: notification.created\ndata: ${JSON.stringify(event)}\n\n`);
+        });
+      });
+      const unsubscribeUserState = subscribeToUserStateEvents(user.id, (event) => {
+        if (event.type === "session.ended") endSession();
+        else void isSessionCurrent().then((current) => {
+          if (current) response.write(`event: user.updated\ndata: ${JSON.stringify(event)}\n\n`);
+        });
       });
       const heartbeat = setInterval(() => {
-        response.write(": heartbeat\n\n");
+        void isSessionCurrent().then((current) => {
+          if (current) response.write(": heartbeat\n\n");
+        });
       }, 25_000);
 
-      request.on("close", () => {
+      function cleanup() {
+        if (closed) return;
+        closed = true;
         clearInterval(heartbeat);
         unsubscribe();
+        unsubscribeUserState();
         response.end();
-      });
+      }
+      request.on("close", cleanup);
+
     })
   );
 

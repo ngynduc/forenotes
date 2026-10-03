@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import {
   Dialog,
@@ -15,6 +15,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "@/stores/ui-store";
 import { useScopeStore } from "@/stores/scope-store";
 import type { EntityDefinition } from "@/config/entity-definitions";
+import { useCurrentUser } from "@/hooks/use-auth";
+import { fetchWithSession } from "@/lib/session-state";
 import { useUsers } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { EntityLinksSection } from "@/components/entity-modal/EntityLinksSection";
@@ -38,6 +40,13 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
   const setFlash = useUIStore((s) => s.setFlash);
   const selectedIncidentId = useScopeStore((s) => s.selectedIncidentId);
   const qc = useQueryClient();
+  const { data: session } = useCurrentUser();
+  const role = session?.user.globalRole;
+  const previousRole = useRef(role);
+  useEffect(() => {
+    if (previousRole.current && role && previousRole.current !== role && open) onOpenChange(false);
+    previousRole.current = role;
+  }, [role, open, onOpenChange]);
   const { data: usersData } = useUsers();
   const { data: incidentMembersData } = useIncidentMembers(selectedIncidentId || undefined);
 
@@ -239,19 +248,19 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
                 )}
               </div>
             ))}
+            {(definition.entityTagSourceType || definition.entityLinkSourceType) && (
+              <EntityTagsSection
+                sourceType={(definition.entityTagSourceType ?? definition.entityLinkSourceType)!}
+                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+                initialCustomTags={Array.isArray(item?.customTags) ? (item.customTags as TagItem[]) : undefined}
+                initialAttackTags={Array.isArray(item?.attackTags) ? (item.attackTags as AttackTagItem[]) : undefined}
+              />
+            )}
             {definition.entityLinkSourceType && (
-              <>
-                <EntityTagsSection
-                  sourceType={definition.entityLinkSourceType}
-                  sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
-                  initialCustomTags={Array.isArray(item?.customTags) ? (item.customTags as TagItem[]) : undefined}
-                  initialAttackTags={Array.isArray(item?.attackTags) ? (item.attackTags as AttackTagItem[]) : undefined}
-                />
-                <EntityLinksSection
-                  sourceType={definition.entityLinkSourceType}
-                  sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
-                />
-              </>
+              <EntityLinksSection
+                sourceType={definition.entityLinkSourceType}
+                sourceId={mode === "edit" && typeof item?.id === "string" ? item.id : undefined}
+              />
             )}
           </div>
         </div>
@@ -295,7 +304,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function requestApi(url: string, init: RequestInit) {
-  const response = await fetch(url, { ...init, credentials: "include" });
+  const response = await fetchWithSession(url, { ...init, credentials: "include" });
   if (response.ok) {
     return response.status === 204 ? null : response.json().catch(() => null);
   }
@@ -305,7 +314,14 @@ async function requestApi(url: string, init: RequestInit) {
     payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
       ? payload.error
       : `${init.method ?? "GET"} ${url} failed`;
-  throw new Error(message);
+  const validationMessages = payload?.details?.fieldErrors;
+  const fieldMessages = validationMessages && typeof validationMessages === "object"
+    ? Object.entries(validationMessages).flatMap(([field, errors]) =>
+        Array.isArray(errors) ? errors.filter((error): error is string => typeof error === "string").map((error) => `${field}: ${error}`) : [])
+    : [];
+  const formMessages = Array.isArray(payload?.details?.formErrors)
+    ? payload.details.formErrors.filter((error: unknown): error is string => typeof error === "string") : [];
+  throw new Error([message, ...fieldMessages, ...formMessages].join(". "));
 }
 
 function extractSavedItem(

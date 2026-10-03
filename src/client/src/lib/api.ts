@@ -1,3 +1,4 @@
+import { fetchWithSession } from "./session-state";
 import type { TimeFilterRequest } from "@/lib/timeFilters";
 import type { IncidentReport, LlmSettingsStatus, PdfTemplate, ReportContext, ReportTemplate } from "@shared/reportTypes";
 
@@ -331,6 +332,39 @@ export interface SearchResultItem {
 
 export interface SearchResponse {
   results: SearchResultItem[];
+}
+
+export interface McpTokenItem {
+  id: string;
+  label: string;
+  scope: "read_only" | "read_write";
+  tokenPrefix: string;
+  expiresAt: string;
+  revokedAt?: string | null;
+  lastUsedAt?: string | null;
+  createdAt: string;
+}
+
+export interface InvestigationRecord {
+  id: string;
+  caseId?: string;
+  incidentId?: string | null;
+  runId?: string;
+  title?: string;
+  description?: string | null;
+  objective?: string;
+  summary?: string | null;
+  status?: string;
+  evidenceType?: string;
+  evidenceIds?: string[];
+  observationIds?: string[];
+  toolName?: string;
+  outcome?: string;
+  errorSummary?: string | null;
+  clientName?: string | null;
+  sourceLocator?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateReportTemplateInput {
@@ -957,7 +991,7 @@ class ApiClient {
     if (body) {
       headers["Content-Type"] = "application/json";
     }
-    const res = await fetch(`${BASE}${url}`, {
+    const res = await fetchWithSession(`${BASE}${url}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -1124,7 +1158,7 @@ class ApiClient {
     this.request<TaskNote>(`/incidents/${incidentId}/tasks/${taskId}/notes`, "PUT", { content });
 
   uploadTaskNoteImage = async (incidentId: string, taskId: string, file: File) => {
-    const res = await fetch(`${BASE}/incidents/${incidentId}/tasks/${taskId}/notes/images`, {
+    const res = await fetchWithSession(`${BASE}/incidents/${incidentId}/tasks/${taskId}/notes/images`, {
       method: "POST",
       credentials: "include",
       headers: {
@@ -1143,7 +1177,7 @@ class ApiClient {
   };
 
   uploadReportImage = async (incidentId: string, file: File) => {
-    const res = await fetch(`${BASE}/incidents/${incidentId}/report-images`, {
+    const res = await fetchWithSession(`${BASE}/incidents/${incidentId}/report-images`, {
       method: "POST",
       credentials: "include",
       headers: {
@@ -1251,6 +1285,19 @@ class ApiClient {
       attackTags: payload.attackTags.map(normalizeAttackTag),
       customTags: payload.customTags.map(normalizeTag),
     };
+  };
+
+  detachEntityTag = (incidentId: string, sourceType: "finding" | "timeline_event" | "query", sourceId: string, kind: "attack" | "custom", tagId: string) => {
+    const collection = { finding: "findings", timeline_event: "timeline-events", query: "queries" }[sourceType];
+    return this.request(`/incidents/${incidentId}/${collection}/${sourceId}/${kind}-tags/${tagId}`, "DELETE");
+  };
+
+  attachAttackTagToQuery = (incidentId: string, queryId: string, attackTagId: string) =>
+    this.request(`/incidents/${incidentId}/queries/${queryId}/attack-tags`, "POST", { attackTagId });
+
+  listQueryTags = async (incidentId: string, queryId: string) => {
+    const payload = await this.request<{ attackTags: RawAttackTagItem[] }>(`/incidents/${incidentId}/queries/${queryId}/tags`);
+    return { customTags: [], attackTags: payload.attackTags.map(normalizeAttackTag) };
   };
 
   attachAttackTagToFinding = (incidentId: string, findingId: string, attackTagId: string) =>
@@ -1403,7 +1450,7 @@ class ApiClient {
     this.request(`/incidents/${incidentId}/reports/${reportId}`, "DELETE");
 
   exportReportHtml = async (incidentId: string, reportId: string, data?: { pdfTemplateId?: string }) => {
-    const res = await fetch(`${BASE}/incidents/${incidentId}/reports/${reportId}/export/html`, {
+    const res = await fetchWithSession(`${BASE}/incidents/${incidentId}/reports/${reportId}/export/html`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...this.headers() },
       credentials: "include",
@@ -1469,6 +1516,28 @@ class ApiClient {
 
   testLlmSettings = () =>
     this.request<{ ok: boolean; model?: string; source?: "user" | "env"; error?: string }>("/me/llm-settings/test", "POST");
+
+  listMcpTokens = () => this.request<{ tokens: McpTokenItem[] }>("/mcp-tokens");
+
+  createMcpToken = (data: { label: string; scope: "read_only" | "read_write"; expiresAt?: string | null }) =>
+    this.request<{ token: string; accessToken: McpTokenItem }>("/mcp-tokens", "POST", data);
+
+  revokeMcpToken = (tokenId: string) =>
+    this.request<{ accessToken: McpTokenItem }>(`/mcp-tokens/${tokenId}`, "DELETE");
+
+  listInvestigationRecords = (
+    caseId: string,
+    collection: "runs" | "evidence" | "observations" | "hypotheses" | "findings" | "actions",
+    filters?: { incidentId?: string; runId?: string }
+  ) => this.request<{ items: InvestigationRecord[]; limit: number; offset: number }>(
+    this.withQueryParams(`/cases/${caseId}/investigation/${collection}`, filters)
+  );
+
+  updateInvestigationRecord = (
+    collection: "evidence" | "observations" | "hypotheses",
+    recordId: string,
+    data: Record<string, unknown>
+  ) => this.request<Record<string, InvestigationRecord>>(`/investigation/${collection}/${recordId}`, "PATCH", data);
 
 }
 

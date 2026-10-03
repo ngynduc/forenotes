@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-entities";
 import { useChangePassword, useCurrentUser, useLogout } from "@/hooks/use-auth";
 import { useTimezone } from "@/providers/TimezoneProvider";
+import { McpTokensPanel } from "@/components/settings/McpTokensPanel";
 
 const LLM_PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI", modelExample: "gpt-4o-mini" },
@@ -411,6 +412,7 @@ export default function SettingsPage() {
             </Button>
           </div>
         </section>
+        <McpTokensPanel />
       </div>
     </div>
   );

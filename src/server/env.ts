@@ -32,7 +32,17 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value === "1" || value === "true")
     .default(false),
-  FORENOTES_LLM_SECRET_KEY: z.string().optional()
+  FORENOTES_LLM_SECRET_KEY: z.string().optional(),
+  FORENOTES_MCP_ENABLED: z
+    .enum(["0", "1", "true", "false"])
+    .optional()
+    .transform((value) => value === "1" || value === "true")
+    .default(false),
+  FORENOTES_MCP_PUBLIC_URL: z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().url().optional()
+  ),
+  FORENOTES_MCP_ALLOWED_ORIGINS: z.string().default("")
 }).superRefine((value, context) => {
   if (process.env.NODE_ENV !== "production") {
     return;
@@ -91,6 +101,14 @@ const envSchema = z.object({
       path: ["FORENOTES_LLM_SECRET_KEY"]
     });
   }
+
+  if (value.FORENOTES_MCP_ENABLED) {
+    if (!value.FORENOTES_MCP_PUBLIC_URL) {
+      context.addIssue({ code: "custom", message: "FORENOTES_MCP_PUBLIC_URL is required when MCP is enabled.", path: ["FORENOTES_MCP_PUBLIC_URL"] });
+    } else if (!value.FORENOTES_MCP_PUBLIC_URL.startsWith("https://")) {
+      context.addIssue({ code: "custom", message: "Production MCP public URL must use HTTPS.", path: ["FORENOTES_MCP_PUBLIC_URL"] });
+    }
+  }
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -104,7 +122,9 @@ if (!parsedEnv.success) {
 
 export const env = {
   ...parsedEnv.data,
-  PORT: parsedEnv.data.APP_PORT ?? parsedEnv.data.PORT ?? 8787
+  PORT: parsedEnv.data.APP_PORT ?? parsedEnv.data.PORT ?? 8787,
+  FORENOTES_MCP_ALLOWED_ORIGINS: parsedEnv.data.FORENOTES_MCP_ALLOWED_ORIGINS
+    .split(",").map((value) => value.trim()).filter(Boolean)
 };
 
 function isDefaultDatabaseUrl(value: string) {
