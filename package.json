@@ -17,7 +17,8 @@
     "astro": "^7.3.3",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "swagger-ui-react": "^5.33.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",

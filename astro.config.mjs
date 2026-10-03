@@ -44,6 +44,7 @@ export default defineConfig({
             "docs/admin/users-and-permissions",
             "docs/admin/authentication",
             "docs/admin/llm-settings",
+            "docs/admin/mcp",
           ],
         },
         {
@@ -71,6 +72,7 @@ export default defineConfig({
             "docs/reference/data-model",
             "docs/reference/environment-variables",
             "docs/reference/permission-matrix",
+            "docs/reference/releases",
           ],
         },
         { label: "Donate", link: "/donate" },
