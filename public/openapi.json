@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Forenotes REST API",
-    "version": "0.2.1",
-    "description": "Forenotes REST API route catalog, including name-based discovery, user-owned MCP token management, and investigation provenance review. REST uses the session cookie. The separate /mcp Streamable HTTP endpoint uses bearer tokens and MCP tool schemas; see the API Reference page for its workflow."
+    "version": "0.2.2",
+    "description": "Forenotes REST API route catalog for 0.2.2, including name-based discovery, user updates, tag removal, user-owned MCP tokens, and investigation provenance review. REST uses the session cookie. The separate /mcp Streamable HTTP endpoint uses bearer tokens; see the MCP investigation agents guide for its tool catalog."
   },
   "servers": [
     {
@@ -1538,6 +1538,42 @@
               "format": "uuid"
             },
             "description": "Existing same-case observation UUIDs from the observations collection."
+          }
+        }
+      },
+      "UserUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Trimmed and normalized to lowercase."
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "globalRole": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "commander",
+              "analyst",
+              "viewer"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
           }
         }
       }
@@ -10993,6 +11029,607 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UserCreateRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}": {
+      "patch": {
+        "operationId": "patch_api_users_userId",
+        "tags": [
+          "user"
+        ],
+        "summary": "Update an existing user",
+        "description": "Requires user:manage and a nonempty partial object. Unknown fields are rejected. Edits preserve before/after audit history and refresh current profile, role, and status access. Duplicate username or email returns 409.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdateRequest"
+              },
+              "example": {
+                "displayName": "Case Analyst",
+                "status": "active"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "user"
+                  ],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "description": "User record using snake_case fields."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username or email already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/findings/{entityId}/attack-tags/{tagId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_findings_entityId_attack_tags_tagId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Detach a attack tag from findings",
+        "description": "Requires current incident access and the record update permission. Removes only the attachment, preserving the record and tag definition. Obtain tagId as the tag UUID from the record tag list; do not use an ATT&CK technique code. Returns 404 when the record is absent; a missing attachment is a successful no-op.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/findings/{entityId}/custom-tags/{tagId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_findings_entityId_custom_tags_tagId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Detach a custom tag from findings",
+        "description": "Requires current incident access and the record update permission. Removes only the attachment, preserving the record and tag definition. Obtain tagId as the tag UUID from the record tag list; do not use an ATT&CK technique code. Returns 404 when the record is absent; a missing attachment is a successful no-op.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/timeline-events/{entityId}/attack-tags/{tagId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_timeline_events_entityId_attack_tags_tagId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Detach a attack tag from timeline-events",
+        "description": "Requires current incident access and the record update permission. Removes only the attachment, preserving the record and tag definition. Obtain tagId as the tag UUID from the record tag list; do not use an ATT&CK technique code. Returns 404 when the record is absent; a missing attachment is a successful no-op.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/timeline-events/{entityId}/custom-tags/{tagId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_timeline_events_entityId_custom_tags_tagId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Detach a custom tag from timeline-events",
+        "description": "Requires current incident access and the record update permission. Removes only the attachment, preserving the record and tag definition. Obtain tagId as the tag UUID from the record tag list; do not use an ATT&CK technique code. Returns 404 when the record is absent; a missing attachment is a successful no-op.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/queries/{entityId}/attack-tags/{tagId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_queries_entityId_attack_tags_tagId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Detach a attack tag from queries",
+        "description": "Requires current incident access and the record update permission. Removes only the attachment, preserving the record and tag definition. Obtain tagId as the tag UUID from the record tag list; do not use an ATT&CK technique code. Returns 404 when the record is absent; a missing attachment is a successful no-op.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/members/{memberUserId}": {
+      "delete": {
+        "operationId": "delete_api_incidents_incidentId_members_memberUserId",
+        "tags": [
+          "incident"
+        ],
+        "summary": "Remove a case member through the incident compatibility route",
+        "description": "Incident membership is derived from case membership. Removes parent-case membership and access to all incidents in that case. Requires incident:member_manage and parent case:member_manage, and preserves commander safeguards.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "memberUserId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }

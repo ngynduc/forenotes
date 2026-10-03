@@ -17,6 +17,14 @@ Set `SECURE_SESSION_COOKIES=true` whenever users reach Forenotes over HTTPS. Use
 
 Sessions can be revoked by disabling the user or changing their credentials. Do not share user accounts: individual accounts preserve useful audit attribution.
 
+Changing or resetting a password revokes browser sessions, including the current session. Sign in again using the new password. Role, profile, and membership changes refresh open workspaces; the server always checks current access.
+
+## MCP bearer tokens
+
+The optional `/mcp` endpoint uses user-owned bearer tokens created in Settings. Tokens are stored as hashes and inherit current owner permissions and case memberships. Required password rotation or disabling the owner blocks MCP access immediately.
+
+Browser cookies cannot authenticate MCP, and MCP tokens cannot authenticate `/api`. Follow [MCP investigation agents](/docs/admin/mcp/) for endpoint configuration, expiry, and revocation.
+
 ## Header authentication
 
 `FORENOTES_ALLOW_HEADER_AUTH=true` enables a development and test convenience mode. It is always disabled in production, and production startup refuses to run when it is enabled.

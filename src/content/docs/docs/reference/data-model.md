@@ -17,7 +17,7 @@ Case
     └── Reports and exports
 ```
 
-Cases and incidents each have membership records. Incident records stay scoped to their parent investigation.
+Case membership is authoritative. Incident membership records are derived from it, so access remains case-wide. Incident records stay scoped to their parent investigation.
 
 ## Core tables
 
@@ -31,7 +31,12 @@ Cases and incidents each have membership records. Incident records stay scoped t
 | Classification | `attack_tags`, `custom_tags`, tag junctions | ATT&CK and case-defined labels |
 | Reporting | `report_templates`, `reports`, `report_exports` | Narrative output and PDF history |
 | Operations | `notifications`, `audit_logs`, `schema_migrations` | Activity, accountability, and schema state |
+| Agent access | `mcp_access_tokens`, `mcp_idempotency_results` | Hashed user-owned tokens and repeatable tool writes |
+| Provenance | `investigation_runs`, `evidence_records`, `observations`, `hypotheses` | Case-scoped agent investigation records |
+| Support and review | `observation_evidence`, `hypothesis_observations`, `finding_observations`, `agent_actions` | Evidence support chains and tool action history |
 
 Uploaded binary files are not stored in PostgreSQL. They live under `FORENOTES_DATA_DIR`; database rows retain the relationships and metadata needed to authorize access.
 
 Database schema changes are applied in order by the migration runner. Never edit an already-deployed migration; add a new migration instead.
+
+The provenance schema is introduced by migration `010_mcp_provenance.sql` in 0.2.2. Agent-created findings remain drafts until human review validates their evidence support. See [MCP investigation agents](/docs/admin/mcp/).

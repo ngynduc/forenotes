@@ -33,3 +33,11 @@ Use graph modes to focus the workspace:
 - `mitre` for ATT&CK coverage.
 
 Look for isolated findings, over-connected generic entities, duplicate indicators, and important relationships that exist only in analyst memory.
+
+Drag nodes to organize the current view. Refreshes preserve manually positioned nodes, and layout uses measured node sizes. Use **Auto layout** when you want to arrange the graph again.
+
+## Maintain ATT&CK coverage
+
+Attach ATT&CK tags to findings, timeline events, and saved queries. Remove an incorrect tag from the record's tag controls. Findings and timeline events also allow removing custom tags. Removing an attachment leaves the investigation record and tag definition intact.
+
+Tag changes refresh both the relationship graph and MITRE matrix. Review the underlying tagged records when assessing technique coverage.

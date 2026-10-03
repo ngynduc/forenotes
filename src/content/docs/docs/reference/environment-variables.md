@@ -8,6 +8,7 @@ description: Quick reference for required and optional Forenotes runtime configu
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `FORENOTES_IMAGE` | Yes | Pinned container image: `ngynduc/forenotes:<image-tag>` |
+| `FORENOTES_REPORT_LLM_IMAGE` | Yes* | Matching report-service image: `ngynduc/forenotes-report-llm:<image-tag>` |
 | `APP_HOST` | No | Listen address inside the container; defaults to `0.0.0.0` |
 | `APP_PORT` | No | Application port; defaults to `3000` in production Compose |
 | `FORENOTES_HOST_PORT` | No | Host port mapped to `APP_PORT`; defaults to `3000` |
@@ -17,7 +18,7 @@ description: Quick reference for required and optional Forenotes runtime configu
 | `POSTGRES_DB` | Yes* | Bundled PostgreSQL database |
 | `FORENOTES_DATA_DIR` | No | Persistent upload directory; `/app/data` in Compose |
 
-`POSTGRES_*` values are required when using the bundled database.
+`POSTGRES_*` values are required when using the bundled database. Production Compose defaults both image variables to its release version; explicitly pin both for audited deployments with the bundled report service.
 
 ## Authentication and secrets
 
@@ -36,7 +37,7 @@ description: Quick reference for required and optional Forenotes runtime configu
 
 | Variable | Purpose |
 | --- | --- |
-| `LITELLM_SERVICE_URL` | Report generation service URL |
+| `LITELLM_SERVICE_URL` | Defaults to `http://report-llm-service:8001` in production Compose; override for an external service |
 | `LLM_PROVIDER` | Provider name |
 | `LLM_MODEL` | Provider model identifier |
 | `LLM_API_KEY` | Deployment-level provider credential |
@@ -47,3 +48,13 @@ description: Quick reference for required and optional Forenotes runtime configu
 | `LLM_CUSTOM_HEADERS_JSON` | Extra provider headers as a JSON object |
 
 Never commit populated environment files. Preserve `FORENOTES_LLM_SECRET_KEY` across upgrades and restores.
+
+## Optional MCP endpoint
+
+| Variable | Purpose |
+| --- | --- |
+| `FORENOTES_MCP_ENABLED` | Enables `/mcp`; defaults to `false` |
+| `FORENOTES_MCP_PUBLIC_URL` | Public endpoint URL; HTTPS is required when enabled in production |
+| `FORENOTES_MCP_ALLOWED_ORIGINS` | Comma-separated additional origins; the public URL's origin is allowed automatically |
+
+Pass these settings into the application service and recreate it after changes. See [MCP investigation agents](/docs/admin/mcp/) for tokens, client configuration, and the tool catalog.

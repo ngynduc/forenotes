@@ -19,6 +19,8 @@ Domain services
 PostgreSQL + /app/data
 ```
 
+Investigation agents use a separate stateless `/mcp` Streamable HTTP endpoint. It validates Host, Origin, and a user-owned bearer token, then dispatches tools through the same domain services and case permissions. Agent writes preserve provenance and action history.
+
 ## Runtime layout
 
 | Path | Responsibility |
@@ -40,6 +42,10 @@ PostgreSQL + /app/data
 5. Relevant mutations write audit and notification records.
 6. The API returns JSON to the React client.
 
+Role, profile, membership, and workspace changes propagate to open clients through the existing single-process realtime stream after transactions commit. Clients reconcile access after reconnecting. Case membership is authoritative; incident membership is a derived view.
+
 ## Production runtime
 
-`docker-compose.prod.yml` runs PostgreSQL 16 and the Forenotes application. The app container runs migrations before startup, serves both API and client assets, and stores uploaded files under `/app/data`.
+Production Compose runs PostgreSQL 16, the Forenotes application, and a separate Python report LLM service. The app container runs migrations before startup, serves API and client assets, and stores uploaded files under `/app/data`. It waits for the report-service healthcheck and reaches the service through the internal network at `http://report-llm-service:8001`; the service has no published host port.
+
+MCP runs inside the application and does not require the report LLM service. See [MCP investigation agents](/docs/admin/mcp/) for its setup and review workflow.

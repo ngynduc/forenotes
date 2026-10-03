@@ -7,7 +7,7 @@ Start with container state and application logs:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
-docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=200 app postgres
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=200 app postgres report-llm-service
 ```
 
 ## A required variable is missing
@@ -15,10 +15,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail
 Compose reports messages such as `set DATABASE_URL` before containers start. Confirm the required values exist:
 
 ```bash
-grep -n 'DATABASE_URL\|FORENOTES_BOOTSTRAP_ADMIN_PASSWORD\|FORENOTES_LLM_SECRET_KEY' .env.production
+docker compose -f docker-compose.prod.yml --env-file .env.production config --quiet
 ```
 
-Avoid printing the whole environment file into shared logs or chat.
+This validates Compose without printing resolved secrets. Check the named variable locally; avoid copying credentials into shared logs or chat.
 
 ## Production validation rejects the configuration
 
@@ -42,6 +42,10 @@ Then recreate the stack and open port `3100`.
 
 Secure cookies require HTTPS. For a local-only HTTP evaluation set `SECURE_SESSION_COOKIES=false`; restore `true` before placing the service behind HTTPS.
 
+## No report-service container exists
+
+Production Compose from 0.2.2 includes `report-llm-service`. If `ps` shows only `app` and `postgres`, the installed Compose file may predate that release. Follow [Upgrade Forenotes](/docs/operations/upgrade/) to replace Compose and pin both images. An app image update alone does not add the service.
+
 ## Report generation fails
 
 Check the report service from inside the app container:
@@ -52,3 +56,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.production \
 ```
 
 Also confirm the model, provider credential, endpoint allowlist, and user-level settings. Core investigation workflows do not depend on the LLM service.
+
+
+## MCP cannot connect
+
+A disabled endpoint returns `404`. Confirm that Compose passes `FORENOTES_MCP_ENABLED=true` and the public URL into the app, then recreate it. Host/Origin failures indicate a mismatch between the public URL, proxy headers, and allowed origins. Authentication failures may indicate an expired or revoked token, a disabled owner, or required password rotation.
+
+Follow the [MCP troubleshooting table](/docs/admin/mcp/#troubleshooting) for permission, run-state, and support-chain errors.

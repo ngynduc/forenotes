@@ -33,6 +33,12 @@ Before confirming a finding, check that:
 3. contradictory or uncertain evidence is described;
 4. impact and recommendations are specific enough to act on.
 
+## Review agent evidence
+
+Select a case and open **Investigation** to review agent runs, evidence records, observations, hypotheses, and draft findings. Observations require evidence support; hypotheses and agent findings require observation support from the same case.
+
+Agent-created findings remain drafts until a human confirms their complete support chain. Use **Agent Actions** to inspect successful and failed tool invocations before accepting the conclusion. See [MCP investigation agents](/docs/admin/mcp/) for the complete workflow.
+
 ## Preserve source material outside Forenotes
 
 Forenotes stores investigation records and references; it is not an evidence acquisition system. Preserve original logs, disk images, memory captures, and exports in your approved evidence repository, then reference them consistently from Forenotes.
