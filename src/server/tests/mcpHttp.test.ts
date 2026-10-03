@@ -7,6 +7,7 @@ import { runMigrations } from "../db/setup.js";
 import { createMcpToken } from "../services/mcpTokenService.js";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import type { Database } from "../db/types.js";
+import type { PoolClient } from "pg";
 
 describe("MCP Streamable HTTP endpoint", () => {
   let app: ReturnType<typeof createApp>;
@@ -19,7 +20,19 @@ describe("MCP Streamable HTTP endpoint", () => {
   beforeEach(async () => {
     const memory = newDb();
     const adapter = memory.adapters.createPg();
-    pool = new adapter.Pool();
+    const memoryPool = new adapter.Pool();
+    // pg-mem permits reconnecting clients; real PostgreSQL clients reject it.
+    pool = {
+      query: memoryPool.query.bind(memoryPool),
+      connect: async () => {
+        const client = await memoryPool.connect();
+        return {
+          query: client.query.bind(client),
+          release: client.release.bind(client),
+          connect: async () => { throw new Error("Client has already been connected."); }
+        } as unknown as PoolClient;
+      }
+    };
     await runMigrations(pool);
     userId = randomUUID();
     await pool.query(
@@ -241,7 +254,13 @@ describe("MCP Streamable HTTP endpoint", () => {
           const observation = await client.callTool({ name: "create_observation", arguments: {
             idempotencyKey: "observation-1", runId, incidentId, title: "Impossible travel", description: "Two distant logins", evidenceIds: [evidenceId]
           } });
+          expect(observation.isError).not.toBe(true);
+          expect(observation.structuredContent).toMatchObject({ evidenceIds: [evidenceId] });
           const observationId = (observation.structuredContent as { id: string }).id;
+          const unsupported = await client.callTool({ name: "create_hypothesis", arguments: {
+            idempotencyKey: "unsupported-hypothesis", runId, title: "No support", description: "Invalid", observationIds: []
+          } });
+          expect(unsupported.isError).toBe(true);
           const hypothesis = await client.callTool({ name: "create_hypothesis", arguments: {
             idempotencyKey: "hypothesis-1", runId, incidentId, title: "Credential compromise", description: "Account was reused", observationIds: [observationId]
           } });
@@ -249,9 +268,34 @@ describe("MCP Streamable HTTP endpoint", () => {
           expect((await client.callTool({ name: "add_timeline_event", arguments: {
             idempotencyKey: "timeline-1", runId, incidentId, eventTime: new Date().toISOString(), title: "Suspicious login"
           } })).isError).not.toBe(true);
-          expect((await client.callTool({ name: "create_entity", arguments: {
+          const system = await client.callTool({ name: "create_entity", arguments: {
             idempotencyKey: "entity-1", runId, incidentId, entityType: "system", hostname: "host-01"
-          } })).isError).not.toBe(true);
+          } });
+          expect(system.isError).not.toBe(true);
+          const systemId = (system.structuredContent as { id: string }).id;
+          const indicator = await client.callTool({ name: "create_entity", arguments: {
+            idempotencyKey: "indicator-1", runId, incidentId, entityType: "indicator", indicatorType: "ip", value: "192.0.2.1"
+          } });
+          expect(indicator.isError).not.toBe(true);
+          const indicatorId = (indicator.structuredContent as { id: string }).id;
+          for (const [sourceType, targetType, sourceId, targetId] of [
+            ["system", "indicator", systemId, indicatorId],
+            ["indicator", "system", indicatorId, systemId],
+            ["system", "ioc", systemId, indicatorId]
+          ]) {
+            const linked = await client.callTool({ name: "link_entities", arguments: {
+              idempotencyKey: `link-${sourceType}-${targetType}`, runId, incidentId,
+              sourceType, sourceId, targetType, targetId, linkType: targetType === "ioc" ? "references" : "related_to"
+            } });
+            expect(linked.isError).not.toBe(true);
+            expect(linked.structuredContent).toMatchObject({ sourceType: sourceType === "indicator" ? "ioc" : sourceType, targetType: targetType === "indicator" ? "ioc" : targetType });
+          }
+          for (const invalid of [{ targetType: "unknown" }, { linkType: "unknown" }]) {
+            expect((await client.callTool({ name: "link_entities", arguments: {
+              idempotencyKey: "invalid-link", runId, incidentId, sourceType: "system", sourceId: systemId,
+              targetType: "indicator", targetId: indicatorId, linkType: "related_to", ...invalid
+            } })).isError).toBe(true);
+          }
           expect((await client.callTool({ name: "create_task", arguments: {
             idempotencyKey: "task-1", runId, incidentId, title: "Reset credentials", status: "todo", priority: "high"
           } })).isError).not.toBe(true);

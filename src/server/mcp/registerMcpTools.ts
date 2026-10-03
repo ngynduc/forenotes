@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { GRAPH_EDGE_TYPES, GRAPH_NODE_TYPES } from "../../shared/domain.js";
 import type { Database } from "../db/types.js";
 import { AppError, isAppError } from "../errors.js";
 import { requireCasePermission, requirePermission } from "../permissions/permissionService.js";
@@ -29,6 +30,8 @@ const runIdSchema = uuid.describe("Run UUID: use id returned by start_investigat
 const querySchema = z.string().trim().max(200).optional().describe("Optional literal, case-insensitive text search. Empty text lists all accessible matches.");
 const pageSchema = { limit: z.number().int().min(1).max(100).optional(), offset: z.number().int().min(0).optional() };
 const writeBase = { idempotencyKey: z.string().trim().min(1), runId: runIdSchema };
+const linkEntityTypeSchema = z.enum([...GRAPH_NODE_TYPES, "indicator"])
+  .describe("Relationship entity type. indicator is accepted as an alias for the graph type ioc.");
 
 interface RegistrationContext {
   database: Database;
@@ -191,8 +194,15 @@ export function createForenotesMcpServer(context: RegistrationContext) {
   register("update_entity", "Update a system, account, or indicator.", entityUpdateSchema(), true,
     async (database, input) => updateInvestigationEntity(database, context.principal, input));
   register("link_entities", "Create a non-destructive relationship between incident entities.", z.object({
-    ...writeBase, incidentId: incidentIdSchema, sourceType: z.string().min(1), sourceId: uuid.describe("Source entity UUID from get_entities, get_timeline, get_findings, or get_tasks; match sourceType."), targetType: z.string().min(1), targetId: uuid.describe("Target entity UUID from get_entities, get_timeline, get_findings, or get_tasks; match targetType."), linkType: z.string().min(1)
-  }), true, async (database, input) => { await requireRunIncident(database, context.principal.user, input.runId as string, input.incidentId as string); return camelize(await createEntityLink(database, context.principal.user, input as never)); });
+    ...writeBase, incidentId: incidentIdSchema, sourceType: linkEntityTypeSchema, sourceId: uuid.describe("Source entity UUID from get_entities, get_timeline, get_findings, or get_tasks; match sourceType."), targetType: linkEntityTypeSchema, targetId: uuid.describe("Target entity UUID from get_entities, get_timeline, get_findings, or get_tasks; match targetType."), linkType: z.enum(GRAPH_EDGE_TYPES)
+  }), true, async (database, input) => {
+    await requireRunIncident(database, context.principal.user, input.runId as string, input.incidentId as string);
+    return camelize(await createEntityLink(database, context.principal.user, {
+      ...input,
+      sourceType: input.sourceType === "indicator" ? "ioc" : input.sourceType,
+      targetType: input.targetType === "indicator" ? "ioc" : input.targetType
+    } as never));
+  });
   register("create_task", "Create an investigation task.", z.object({
     ...writeBase, incidentId: incidentIdSchema, title: z.string().min(1), description: z.string().optional(),
     status: z.enum(["todo", "in_progress", "blocked", "done"]).default("todo"), priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
