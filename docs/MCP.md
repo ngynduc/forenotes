@@ -112,6 +112,13 @@ update_draft_finding
 
 List tools use bounded pagination. `limit` defaults to 50 and cannot exceed 100. Structured results use camelCase fields.
 
+For `link_entities`, use the UUID returned by creation or discovery. Indicator
+endpoints accept either `indicator` or `ioc`; stored relationships use `ioc`.
+Entity and relationship types are validated against the graph's supported types.
+An observation requires at least one `evidenceIds` entry, and a hypothesis requires
+at least one `observationIds` entry. If observation creation fails, resolve that
+error and retry it before creating a hypothesis with the returned observation ID.
+
 ## Provenance and review
 
 Forenotes preserves these invariants:

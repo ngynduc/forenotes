@@ -64,7 +64,9 @@ export async function withTransaction<T>(database: Database, work: (client: Data
   try {
     await client.query("begin");
     const state: TransactionState = { client, afterCommit: [] };
-    const result = await requestTransaction.run(state, () => work(client));
+    // Expose only query: pg clients also have connect(), but cannot be reconnected.
+    const transaction: DatabaseClient = { query: client.query.bind(client) };
+    const result = await requestTransaction.run(state, () => work(transaction));
     await client.query("commit");
     requestTransaction.exit(() => state.afterCommit.forEach((callback) => callback()));
     return result;
