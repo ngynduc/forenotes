@@ -104,6 +104,7 @@ Services encapsulate business logic and database access.
 Production uses `docker-compose.prod.yml`:
 
 - `postgres`: PostgreSQL 16 with a named volume.
+- `report-llm-service`: published Python/LiteLLM image, internal port 8001, healthcheck; the app waits for it.
 - `app`: published Forenotes image, environment-driven config, `/app/data` named volume, `/api/health` healthcheck.
 
 The production image runs migrations before starting the app. It refuses unsafe production settings such as default database credentials, demo mode, header auth, short bootstrap passwords, or a missing `FORENOTES_LLM_SECRET_KEY`.

@@ -19,6 +19,8 @@ Environment overrides:
   FORENOTES_INSTALL_DIR   Installation directory
   FORENOTES_HOST_PORT     Host port (default: 3000)
   SECURE_SESSION_COOKIES  Set to true when serving through HTTPS
+  FORENOTES_IMAGE        Published application image override for new installs
+  FORENOTES_REPORT_LLM_IMAGE  Published report service image override for new installs
 EOF
 }
 
@@ -77,7 +79,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   umask 077
   cat >"$ENV_FILE" <<EOF
 NODE_ENV=production
-FORENOTES_IMAGE=ngynduc/forenotes:0.2.0
+FORENOTES_IMAGE=${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.2}
+FORENOTES_REPORT_LLM_IMAGE=${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.2}
 
 APP_HOST=0.0.0.0
 APP_PORT=3000
@@ -97,7 +100,7 @@ FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY=true
 FORENOTES_LLM_SECRET_KEY=$llm_secret
 SECURE_SESSION_COOKIES=$SECURE_SESSION_COOKIES
 
-LITELLM_SERVICE_URL=
+LITELLM_SERVICE_URL=http://report-llm-service:8001
 LLM_PROVIDER=
 LLM_MODEL=
 LLM_API_KEY=
@@ -110,6 +113,15 @@ EOF
   chmod 600 "$ENV_FILE" "$PASSWORD_FILE"
 else
   echo "Keeping existing $ENV_FILE"
+  # Older installs left this URL blank. Preserve any configured external service.
+  if grep -Eq '^LITELLM_SERVICE_URL=[[:space:]]*$' "$ENV_FILE"; then
+    sed -i 's|^LITELLM_SERVICE_URL=.*|LITELLM_SERVICE_URL=http://report-llm-service:8001|' "$ENV_FILE"
+  elif ! grep -q '^LITELLM_SERVICE_URL=' "$ENV_FILE"; then
+    printf '\nLITELLM_SERVICE_URL=http://report-llm-service:8001\n' >>"$ENV_FILE"
+  fi
+  if ! grep -q '^FORENOTES_REPORT_LLM_IMAGE=' "$ENV_FILE"; then
+    printf '\nFORENOTES_REPORT_LLM_IMAGE=%s\n' "${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.2}" >>"$ENV_FILE"
+  fi
   if [[ "$SECURE_SESSION_COOKIES" == "true" ]]; then
     if grep -q '^SECURE_SESSION_COOKIES=' "$ENV_FILE"; then
       sed -i 's/^SECURE_SESSION_COOKIES=.*/SECURE_SESSION_COOKIES=true/' "$ENV_FILE"
@@ -129,6 +141,7 @@ for _ in {1..60}; do
   if curl --fail --silent "$url/api/health" >/dev/null; then
     echo
     echo "Forenotes is ready: $url"
+    echo "Report LLM service is installed. Configure a provider, model, and API key in user settings to enable AI reports."
     echo "Username: admin"
     if [[ -f "$PASSWORD_FILE" ]]; then
       echo "Password: $(<"$PASSWORD_FILE")"

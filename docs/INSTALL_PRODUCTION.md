@@ -5,6 +5,7 @@ This guide is for a new operator installing the published Forenotes production i
 The production install runs:
 
 - the Forenotes application image from Docker Hub
+- the report LLM service image (`report-llm-service`), reachable only inside the Compose network
 - PostgreSQL from the Compose file, or an external PostgreSQL database if you change `DATABASE_URL`
 - persistent volumes for database state and uploaded app data
 - startup migrations and first-admin bootstrap
@@ -40,14 +41,14 @@ Storage: 20 GB minimum
 
 ## Image Tags
 
-Published image:
+Pin both images to a published release that includes the report service:
 
-```text
-ngynduc/forenotes:0.2.1
-ngynduc/forenotes:main-acab558
+```dotenv
+FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
+FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 ```
 
-Use the versioned tag for production so upgrades are deliberate. Use `latest` only when you intentionally want the newest published image.
+Replace `<release-tag>` with an available full version tag. The app and report service are separate images; the app image alone does not contain Python or LiteLLM. Older releases may have only the app image.
 
 ## Clean Folder Install
 
@@ -92,7 +93,8 @@ Set these values in `.env.production`:
 
 ```text
 NODE_ENV=production
-FORENOTES_IMAGE=ngynduc/forenotes:main-acab558
+FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
+FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 APP_HOST=0.0.0.0
 APP_PORT=3000
 FORENOTES_HOST_PORT=3000
@@ -122,7 +124,8 @@ Forenotes uses database-backed opaque session cookies in this release. `SESSION_
 
 ```dotenv
 NODE_ENV=production
-FORENOTES_IMAGE=ngynduc/forenotes:main-acab558
+FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
+FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 
 APP_HOST=0.0.0.0
 APP_PORT=3000
@@ -146,7 +149,7 @@ FORENOTES_MCP_ENABLED=false
 FORENOTES_MCP_PUBLIC_URL=
 FORENOTES_MCP_ALLOWED_ORIGINS=
 
-LITELLM_SERVICE_URL=
+LITELLM_SERVICE_URL=http://report-llm-service:8001
 LLM_PROVIDER=
 LLM_MODEL=
 LLM_API_KEY=
@@ -156,60 +159,9 @@ LLM_SYSTEM_PROMPT=
 LLM_CUSTOM_HEADERS_JSON={}
 ```
 
-## Docker Compose Production Example
+## Docker Compose Production Services
 
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
-    volumes:
-      - forenotes_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  app:
-    image: ${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.1}
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      APP_HOST: ${APP_HOST:-0.0.0.0}
-      APP_PORT: ${APP_PORT:-3000}
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
-      FORENOTES_DATA_DIR: /app/data
-      FORENOTES_BOOTSTRAP_ADMIN_USERNAME: ${FORENOTES_BOOTSTRAP_ADMIN_USERNAME:?set FORENOTES_BOOTSTRAP_ADMIN_USERNAME}
-      FORENOTES_BOOTSTRAP_ADMIN_EMAIL: ${FORENOTES_BOOTSTRAP_ADMIN_EMAIL:?set FORENOTES_BOOTSTRAP_ADMIN_EMAIL}
-      FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME:?set FORENOTES_BOOTSTRAP_ADMIN_DISPLAY_NAME}
-      FORENOTES_BOOTSTRAP_ADMIN_PASSWORD: ${FORENOTES_BOOTSTRAP_ADMIN_PASSWORD:?set FORENOTES_BOOTSTRAP_ADMIN_PASSWORD}
-      FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY: ${FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY:-true}
-      FORENOTES_LLM_SECRET_KEY: ${FORENOTES_LLM_SECRET_KEY:?set FORENOTES_LLM_SECRET_KEY}
-      SECURE_SESSION_COOKIES: ${SECURE_SESSION_COOKIES:-true}
-      FORENOTES_MCP_ENABLED: ${FORENOTES_MCP_ENABLED:-false}
-      FORENOTES_MCP_PUBLIC_URL: ${FORENOTES_MCP_PUBLIC_URL:-}
-      FORENOTES_MCP_ALLOWED_ORIGINS: ${FORENOTES_MCP_ALLOWED_ORIGINS:-}
-      LITELLM_SERVICE_URL: ${LITELLM_SERVICE_URL:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_API_ENDPOINT: ${LLM_API_ENDPOINT:-}
-      LLM_SYSTEM_PROMPT: ${LLM_SYSTEM_PROMPT:-}
-      LLM_CUSTOM_HEADERS_JSON: ${LLM_CUSTOM_HEADERS_JSON:-{}}
-    ports:
-      - "${FORENOTES_HOST_PORT:-3000}:${APP_PORT:-3000}"
-    volumes:
-      - forenotes_app_data:/app/data
-
-volumes:
-  forenotes_postgres_data:
-  forenotes_app_data:
-```
+Use the downloaded `docker-compose.prod.yml` as the source of truth. It starts `postgres`, `app`, and `report-llm-service`. The app waits for the report service healthcheck. The report service does not publish a host port.
 
 ## Pull And Start
 
@@ -273,17 +225,18 @@ Back up the database before upgrading.
 Pin the next version in `.env.production`:
 
 ```dotenv
-FORENOTES_IMAGE=ngynduc/forenotes:main-acab558
+FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
+FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 ```
 
 Pull and recreate the app:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production pull app
+docker compose -f docker-compose.prod.yml --env-file .env.production pull app report-llm-service
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
-The app runs migrations before it starts.
+The app runs migrations before it starts. Keep the install directory and Compose project name unchanged so existing volumes are reused.
 
 ## PostgreSQL Configuration
 
@@ -306,19 +259,32 @@ DATABASE_URL=postgres://forenotes:<password>@db.example.internal:5432/forenotes
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
-The external database must already exist and the configured user must be able to create tables, indexes, and constraints. The `postgres` service may remain in `docker-compose.prod.yml`; `up -d app` starts only the app because the production Compose file does not declare `depends_on`.
+The external database must already exist and the configured user must be able to create tables, indexes, and constraints. `up -d app` also starts the report service dependency, but does not start bundled PostgreSQL.
 
 ## Report LLM Service
 
-AI report generation calls the service URL configured by `LITELLM_SERVICE_URL`.
+The production stack includes the Python report service. AI report requests follow this path:
 
-Example:
-
-```dotenv
-LITELLM_SERVICE_URL=http://llm-service.example.internal:8001
+```text
+Forenotes app → report-llm-service:8001 → configured model provider
 ```
 
-Leave `LITELLM_SERVICE_URL` empty if you are not running a report LLM service. The app still starts. Service-backed report generation is unavailable until the URL and provider settings are configured.
+The default service URL is:
+
+```dotenv
+LITELLM_SERVICE_URL=http://report-llm-service:8001
+```
+
+The container starts without provider credentials. Configure a provider, model, and API key in user settings or the environment before generating AI reports. Manual reports work without provider settings. `FORENOTES_LLM_SECRET_KEY` encrypts saved keys; it is not a provider API key.
+
+For an independently hosted report service, override `LITELLM_SERVICE_URL` with a URL reachable from the app container. Do not use `localhost` to reach another container or the Docker host.
+
+To add the service to an existing installation, download the updated Compose file, keep your existing environment and secrets, set `FORENOTES_REPORT_LLM_IMAGE` to a published report-service image, and replace an empty or absent `LITELLM_SERVICE_URL` with the default above. Then run:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production pull app report-llm-service
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d app report-llm-service
+```
 
 Optional environment-level provider defaults:
 
@@ -406,15 +372,7 @@ For external PostgreSQL, use your database platform's backup and restore procedu
 
 ## Publisher Build And Push Commands
 
-These are the exact production image commands used for the published tags:
-
-```bash
-docker build --pull --target runtime -f Dockerfile -t ngynduc/forenotes:main-acab558 -t ngynduc/forenotes:latest .
-docker push ngynduc/forenotes:main-acab558
-docker push ngynduc/forenotes:latest
-```
-
-This uses the production Dockerfile runtime target, not `Dockerfile.dev`.
+See [RELEASING.md](./RELEASING.md). Publish both images before updating installation defaults to that release.
 
 ## Troubleshooting
 
@@ -496,7 +454,7 @@ Check that `LITELLM_SERVICE_URL` points to the report LLM service from inside th
 docker compose -f docker-compose.prod.yml --env-file .env.production exec app sh -c 'wget -qO- "$LITELLM_SERVICE_URL/health"'
 ```
 
-If the URL is empty, service-backed report generation is not configured.
+Check `docker compose -f docker-compose.prod.yml --env-file .env.production ps report-llm-service` and its logs. An empty URL uses the client fallback `localhost:8001`, where the app container has no report service. Set the Compose service URL and recreate the app.
 
 ### Cannot log in
 

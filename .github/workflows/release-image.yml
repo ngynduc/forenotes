@@ -1,4 +1,4 @@
-name: Release container image
+name: Release container images
 
 on:
   push:
@@ -12,9 +12,6 @@ concurrency:
 
 permissions:
   contents: read
-
-env:
-  IMAGE_NAME: ngynduc/forenotes
 
 jobs:
   validate:
@@ -50,6 +47,16 @@ jobs:
 
   publish:
     needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ngynduc/forenotes
+            context: .
+            dockerfile: ./Dockerfile
+          - image: ngynduc/forenotes-report-llm
+            context: ./services/report-llm-service
+            dockerfile: ./services/report-llm-service/Dockerfile
     runs-on: ubuntu-latest
 
     steps:
@@ -69,7 +76,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ matrix.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -79,12 +86,12 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max
           sbom: true

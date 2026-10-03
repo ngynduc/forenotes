@@ -2,6 +2,7 @@ node_modules
 src/client/node_modules
 dist
 src/server/tests
+scripts/*.test.ts
 src/**/*.test.ts
 src/**/*.test.tsx
 src/**/*.spec.ts
