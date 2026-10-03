@@ -19,6 +19,7 @@ export default function AdminPage() {
   const { data, isLoading } = useUsers(canManageUsers);
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editItem, setEditItem] = useState<Record<string, unknown> | null>(null);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [resetMessage, setResetMessage] = useState<string | null>(null);
@@ -53,7 +54,7 @@ export default function AdminPage() {
           <p className="text-sm text-[var(--color-text-muted)]">{tableDef.subtitle}</p>
         </div>
         {tableDef.createLabel && (
-          <Button onClick={() => setModalOpen(true)}>
+          <Button onClick={() => { setEditItem(null); setModalOpen(true); }}>
             {tableDef.createLabel}
           </Button>
         )}
@@ -65,18 +66,22 @@ export default function AdminPage() {
           columns={tableDef.columns}
           data={rows}
           emptyLabel={tableDef.emptyLabel}
+          onRowClick={(row) => { setEditItem(row); setModalOpen(true); }}
           renderRowActions={(row) => (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setResetUserId(String(row.id ?? ""));
-                setTemporaryPassword("");
-                setResetMessage(null);
-              }}
-            >
-              Reset Password
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => { setEditItem(row); setModalOpen(true); }}>Edit</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setResetUserId(String(row.id ?? ""));
+                  setTemporaryPassword("");
+                  setResetMessage(null);
+                }}
+              >
+                Reset Password
+              </Button>
+            </div>
           )}
         />
       )}
@@ -109,9 +114,13 @@ export default function AdminPage() {
       <EntityModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        definition={definitions.user}
-        item={null}
-        mode="create"
+        definition={editItem ? {
+          ...definitions.user,
+          fields: () => [...definitions.user.fields().filter((field) => field.name !== "password"),
+            { name: "status", label: "Status", type: "select", options: ["active", "disabled"], required: true }],
+        } : definitions.user}
+        item={editItem}
+        mode={editItem ? "edit" : "create"}
       />
     </div>
   );

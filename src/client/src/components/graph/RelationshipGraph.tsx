@@ -1,8 +1,10 @@
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
+  Panel,
+  type ReactFlowInstance,
   MiniMap,
   type Node,
   type Edge,
@@ -12,7 +14,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import { EntityNode } from "./nodes/EntityNode";
 import { LabeledEdge } from "./edges/LabeledEdge";
-import { layoutNodes } from "./layout";
+import { Button } from "@/components/ui/Button";
+import { layoutNodes, placeNewNodes } from "./layout";
 import { useGraph } from "@/hooks/use-graph";
 import { useGraphStore } from "@/stores/graph-store";
 import { NodeInspector } from "./NodeInspector";
@@ -39,21 +42,25 @@ type LabeledFlowEdge = Edge<LabeledEdgeData>;
 
 export function RelationshipGraph() {
   const { data, isLoading } = useGraph();
+  const scopeRef = useRef("");
+  const measuredLayoutDone = useRef(false);
+  const flowRef = useRef<ReactFlowInstance<EntityFlowNode, LabeledFlowEdge> | null>(null);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const setSelectedNode = useGraphStore((s) => s.setSelectedNode);
 
   const { nodes: baseNodes, edges: baseEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
 
-    const layout = layoutNodes(data.nodes);
+    const layout = layoutNodes(data.nodes, data.edges);
 
+    const graphNodes = new Map(data.nodes.map((node) => [node.id, node]));
     const nodes: EntityFlowNode[] = layout.map((ln) => {
-      const gn = data.nodes.find((n) => n.id === ln.id)!;
+      const gn = graphNodes.get(ln.id)!;
       return {
         id: ln.id,
         type: "entity",
         position: { x: ln.x, y: ln.y },
-        style: { width: ln.width, minHeight: ln.height },
+        style: { width: ln.width, minHeight: 84 },
         data: { ...gn, label: gn.label },
       };
     });
@@ -63,7 +70,7 @@ export function RelationshipGraph() {
       source: e.source,
       target: e.target,
       type: "labeled",
-      data: { label: e.label },
+      data: { ...e, label: e.label },
       animated: e.derived,
     }));
 
@@ -74,15 +81,50 @@ export function RelationshipGraph() {
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<LabeledFlowEdge>(baseEdges);
 
   useEffect(() => {
+    // Query-key changes briefly have no data; retain positions through that
+    // loading interval and reset only when a different incident/mode arrives.
+    if (!data) return;
+    const scope = `${data.incidentId}:${data.mode}`;
+    const sameScope = scope === scopeRef.current;
+    if (!sameScope) measuredLayoutDone.current = false;
+    scopeRef.current = scope;
     setFlowNodes((currentNodes) => {
-      const positionById = new Map(currentNodes.map((node) => [node.id, node.position]));
-
+      const current = sameScope ? currentNodes : [];
+      const currentById = new Map(current.map((node) => [node.id, node]));
+      const toLayoutNode = (node: EntityFlowNode) => ({
+        id: node.id, type: node.data.type, ...node.position,
+        width: node.measured?.width ?? 240,
+        height: node.measured?.height ?? 84,
+      });
+      const placements = placeNewNodes(
+        data ? layoutNodes(data.nodes, data.edges) : [], current.map(toLayoutNode)
+      );
+      const positions = new Map(placements.map((node) => [node.id, { x: node.x, y: node.y }]));
       return baseNodes.map((node) => ({
         ...node,
-        position: positionById.get(node.id) ?? node.position,
+        measured: currentById.get(node.id)?.measured,
+        position: positions.get(node.id) ?? node.position,
       }));
     });
-  }, [baseNodes, setFlowNodes]);
+  }, [baseNodes, data, setFlowNodes]);
+
+  const applyLayout = useCallback(() => {
+    if (!data) return;
+    const dimensions = new Map(flowNodes.flatMap((node) => node.measured?.width && node.measured?.height
+      ? [[node.id, { width: node.measured.width, height: node.measured.height }] as const] : []));
+    const positions = new Map(layoutNodes(data.nodes, data.edges, dimensions).map((node) => [node.id, { x: node.x, y: node.y }]));
+    measuredLayoutDone.current = true;
+    setFlowNodes((current) => current.map((node) => ({ ...node, position: positions.get(node.id) ?? node.position })));
+    requestAnimationFrame(() => void flowRef.current?.fitView({ padding: 0.2 }));
+  }, [data, flowNodes, setFlowNodes]);
+
+  useEffect(() => {
+    const ids = new Set(data?.nodes.map((node) => node.id));
+    if (!measuredLayoutDone.current && flowNodes.length && flowNodes.length === ids.size &&
+        flowNodes.every((node) => ids.has(node.id) && node.measured?.width && node.measured?.height)) {
+      applyLayout();
+    }
+  }, [data, flowNodes, applyLayout]);
 
   useEffect(() => {
     setFlowEdges(baseEdges);
@@ -156,6 +198,7 @@ export function RelationshipGraph() {
 
   const onNodeDragStart = useCallback(
     (_: React.MouseEvent, node: EntityFlowNode) => {
+      measuredLayoutDone.current = true;
       setSelectedNode(node.id);
     },
     [setSelectedNode]
@@ -178,6 +221,7 @@ export function RelationshipGraph() {
             edges={flowEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            onInit={(instance) => { flowRef.current = instance; }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={onNodeClick}
@@ -188,6 +232,9 @@ export function RelationshipGraph() {
             maxZoom={2}
             nodesDraggable
           >
+            <Panel position="top-left">
+              <Button size="sm" variant="outline" onClick={applyLayout}>Auto layout</Button>
+            </Panel>
             <Background />
             <Controls />
             <MiniMap />

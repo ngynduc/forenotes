@@ -72,6 +72,7 @@ export function createAuthRoutes(database: Database) {
       const user = await getAuthenticatedUser(request, database, { allowPasswordRotation: true });
       const payload = changePasswordSchema.parse(request.body);
       await changeOwnPassword(database, user, payload);
+      clearSessionCookie(response);
       response.status(204).send();
     })
   );

@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { afterTransactionCommit } from "../db/transaction.js";
 import type { Database } from "../db/types.js";
 
 interface NotificationInput {
   recipientUserId: string;
+  caseId?: string;
   incidentId?: string | null;
   actorUserId?: string | null;
   eventType: string;
@@ -40,12 +42,30 @@ interface NotificationRow {
 
 export type NotificationStreamItem = Omit<NotificationRow, "recipient_user_id">;
 
-interface NotificationCreatedEvent {
+export interface NotificationCreatedEvent {
   recipientUserId: string;
   notification: NotificationStreamItem;
+  caseId?: string;
 }
 
 const notificationEvents = new EventEmitter();
+
+export interface UserStateEvent {
+  userId: string;
+  type: "user.updated" | "session.ended";
+}
+
+export function publishUserStateEvent(event: UserStateEvent) {
+  afterTransactionCommit(() => notificationEvents.emit("user-state", event));
+}
+
+export function subscribeToUserStateEvents(userId: string, listener: (event: UserStateEvent) => void) {
+  const wrappedListener = (event: UserStateEvent) => {
+    if (event.userId === userId) listener(event);
+  };
+  notificationEvents.on("user-state", wrappedListener);
+  return () => notificationEvents.off("user-state", wrappedListener);
+}
 
 export async function getCaseNotificationScope(database: Database, caseId: string): Promise<CaseNotificationScope | null> {
   const result = await database.query<CaseNotificationScope>(
@@ -124,10 +144,11 @@ export async function createNotification(database: Database, input: Notification
   const notification = result.rows[0];
   if (notification) {
     const { recipient_user_id: recipientUserId, ...streamNotification } = notification;
-    notificationEvents.emit("created", {
+    afterTransactionCommit(() => notificationEvents.emit("created", {
       recipientUserId,
+      caseId: input.caseId,
       notification: streamNotification
-    } satisfies NotificationCreatedEvent);
+    } satisfies NotificationCreatedEvent));
   }
 }
 

@@ -62,16 +62,22 @@ export async function createIncident(database: Database, user: AuthenticatedUser
     });
 
     const scope = await getCaseNotificationScope(transaction, input.caseId);
-    await createNotification(transaction, {
-    recipientUserId: user.id,
-    incidentId,
-    actorUserId: user.id,
-    eventType: "incident.created",
-    title: `Incident created: ${input.name}`,
-    body: formatNotificationScope(scope),
-    entityType: "incident",
-    entityId: incidentId
-    });
+    const members = await transaction.query<{ user_id: string }>(
+      "select user_id from incident_members where incident_id = $1", [incidentId]
+    );
+    for (const member of members.rows) {
+      await createNotification(transaction, {
+        recipientUserId: member.user_id,
+        caseId: input.caseId,
+        incidentId,
+        actorUserId: user.id,
+        eventType: "incident.created",
+        title: `Incident created: ${input.name}`,
+        body: formatNotificationScope(scope),
+        entityType: "incident",
+        entityId: incidentId
+      });
+    }
 
     const result = await transaction.query("select * from incidents where id = $1", [incidentId]);
     if (result.rowCount === 0) {

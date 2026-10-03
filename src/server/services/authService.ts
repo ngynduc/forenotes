@@ -6,6 +6,7 @@ import type { Database } from "../db/types.js";
 import { AppError } from "../errors.js";
 import type { GlobalRole } from "../../shared/domain.js";
 import { env } from "../env.js";
+import { publishUserStateEvent } from "./notificationService.js";
 import { withTransaction } from "../db/transaction.js";
 
 const SESSION_COOKIE_NAME = "forenotes_session";
@@ -248,6 +249,7 @@ export async function changeOwnPassword(
       [user.id, passwordHash]
     );
     await client.query("delete from sessions where user_id = $1", [user.id]);
+    publishUserStateEvent({ userId: user.id, type: "session.ended" });
   });
 }
 
@@ -272,6 +274,7 @@ export async function resetUserPassword(
       [targetUserId, await hashPassword(input.newPassword)]
     );
     await client.query("delete from sessions where user_id = $1", [targetUserId]);
+    publishUserStateEvent({ userId: targetUserId, type: "session.ended" });
   });
 }
 

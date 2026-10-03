@@ -27,7 +27,7 @@ export function EntityNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "w-full min-w-0 rounded-[var(--radius-sm)] border-2 bg-[var(--color-surface)] p-2.5 shadow-sm transition-[opacity,box-shadow,border-color,transform] duration-150",
+        "w-full min-w-0 min-h-[84px] rounded-[var(--radius-sm)] border-2 bg-[var(--color-surface)] p-2.5 shadow-sm transition-[opacity,box-shadow,border-color,transform] duration-150",
         severityClass || "border-[var(--color-border)]",
         isSelected && "ring-2 ring-[var(--color-primary)] shadow-md",
         !isSelected && isConnected && "border-[var(--color-primary)] shadow-md",

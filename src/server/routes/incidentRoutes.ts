@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Router, raw } from "express";
 import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
@@ -9,7 +10,7 @@ import { createEvidenceLink, deleteEvidenceLink, listEvidenceLinks } from "../se
 import { createTask, createTaskLink, deleteTask, listTasks, updateTask } from "../services/taskService.js";
 import { NOTE_IMAGE_CONTENT_TYPES, readTaskNote, uploadTaskNoteImage, writeTaskNote } from "../services/noteService.js";
 import { createQuery, deleteQuery, listQueries, updateQuery } from "../services/queryService.js";
-import { addIncidentMember, listIncidentMembers } from "../services/membershipService.js";
+import { addIncidentMember, listIncidentMembers, removeIncidentMember } from "../services/membershipService.js";
 import { createSystem, deleteSystem, listSystems, updateSystem } from "../services/systemService.js";
 import { createAccount, deleteAccount, listAccounts, updateAccount } from "../services/accountService.js";
 import { updateIncident } from "../services/incidentService.js";
@@ -85,6 +86,17 @@ export function createIncidentRoutes(database: Database) {
         incidentId
       });
       response.status(201).json({ finding });
+    })
+  );
+
+  router.delete(
+    "/:incidentId/members/:memberUserId",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = z.string().uuid().parse(request.params.incidentId);
+      const memberUserId = z.string().uuid().parse(request.params.memberUserId);
+      await removeIncidentMember(database, user, incidentId, memberUserId);
+      response.status(204).send();
     })
   );
 

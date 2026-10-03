@@ -49,6 +49,7 @@ export interface EntityDefinition {
   fromForm: (data: Record<string, unknown>) => Record<string, unknown>;
   inline?: Record<string, InlineField>;
   entityLinkSourceType?: EntityLinkSourceType;
+  entityTagSourceType?: EntityLinkSourceType | "query";
 }
 
 // Option sets
@@ -281,6 +282,7 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
     },
     query: {
       collection: "queries",
+      entityTagSourceType: "query",
       label: "Query",
       createTitle: "Create Query",
       editTitle: "Query Detail",
@@ -444,11 +446,11 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       collection: "users",
       label: "User",
       createTitle: "Create User",
-      editTitle: "Create User",
+      editTitle: "Edit User",
       createAction: "Create User",
-      updateAction: "Create User",
+      updateAction: "Save User",
       create: () => ({ url: "/api/users", method: "POST" }),
-      update: () => ({ url: "/api/users", method: "POST" }),
+      update: (id) => ({ url: `/api/users/${id}`, method: "PATCH" }),
       fields: () => [
         { name: "username", label: "Username", type: "text", required: true, autofocus: true },
         { name: "email", label: "Email", type: "email", required: true },
@@ -456,8 +458,14 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         { name: "password", label: "Temporary Password", type: "password", required: true },
         { name: "globalRole", label: "Global Role", type: "select", options: [...OPTION_SETS.globalRole], required: true },
       ],
-      values: () => ({ username: "", email: "", displayName: "", password: "", globalRole: "analyst" }),
-      fromForm: (data) => cleanObject(data),
+      values: (item) => ({
+        username: item?.username ?? "",
+        email: item?.email ?? "",
+        displayName: item?.displayName ?? "",
+        globalRole: item?.globalRole ?? "analyst",
+        ...(item ? { status: item.status } : { password: "" }),
+      }),
+      fromForm: (data) => data,
     },
     case_member: {
       collection: "caseMembers",

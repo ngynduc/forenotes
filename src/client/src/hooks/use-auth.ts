@@ -1,11 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type CurrentUser, type LoginInput } from "@/lib/api";
+import { api, type LoginInput } from "@/lib/api";
+import { useNavigate } from "react-router";
+import { clearClientSession } from "@/lib/session-state";
 import { useScopeStore } from "@/stores/scope-store";
-
-interface AuthSession {
-  user: CurrentUser;
-  permissions: string[];
-}
 
 export function useCurrentUser() {
   return useQuery({
@@ -22,6 +19,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (input: LoginInput) => api.login(input),
     onSuccess: async ({ user }) => {
+      clearClientSession(qc);
       setActiveUser(user.id);
       await qc.invalidateQueries({ queryKey: ["auth", "me"] });
     },
@@ -30,25 +28,27 @@ export function useLogin() {
 
 export function useLogout() {
   const qc = useQueryClient();
-  const clearSessionScope = useScopeStore((s) => s.clearSessionScope);
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: () => api.logout(),
     onSuccess: () => {
-      clearSessionScope();
-      qc.setQueryData<AuthSession | null>(["auth", "me"], null);
-      qc.removeQueries({ queryKey: ["dashboard"] });
-      qc.removeQueries({ queryKey: ["notifications"] });
+      clearClientSession(qc);
+      navigate("/login", { replace: true });
     },
   });
 }
 
 export function useChangePassword() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
     mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
       api.changePassword(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
+    onSuccess: () => {
+      clearClientSession(qc);
+      navigate("/login", { replace: true });
+    },
   });
 }
 
