@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Database } from "../db/types.js";
 import { GLOBAL_ROLES } from "../../shared/domain.js";
 import { asyncHandler } from "../http.js";
-import { createUser, listUsers, updateUser } from "../services/userService.js";
+import { createUser, deleteUser, listUsers, updateUser } from "../services/userService.js";
 import { hashPassword, requireAuth, resetUserPassword, validatePasswordPolicy } from "../services/authService.js";
 import { requirePermission } from "../permissions/permissionService.js";
 import { resetPasswordSchema } from "../schemas/schemas.js";
@@ -66,6 +66,17 @@ export function createUserRoutes(database: Database) {
       const userId = z.uuid().parse(getRequiredParam(request.params.userId, "userId"));
       const payload = updateUserSchema.parse(request.body);
       response.json({ user: await updateUser(database, actor, userId, payload) });
+    })
+  );
+
+  router.delete(
+    "/:userId",
+    asyncHandler(async (request, response) => {
+      const actor = await requireAuth(request, database);
+      await requirePermission(database, actor, "user:manage");
+      const userId = z.uuid().parse(getRequiredParam(request.params.userId, "userId"));
+      await deleteUser(database, actor, userId);
+      response.status(204).send();
     })
   );
 

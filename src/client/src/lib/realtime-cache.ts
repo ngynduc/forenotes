@@ -89,7 +89,9 @@ export async function handleRealtimeNotification(queryClient: QueryClient, userI
 export async function refreshCurrentUser(queryClient: QueryClient) {
   await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
   // User directories and audit/investigation views depend on mutable global permissions.
-  await queryClient.resetQueries({ predicate: (query) => ["users", "audit-logs", "investigation"].includes(String(query.queryKey[0])) });
+  await queryClient.resetQueries({ predicate: (query) =>
+    ["users", "audit-logs", "investigation"].includes(String(query.queryKey[0]))
+    || (query.queryKey[0] === "cases" && query.queryKey[2] === "member-candidates") });
   await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
 }
 

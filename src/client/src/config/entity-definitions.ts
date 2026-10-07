@@ -451,6 +451,7 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       updateAction: "Save User",
       create: () => ({ url: "/api/users", method: "POST" }),
       update: (id) => ({ url: `/api/users/${id}`, method: "PATCH" }),
+      delete: (id) => ({ url: `/api/users/${id}`, method: "DELETE" }),
       fields: () => [
         { name: "username", label: "Username", type: "text", required: true, autofocus: true },
         { name: "email", label: "Email", type: "email", required: true },

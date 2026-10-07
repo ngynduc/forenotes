@@ -34,6 +34,14 @@ export function useCaseMembers(caseId?: string) {
   });
 }
 
+export function useCaseMemberCandidates(caseId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["cases", caseId, "member-candidates"],
+    queryFn: () => api.listCaseMemberCandidates(caseId!),
+    enabled: !!caseId && enabled,
+  });
+}
+
 export function useAddCaseMember(caseId?: string) {
   const qc = useQueryClient();
   return useMutation({

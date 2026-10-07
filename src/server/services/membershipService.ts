@@ -2,7 +2,7 @@ import type { Database } from "../db/types.js";
 import type { AuthenticatedUser } from "./authService.js";
 import type { CaseMemberRole } from "../../shared/domain.js";
 import { AppError } from "../errors.js";
-import { requireCaseMembership, requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
+import { requireCaseMembership, requireCasePermission, requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { createAuditLog } from "./auditLogService.js";
 import {
   createNotification,
@@ -41,6 +41,22 @@ export async function listCaseMembers(database: Database, userId: string, caseId
       order by cm.added_at asc
     `,
     [caseId]
+  );
+  return result.rows;
+}
+
+export async function listCaseMemberCandidates(database: Database, user: AuthenticatedUser, caseId: string) {
+  await requireCasePermission(database, user, caseId, "case:member_manage");
+  const result = await database.query<{
+    id: string;
+    username: string;
+    email: string;
+    display_name: string;
+  }>(
+    `select id, username, email, display_name
+     from users
+     where status = 'active'
+     order by display_name asc, username asc, id asc`
   );
   return result.rows;
 }
@@ -315,6 +331,8 @@ async function syncCaseMemberToIncidents(
 }
 
 async function ensureNotLastCaseCommander(database: Database, caseId: string) {
+  // Serialize commander changes with account deletion before counting members.
+  await database.query("select id from cases where id = $1 for update", [caseId]);
   const leadCount = await database.query<{ count: string }>(
     "select count(*)::int as count from case_members where case_id = $1 and case_role = 'commander'",
     [caseId]

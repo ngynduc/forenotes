@@ -1,10 +1,11 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { Database } from "../db/types.js";
 import { asyncHandler } from "../http.js";
 import { getAuthenticatedUser } from "../services/authService.js";
 import { createCase, listCases, updateCase } from "../services/caseService.js";
 import { createIncident, listIncidentsForCase } from "../services/incidentService.js";
-import { addCaseMember, listCaseMembers, removeCaseMember, updateCaseMemberRole } from "../services/membershipService.js";
+import { addCaseMember, listCaseMemberCandidates, listCaseMembers, removeCaseMember, updateCaseMemberRole } from "../services/membershipService.js";
 import {
   addCaseMemberSchema,
   createCaseSchema,
@@ -54,6 +55,15 @@ export function createCaseRoutes(database: Database) {
       const user = await getAuthenticatedUser(request, database);
       const caseId = getRequiredParam(request.params.caseId, "caseId");
       response.json({ members: await listCaseMembers(database, user.id, caseId) });
+    })
+  );
+
+  router.get(
+    "/:caseId/member-candidates",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const caseId = z.uuid().parse(getRequiredParam(request.params.caseId, "caseId"));
+      response.json({ users: await listCaseMemberCandidates(database, user, caseId) });
     })
   );
 

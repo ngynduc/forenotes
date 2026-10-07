@@ -107,6 +107,15 @@ describe("central realtime invalidation", () => {
     expect(navigate).toHaveBeenCalledOnce();
     expect(client.getQueryData(["graph", "incident"])).toBeUndefined();
   });
+
+  it("clears case member directories when mutable global permissions change", async () => {
+    const directoryKeys = [["cases", "case", "member-candidates"], ["cases", "other-case", "member-candidates"]];
+    directoryKeys.forEach((key) => client.setQueryData(key, { users: [{ id: "old-candidate" }] }));
+    client.setQueryData(["cases", "case", "members"], { members: [] });
+    await refreshCurrentUser(client);
+    directoryKeys.forEach((key) => expect(client.getQueryData(key)).toBeUndefined());
+    expect(client.getQueryData(["cases", "case", "members"])).toEqual({ members: [] });
+  });
 });
 
 it("reports lost authentication centrally without treating a rejected password as logout", async () => {

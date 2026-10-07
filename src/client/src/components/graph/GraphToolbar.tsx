@@ -2,19 +2,20 @@ import { Input } from "@/components/ui/Input";
 import { useGraphStore } from "@/stores/graph-store";
 
 export function GraphToolbar() {
-  const { q, setQ, mode, setMode, includeDerived, setIncludeDerived, includeManual, setIncludeManual } =
+  const { q, setQ, mode, setMode, includeDerived, setIncludeDerived, includeManual, setIncludeManual,
+    includeAssignments, setIncludeAssignments } =
     useGraphStore();
 
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
       <select
+        aria-label="Graph mode"
         value={mode}
         onChange={(e) => setMode(e.target.value)}
         className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
       >
         <option value="overview">Overview</option>
         <option value="timeline">Timeline</option>
-        <option value="mitre">MITRE</option>
       </select>
 
       <label className="flex items-center gap-1 text-sm">
@@ -24,6 +25,10 @@ export function GraphToolbar() {
       <label className="flex items-center gap-1 text-sm">
         <input type="checkbox" checked={includeManual} onChange={(e) => setIncludeManual(e.target.checked)} />
         Manual
+      </label>
+      <label className="flex items-center gap-1 text-sm">
+        <input type="checkbox" checked={includeAssignments} onChange={(e) => setIncludeAssignments(e.target.checked)} />
+        Assigned to
       </label>
 
       <Input
