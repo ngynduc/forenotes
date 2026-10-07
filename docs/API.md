@@ -8,6 +8,11 @@ Base URL in local development: `http://localhost:8787/api` unless `APP_PORT` or 
 
 Production API requests use the `forenotes_session` HTTP-only cookie created by `POST /api/auth/login`.
 
+New browser sessions expire four hours after login. Requests do not extend the
+expiry, and the cookie and database session share the same deadline. Sessions
+issued before this change retain their original expiry; signing out and back in
+creates a four-hour session.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/auth/login` | Login with username/password and set the session cookie |
@@ -68,6 +73,7 @@ Zod validation errors return `400` with flattened validation details.
 | `GET` | `/api/users` | List users |
 | `POST` | `/api/users` | Create a user |
 | `PATCH` | `/api/users/:userId` | Update profile, role, or status |
+| `DELETE` | `/api/users/:userId` | Delete an unreferenced user account |
 | `POST` | `/api/users/:userId/reset-password` | Reset a user's password |
 
 Requires `user:manage`. User updates accept any non-empty subset of `username`,
@@ -75,6 +81,20 @@ Requires `user:manage`. User updates accept any non-empty subset of `username`,
 and `status` (`active`, `disabled`). Password resets remain a separate operation.
 Unknown fields are rejected. Updates return `{ user }` using the same public
 fields as user listing; duplicate usernames/emails return `409`.
+
+In **Admin → Users**, open **Edit** and choose **Delete**, then confirm.
+Deletion returns `204`, removes browser sessions, MCP tokens, memberships,
+notifications addressed to the user, and personal LLM settings, and records
+`user.delete` in the audit log. Your own account, the bootstrap admin, and the
+last commander of any case cannot be deleted (`409`). Accounts referenced by
+existing records, assignments, audit history, or manual graph links also return
+`409`; disable them to preserve attribution. Missing users return `404` and
+invalid UUIDs return `400`.
+
+```bash
+curl -b "$COOKIE_FILE" -X DELETE "http://localhost:8787/api/users/$USER_ID"
+# Expected: 204 No Content for an unreferenced account.
+```
 
 ```bash
 curl -b "$COOKIE_FILE" -X PATCH "http://localhost:8787/api/users/$USER_ID" \
@@ -106,11 +126,21 @@ Use `/api/cases/:caseId/members` to obtain member `user_id` values for assignmen
 | `POST` | `/api/cases` | Create a case |
 | `PATCH` | `/api/cases/:caseId` | Update case details |
 | `GET` | `/api/cases/:caseId/members` | List case members |
+| `GET` | `/api/cases/:caseId/member-candidates` | List active accounts for the member picker |
 | `POST` | `/api/cases/:caseId/members` | Add a case member |
 | `PATCH` | `/api/cases/:caseId/members/:memberUserId` | Update a case member role |
 | `DELETE` | `/api/cases/:caseId/members/:memberUserId` | Remove a case member |
 | `GET` | `/api/cases/:caseId/incidents` | List incidents in a case |
 | `POST` | `/api/cases/:caseId/incidents` | Create an incident in a case |
+
+Member candidates require `case:member_manage` and membership in the requested
+case. The response is `{ "users": [...] }` with only `id`, `username`, `email`,
+and `display_name`; the picker excludes existing members. Disabled accounts are
+omitted. The admin `/api/users` endpoint still requires `user:manage`.
+
+```bash
+curl -b "$COOKIE_FILE" "http://localhost:8787/api/cases/$CASE_ID/member-candidates"
+```
 
 ## Incidents And Investigation Records
 
@@ -166,6 +196,12 @@ Incident-scoped records require incident membership plus the relevant permission
 | `GET` | `/api/incidents/:incidentId/mitre-matrix` | Build the MITRE matrix |
 
 Graph modes: `overview`, `investigation`, `timeline`, `assets`, `tasks`, `mitre`.
+
+The relationship graph excludes MITRE techniques, tactics, and custom-tag nodes
+and their edges. ATT&CK mappings remain available in the MITRE Matrix. In the
+graph toolbar, **Assigned to** shows assignment edges; it is off by default.
+This display filter also hides users with no remaining relationships and keeps
+the inspector in sync. It does not change assignments or refetch the graph.
 
 ## Tags
 

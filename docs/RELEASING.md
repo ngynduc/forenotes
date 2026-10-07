@@ -15,7 +15,7 @@ The workflow publishes on version tags or a manual workflow dispatch. Pull reque
 
 ## Release a version
 
-Prepare and validate the release branch first. Review the release notes and confirm both Docker Hub repositories are available to the publishing token. For `0.2.3`, see [release notes](./releases/0.2.3.md).
+Prepare and validate the release branch first. Review the release notes and confirm both Docker Hub repositories are available to the publishing token. For `0.2.4`, see [release notes](./releases/0.2.4.md) and [regression checks](./releases/0.2.4-validation.md).
 
 Push the release branch for review, using the chosen version without the `v` prefix:
 
@@ -26,21 +26,19 @@ git status --short # Must be clean.
 git push origin "release/v$RELEASE_TAG"
 ```
 
-Merge the reviewed release branch into `main` and wait for CI to pass on the
-merge commit. Then tag that commit:
+Tag the validated release commit directly on the release branch:
 
 ```bash
 RELEASE_TAG="<release-tag>"
-git checkout main
-git pull --ff-only origin main
+git checkout "release/v$RELEASE_TAG"
 git status --short # Must be clean.
 git tag -a "v$RELEASE_TAG" -m "Release v$RELEASE_TAG"
 git push origin "v$RELEASE_TAG"
 ```
 
-The tag workflow repeats validation before publishing. Tagging after merge does
-not remove that check; it ensures the release points to reviewed code on `main`.
-Do not move or overwrite an existing release tag.
+The tag workflow repeats validation before publishing. Merge the release branch
+into `main` through the normal review process afterward; publication does not
+depend on that merge. Do not move or overwrite an existing release tag.
 
 The tag workflow publishes matching full semver, minor, major, and SHA tags for both repositories:
 
