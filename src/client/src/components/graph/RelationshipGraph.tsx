@@ -48,6 +48,12 @@ export function RelationshipGraph() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const setSelectedNode = useGraphStore((s) => s.setSelectedNode);
 
+  useEffect(() => {
+    if (data && selectedNodeId && !data.nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNode(null);
+    }
+  }, [data, selectedNodeId, setSelectedNode]);
+
   const { nodes: baseNodes, edges: baseEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
 
