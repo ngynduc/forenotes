@@ -47,7 +47,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
     if (previousRole.current && role && previousRole.current !== role && open) onOpenChange(false);
     previousRole.current = role;
   }, [role, open, onOpenChange]);
-  const { data: usersData } = useUsers();
+  const { data: usersData } = useUsers(open && Boolean(session?.permissions.includes("user:manage")));
   const { data: incidentMembersData } = useIncidentMembers(selectedIncidentId || undefined);
 
   const userOptions = (usersData?.users ?? []).map((user) => ({

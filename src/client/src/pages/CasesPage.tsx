@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from "react-router";
 import { DataTable } from "@/components/data-table/DataTable";
 import { EntityModal } from "@/components/entity-modal/EntityModal";
 import { Button } from "@/components/ui/Button";
-import { useAddCaseMember, useCaseMembers, useCases, useRemoveCaseMember, useUpdateCaseMember } from "@/hooks/use-cases";
-import { useUsers } from "@/hooks/use-entities";
+import { useAddCaseMember, useCaseMemberCandidates, useCaseMembers, useCases, useRemoveCaseMember, useUpdateCaseMember } from "@/hooks/use-cases";
+import { usePermissions } from "@/hooks/use-auth";
 import { useIncidents } from "@/hooks/use-incidents";
 import { useScopeStore } from "@/stores/scope-store";
 import { TABLE_DEFINITIONS } from "@/config/table-definitions";
@@ -26,9 +26,11 @@ export default function CasesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data, isLoading } = useCases();
+  const { can } = usePermissions();
+  const collaborationEnabled = can("case:member_manage");
   const incidentsQuery = useIncidents();
   const membersQuery = useCaseMembers(selectedCaseId || undefined);
-  const usersQuery = useUsers();
+  const usersQuery = useCaseMemberCandidates(selectedCaseId || undefined, collaborationEnabled);
   const addCaseMember = useAddCaseMember(selectedCaseId || undefined);
   const updateCaseMember = useUpdateCaseMember(selectedCaseId || undefined);
   const removeCaseMember = useRemoveCaseMember(selectedCaseId || undefined);
@@ -47,7 +49,6 @@ export default function CasesPage() {
   const users = usersQuery.data?.users ?? [];
   const memberIds = new Set(members.map((member) => String(member.userId ?? "")));
   const availableUsers = users.filter((user) => !memberIds.has(user.id));
-  const collaborationEnabled = true;
   const selectedCase = cases.find((entry) => String(entry.id ?? "") === selectedCaseId) ?? null;
   const caseTargetId = searchParams.get("caseId");
   const incidentTargetId = searchParams.get("incidentId");
@@ -121,7 +122,7 @@ export default function CasesPage() {
 
   function handleAddMember() {
     if (!collaborationEnabled) {
-      setMemberMessage("Case collaboration requires Forenotes Teams.");
+      setMemberMessage("You do not have permission to manage case members.");
       return;
     }
     if (!memberUserId) {
@@ -349,7 +350,7 @@ export default function CasesPage() {
                     <h4 className="text-lg font-semibold">Case Members</h4>
                     <p className="text-sm text-[var(--color-text-muted)]">Manage case access. Incidents inherit these members automatically.</p>
                     {!collaborationEnabled ? (
-                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">Adding, removing, and changing collaborators requires Forenotes Teams.</p>
+                      <p className="mt-1 text-sm text-[var(--color-text-muted)]">You do not have permission to manage case members.</p>
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
@@ -359,9 +360,9 @@ export default function CasesPage() {
                         className="h-9 w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm text-[var(--color-text)]"
                         value={memberUserId}
                         onChange={(event) => setMemberUserId(event.target.value)}
-                        disabled={!collaborationEnabled || addCaseMember.isPending || usersQuery.isLoading}
+                        disabled={!collaborationEnabled || addCaseMember.isPending || usersQuery.isLoading || usersQuery.isError}
                       >
-                        <option value="">Select user</option>
+                        <option value="">{usersQuery.isLoading ? "Loading users..." : "Select user"}</option>
                         {availableUsers.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.displayName} ({user.username})
@@ -384,11 +385,18 @@ export default function CasesPage() {
                         ))}
                       </select>
                     </label>
-                    <Button size="sm" onClick={handleAddMember} disabled={!collaborationEnabled || addCaseMember.isPending || !selectedCaseId}>
+                    <Button size="sm" onClick={handleAddMember} disabled={!collaborationEnabled || addCaseMember.isPending || !selectedCaseId || !memberUserId || usersQuery.isLoading || usersQuery.isError}>
                       Add
                     </Button>
                   </div>
                 </div>
+                {usersQuery.isError ? (
+                  <p role="alert" className="mb-3 text-sm text-[var(--color-text-muted)]">
+                    {usersQuery.error instanceof Error ? usersQuery.error.message : "Unable to load users to add."}
+                  </p>
+                ) : collaborationEnabled && !usersQuery.isLoading && availableUsers.length === 0 ? (
+                  <p className="mb-3 text-sm text-[var(--color-text-muted)]">No active users available to add.</p>
+                ) : null}
                 {memberMessage ? (
                   <p className="mb-3 rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
                     {memberMessage}

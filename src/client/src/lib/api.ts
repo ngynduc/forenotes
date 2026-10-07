@@ -62,6 +62,13 @@ export interface CaseItem {
   createdAt?: string;
 }
 
+export interface CaseMemberCandidateItem {
+  id: string;
+  username: string;
+  email: string;
+  displayName: string;
+}
+
 export interface CreateCaseInput {
   caseName: string;
   clientName?: string;
@@ -1023,6 +1030,20 @@ class ApiClient {
   listUsers = async () => {
     const payload = await this.request<{ users: RawUserItem[] }>("/users");
     return { users: payload.users.map(normalizeUser) };
+  };
+
+  listCaseMemberCandidates = async (caseId: string): Promise<{ users: CaseMemberCandidateItem[] }> => {
+    const payload = await this.request<{
+      users: Array<{ id: string; username: string; email: string; display_name: string }>;
+    }>(`/cases/${caseId}/member-candidates`);
+    return {
+      users: payload.users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        displayName: user.display_name,
+      })),
+    };
   };
 
   createUser = async (data: CreateUserInput) => {
