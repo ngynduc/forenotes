@@ -31,7 +31,7 @@ RELEASE_TAG="<release-tag>" # Replace with a published version.
 docker pull "ngynduc/forenotes:$RELEASE_TAG"
 ```
 
-The production image runs migrations before starting the app. Persist `/app/data` because uploaded note images and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.
+The production image runs migrations before starting the app. Persist `/app/data` because saved report bodies, uploaded note images, and markdown note files live there. Run behind HTTPS and keep `SECURE_SESSION_COOKIES=true`. See `docs/INSTALL_PRODUCTION.md` for the complete install flow, environment reference, and troubleshooting.
 
 For Compose deployments:
 

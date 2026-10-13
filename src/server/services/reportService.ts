@@ -6,12 +6,14 @@ import path from "node:path";
 import type { LlmSettingsStatus, PdfTemplate, ReportContext, ReportGenerationMode } from "../../shared/reportTypes.js";
 import type { ReportType } from "../../shared/domain.js";
 import type { Database } from "../db/types.js";
+import { afterTransactionCommit, afterTransactionRollback, withTransaction } from "../db/transaction.js";
 import { env } from "../env.js";
 import { AppError } from "../errors.js";
 import { requireIncidentMembership, requirePermission } from "../permissions/permissionService.js";
 import { getDataDir, getUploadsDir } from "../storage.js";
 import type { AuthenticatedUser } from "./authService.js";
 import { createAuditLog } from "./auditLogService.js";
+import { discardReportBody, readReportBody, writeReportBody } from "./reportBodyStorage.js";
 import {
   buildLiteLlmGenerateReportPayload,
   callLiteLlmGenerateReportService,
@@ -492,7 +494,7 @@ export async function listReports(database: Database, user: AuthenticatedUser, i
   await requirePermission(database, user, "report:read");
   await requireIncidentMembership(database, user.id, incidentId);
   const result = await database.query("select * from reports where incident_id = $1 order by created_at desc", [incidentId]);
-  return result.rows;
+  return Promise.all(result.rows.map((row) => hydrateReportBody(row)));
 }
 
 export async function getReport(database: Database, user: AuthenticatedUser, incidentId: string, reportId: string) {
@@ -508,41 +510,51 @@ export async function createReport(database: Database, user: AuthenticatedUser, 
     await getTemplate(database, incidentId, input.templateId);
   }
 
-  const reportId = randomUUID();
-  await database.query(
-    `
-      insert into reports (
-        id, incident_id, template_id, title, report_type, report_date, timezone, markdown,
-        generation_mode, generated_context, unresolved_placeholders, created_by_user_id
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-    `,
-    [
-      reportId,
-      incidentId,
-      input.templateId ?? null,
-      input.title,
-      input.reportType,
-      input.reportDate ?? null,
-      input.timezone ?? null,
-      input.markdown,
-      input.generationMode,
-      JSON.stringify(input.generatedContext),
-      JSON.stringify(input.unresolvedPlaceholders ?? []),
-      user.id
-    ]
-  );
+  return withTransaction(database, async (transaction) => {
+    const reportId = randomUUID();
+    const contentFile = await writeReportBody(incidentId, {
+      markdown: input.markdown,
+      generatedContext: input.generatedContext
+    });
+    afterTransactionRollback(() => { void discardReportBody(incidentId, contentFile); });
+    try {
+      await transaction.query(
+        `insert into reports (
+          id, incident_id, template_id, title, report_type, report_date, timezone, markdown,
+          generation_mode, generated_context, unresolved_placeholders, created_by_user_id, content_file
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          reportId,
+          incidentId,
+          input.templateId ?? null,
+          input.title,
+          input.reportType,
+          input.reportDate ?? null,
+          input.timezone ?? null,
+          "",
+          input.generationMode,
+          "{}",
+          JSON.stringify(input.unresolvedPlaceholders ?? []),
+          user.id,
+          contentFile
+        ]
+      );
 
-  await createAuditLog(database, {
-    actorUserId: user.id,
-    incidentId,
-    action: "report.create",
-    entityType: "report",
-    entityId: reportId,
-    afterJson: { title: input.title, reportType: input.reportType }
+      await createAuditLog(transaction, {
+        actorUserId: user.id,
+        incidentId,
+        action: "report.create",
+        entityType: "report",
+        entityId: reportId,
+        afterJson: { title: input.title, reportType: input.reportType }
+      });
+
+      return await getReportRow(transaction, incidentId, reportId);
+    } catch (error) {
+      await discardReportBody(incidentId, contentFile);
+      throw error;
+    }
   });
-
-  return getReportRow(database, incidentId, reportId);
 }
 
 export async function updateReport(
@@ -554,30 +566,59 @@ export async function updateReport(
 ) {
   await requirePermission(database, user, "report:update");
   await requireIncidentMembership(database, user.id, incidentId);
-  const existing = await getReportRow(database, incidentId, reportId);
-  await database.query(
-    `
-      update reports
-      set title = $3, markdown = $4, updated_by_user_id = $5, updated_at = now()
-      where id = $1 and incident_id = $2
-    `,
-    [reportId, incidentId, input.title ?? existing.title, input.markdown ?? existing.markdown, user.id]
-  );
-  return getReportRow(database, incidentId, reportId);
+  return withTransaction(database, async (transaction) => {
+    const existing = await getReportRow(transaction, incidentId, reportId);
+    if (input.markdown === undefined) {
+      await transaction.query(
+        "update reports set title = $3, updated_by_user_id = $4, updated_at = now() where id = $1 and incident_id = $2",
+        [reportId, incidentId, input.title ?? existing.title, user.id]
+      );
+      return getReportRow(transaction, incidentId, reportId);
+    }
+    const contentFile = await writeReportBody(incidentId, {
+      markdown: input.markdown,
+      generatedContext: existing.generated_context
+    });
+    afterTransactionRollback(() => { void discardReportBody(incidentId, contentFile); });
+    try {
+      await transaction.query(
+        `update reports
+         set title = $3, markdown = '', generated_context = '{}'::jsonb,
+             content_file = $4, updated_by_user_id = $5, updated_at = now()
+         where id = $1 and incident_id = $2`,
+        [reportId, incidentId, input.title ?? existing.title, contentFile, user.id]
+      );
+      if (typeof existing.content_file === "string") {
+        afterTransactionCommit(() => { void discardReportBody(incidentId, String(existing.content_file)); });
+      }
+      return await getReportRow(transaction, incidentId, reportId);
+    } catch (error) {
+      await discardReportBody(incidentId, contentFile);
+      throw error;
+    }
+  });
 }
 
 export async function deleteReport(database: Database, user: AuthenticatedUser, incidentId: string, reportId: string) {
   await requirePermission(database, user, "report:delete");
   await requireIncidentMembership(database, user.id, incidentId);
-  const existing = await getReportRow(database, incidentId, reportId);
-  await database.query("delete from reports where id = $1 and incident_id = $2", [reportId, incidentId]);
-  await createAuditLog(database, {
-    actorUserId: user.id,
-    incidentId,
-    action: "report.delete",
-    entityType: "report",
-    entityId: reportId,
-    beforeJson: existing
+  await withTransaction(database, async (transaction) => {
+    const existing = await one(transaction, "select * from reports where id = $1 and incident_id = $2", [reportId, incidentId], "Report not found");
+    await transaction.query("delete from reports where id = $1 and incident_id = $2", [reportId, incidentId]);
+    const metadata = { ...existing };
+    delete metadata.markdown;
+    delete metadata.generated_context;
+    await createAuditLog(transaction, {
+      actorUserId: user.id,
+      incidentId,
+      action: "report.delete",
+      entityType: "report",
+      entityId: reportId,
+      beforeJson: metadata
+    });
+    if (typeof existing.content_file === "string") {
+      afterTransactionCommit(() => { void discardReportBody(incidentId, String(existing.content_file)); });
+    }
   });
 }
 
@@ -1137,7 +1178,14 @@ async function getTemplate(database: Database, incidentId: string, templateId: s
 }
 
 async function getReportRow(database: Database, incidentId: string, reportId: string) {
-  return one(database, "select * from reports where id = $1 and incident_id = $2", [reportId, incidentId], "Report not found");
+  const row = await one(database, "select * from reports where id = $1 and incident_id = $2", [reportId, incidentId], "Report not found");
+  return hydrateReportBody(row);
+}
+
+async function hydrateReportBody(row: DbRow) {
+  if (typeof row.content_file !== "string") return row;
+  const body = await readReportBody(String(row.incident_id), row.content_file);
+  return { ...row, markdown: body.markdown, generated_context: body.generatedContext };
 }
 
 async function getPdfTemplate(database: Database, user: AuthenticatedUser, pdfTemplateId: string): Promise<PdfTemplate> {

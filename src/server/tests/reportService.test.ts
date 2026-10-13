@@ -13,6 +13,9 @@ import {
   buildReportContext,
   createReport,
   createReportTemplate,
+  deleteReport,
+  getReport,
+  updateReport,
   exportReportPdf,
   buildLiteLlmGenerateReportPayload,
   inlineReportUploadImagesForPdf,
@@ -806,6 +809,184 @@ describe("report service", () => {
     expect(exported.pdf.byteLength).toBeGreaterThan(0);
     expect(exported.pdf.toString("utf8", 0, 5)).toBe("%PDF-");
   }, 30000);
+
+  it("saves, lists, and updates large AI reports without truncating their content or context", async () => {
+    const app = createApp(database, { accessLogWriter: () => {} });
+    const markdown = "## Analysis\n\nEvidence reviewed: 分析.\n".repeat(100_000);
+    const generatedContext = {
+      ...await buildReportContext(database, user(userId), incidentId, "incident"),
+      summary: "Fixture context. ".repeat(500_000)
+    };
+    const payload = {
+      title: "Large AI report",
+      reportType: "incident",
+      markdown,
+      generationMode: "llm",
+      generatedContext
+    };
+    expect(markdown.length).toBeGreaterThan(2 * 1024 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(payload))).toBeGreaterThan(10 * 1024 * 1024);
+
+    const saved = await request(app)
+      .post(`/api/incidents/${incidentId}/reports`)
+      .set("x-user-id", userId)
+      .send(payload);
+    expect(saved.status).toBe(201);
+    expect(saved.body.report.markdown).toBe(markdown);
+    expect(saved.body.report.generated_context).toEqual(JSON.parse(JSON.stringify(generatedContext)));
+    const stored = await database.query("select * from reports where id = $1", [saved.body.report.id]);
+    expect(stored.rows[0].markdown).toBe("");
+    expect(stored.rows[0].generated_context).toEqual({});
+    const bodyFile = path.join(dataDir, "reports", incidentId, stored.rows[0].content_file);
+    expect(JSON.parse(await fsPromises.readFile(bodyFile, "utf8"))).toEqual(JSON.parse(JSON.stringify({ markdown, generatedContext })));
+
+    const listed = await request(app)
+      .get(`/api/incidents/${incidentId}/reports`)
+      .set("x-user-id", userId);
+    expect(listed.status).toBe(200);
+    expect(listed.body.reports[0].markdown).toBe(markdown);
+
+    const updatedMarkdown = `${markdown}\n## Follow-up\nAdditional analysis.`;
+    const updated = await request(app)
+      .patch(`/api/incidents/${incidentId}/reports/${saved.body.report.id}`)
+      .set("x-user-id", userId)
+      .send({ markdown: updatedMarkdown });
+    expect(updated.status).toBe(200);
+    expect(updated.body.report.markdown).toBe(updatedMarkdown);
+    expect(updated.body.report.generated_context).toEqual(saved.body.report.generated_context);
+    await vi.waitFor(async () => {
+      await expect(fsPromises.stat(bodyFile)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+    expect(await fsPromises.readdir(path.join(dataDir, "reports", incidentId))).toHaveLength(1);
+  });
+
+  it("reads legacy inline reports and moves their body to disk when edited", async () => {
+    const reportId = randomUUID();
+    await database.query(
+      `insert into reports (id, incident_id, title, report_type, markdown, generation_mode, generated_context, created_by_user_id)
+       values ($1, $2, 'Legacy report', 'incident', '# Legacy body', 'deterministic', '{"legacy":true}'::jsonb, $3)`,
+      [reportId, incidentId, userId]
+    );
+    expect((await getReport(database, user(userId), incidentId, reportId)).markdown).toBe("# Legacy body");
+    const updated = await updateReport(database, user(userId), incidentId, reportId, { markdown: "# Edited legacy body" });
+    expect(updated.markdown).toBe("# Edited legacy body");
+    expect(updated.generated_context).toEqual({ legacy: true });
+    const stored = await database.query("select * from reports where id = $1", [reportId]);
+    expect(stored.rows[0].markdown).toBe("");
+    expect(stored.rows[0].generated_context).toEqual({});
+    expect(stored.rows[0].content_file).toMatch(/\.json$/);
+  });
+
+  it("keeps file-backed content unchanged on a title-only update", async () => {
+    const report = await createReport(database, user(userId), incidentId, {
+      title: "Original title", reportType: "incident", markdown: "# Original body",
+      generationMode: "deterministic", generatedContext: await buildReportContext(database, user(userId), incidentId, "incident")
+    });
+    const updated = await updateReport(database, user(userId), incidentId, String(report.id), { title: "New title" });
+    expect(updated.content_file).toBe(report.content_file);
+    expect(updated.markdown).toBe("# Original body");
+    expect(updated.title).toBe("New title");
+  });
+
+  it("rejects inaccessible reports before reading their private file", async () => {
+    const report = await createReport(database, user(userId), incidentId, {
+      title: "Private report", reportType: "incident", markdown: "Private body",
+      generationMode: "deterministic", generatedContext: await buildReportContext(database, user(userId), incidentId, "incident")
+    });
+    await fsPromises.rm(path.join(dataDir, "reports", incidentId, String(report.content_file)));
+    await expect(getReport(database, user(randomUUID()), incidentId, String(report.id))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(getReport(database, user(userId), incidentId, String(report.id))).rejects.toMatchObject({ statusCode: 503 });
+    await deleteReport(database, user(userId, "admin"), incidentId, String(report.id));
+    expect((await database.query("select id from reports where id = $1", [report.id])).rows).toHaveLength(0);
+  });
+
+  it("deletes the body file without copying large content into the audit log", async () => {
+    const report = await createReport(database, user(userId), incidentId, {
+      title: "Delete report", reportType: "incident", markdown: "Private report body",
+      generationMode: "deterministic", generatedContext: await buildReportContext(database, user(userId), incidentId, "incident")
+    });
+    const bodyFile = path.join(dataDir, "reports", incidentId, String(report.content_file));
+    await deleteReport(database, user(userId, "admin"), incidentId, String(report.id));
+    await vi.waitFor(async () => {
+      await expect(fsPromises.stat(bodyFile)).rejects.toMatchObject({ code: "ENOENT" });
+    });
+    const audit = await database.query("select before_json from audit_logs where action = 'report.delete'");
+    expect(audit.rows[0].before_json.title).toBe("Delete report");
+    expect(audit.rows[0].before_json).not.toHaveProperty("markdown");
+    expect(audit.rows[0].before_json).not.toHaveProperty("generated_context");
+  });
+
+  it("removes a newly written file when the report insert fails", async () => {
+    const failingDatabase: Database = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        if (sql.includes("insert into reports")) throw new Error("Insert failed");
+        return database.query(sql, params);
+      })
+    };
+    await expect(createReport(failingDatabase, user(userId), incidentId, {
+      title: "Failed report", reportType: "incident", markdown: "Unsaved body",
+      generationMode: "deterministic", generatedContext: await buildReportContext(database, user(userId), incidentId, "incident")
+    })).rejects.toThrow("Insert failed");
+    expect(await fsPromises.readdir(path.join(dataDir, "reports", incidentId))).toEqual([]);
+  });
+
+  it("applies file storage to legacy schemas without migration history and preserves inline reports", async () => {
+    // pg-mem flags skipped IF NOT EXISTS definitions on repeated migrations.
+    const db = newDb({ noAstCoverageCheck: true });
+    const adapter = db.adapters.createPg();
+    database = new adapter.Pool() as Database;
+    await runMigrations(database);
+    incidentId = (await seedIncident(database, userId)).incidentId;
+    const reportId = randomUUID();
+    await database.query(
+      `insert into reports (id, incident_id, title, report_type, markdown, generation_mode, generated_context, created_by_user_id)
+       values ($1, $2, 'Legacy report', 'incident', '# Legacy body', 'deterministic', '{}'::jsonb, $3)`,
+      [reportId, incidentId, userId]
+    );
+    await database.query("alter table reports drop column content_file");
+    await database.query("delete from schema_migrations");
+    await runMigrations(database);
+    await runMigrations(database);
+    const stored = await database.query("select markdown, content_file from reports where id = $1", [reportId]);
+    expect(stored.rows[0]).toEqual({ markdown: "# Legacy body", content_file: null });
+  }, 30000);
+
+  it("preserves the previous body file when a Markdown update fails", async () => {
+    const report = await createReport(database, user(userId), incidentId, {
+      title: "Original report", reportType: "incident", markdown: "# Original body",
+      generationMode: "deterministic", generatedContext: await buildReportContext(database, user(userId), incidentId, "incident")
+    });
+    const failingDatabase: Database = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        if (sql.includes("update reports")) throw new Error("Update failed");
+        return database.query(sql, params);
+      })
+    };
+    await expect(updateReport(failingDatabase, user(userId), incidentId, String(report.id), {
+      markdown: "# Failed update"
+    })).rejects.toThrow("Update failed");
+    expect((await getReport(database, user(userId), incidentId, String(report.id))).markdown).toBe("# Original body");
+    expect(await fsPromises.readdir(path.join(dataDir, "reports", incidentId))).toEqual([report.content_file]);
+  });
+
+  it("still validates the report markdown length after parsing a large body", async () => {
+    const app = createApp(database, { accessLogWriter: () => {} });
+    const response = await request(app)
+      .post(`/api/incidents/${incidentId}/reports`)
+      .set("x-user-id", userId)
+      .send({
+        title: "Oversized markdown",
+        reportType: "incident",
+        markdown: "x".repeat(10 * 1024 * 1024 + 1),
+        generationMode: "llm",
+        generatedContext: {}
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.details.fieldErrors.markdown).toHaveLength(1);
+    const reports = await database.query("select id from reports where incident_id = $1", [incidentId]);
+    expect(reports.rows).toHaveLength(0);
+  });
 
   it("supports report routes for template CRUD, generation, save, export, and unauthenticated denial", async () => {
     const app = createApp(database);

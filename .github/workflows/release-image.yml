@@ -2,51 +2,137 @@ name: Release container images
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Version tag to republish (for example, v0.2.4)
+        required: true
+        type: string
 
 concurrency:
   group: release-image-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
-  validate:
+  resolve-release:
     runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.release.outputs.should_publish }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_commit: ${{ steps.release.outputs.release_commit }}
+      version: ${{ steps.release.outputs.version }}
+      minor_version: ${{ steps.release.outputs.minor_version }}
+      major_version: ${{ steps.release.outputs.major_version }}
+      short_sha: ${{ steps.release.outputs.short_sha }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          fetch-depth: 0
 
-      - name: Install server dependencies
-        run: npm ci
+      - name: Resolve validated release tag
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
 
-      - name: Install client dependencies
-        run: npm ci --prefix src/client
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_tag="$REQUESTED_TAG"
+            target_revision="refs/remotes/origin/main"
+          else
+            target_revision="$GITHUB_SHA"
+            mapfile -t merged_tags < <(git tag --list "v*.*.*" --merged "$GITHUB_SHA" --sort=-version:refname)
+            new_tags=()
+            for candidate_tag in "${merged_tags[@]}"; do
+              candidate_commit="$(git rev-parse "$candidate_tag^{commit}")"
+              if [[ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]] || \
+                 ! git merge-base --is-ancestor "$candidate_commit" "$BEFORE_SHA"; then
+                new_tags+=("$candidate_tag")
+              fi
+            done
 
-      - name: Validate Compose configuration
-        run: docker compose --env-file .env.production.example -f docker-compose.prod.yml config --quiet
+            if [[ "${#new_tags[@]}" -eq 0 ]]; then
+              echo "No newly merged release tag; skipping image publication."
+              echo "should_publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
-      - name: Run lint
-        run: npm run lint
+            if [[ "${#new_tags[@]}" -ne 1 ]]; then
+              echo "Expected one newly merged release tag, found: ${new_tags[*]}" >&2
+              exit 1
+            fi
 
-      - name: Run tests
-        run: npm test -- --no-file-parallelism
+            release_tag="${new_tags[0]}"
+          fi
 
-      - name: Build application
-        run: npm run build
+          if [[ "$release_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major_version="${BASH_REMATCH[1]}"
+            minor_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          else
+            echo "Release tag must use vMAJOR.MINOR.PATCH format: $release_tag" >&2
+            exit 1
+          fi
+
+          release_commit="$(git rev-parse --verify "refs/tags/$release_tag^{commit}")"
+          version="${release_tag#v}"
+          package_version="$(git show "$release_tag:package.json" | node -e \
+            "let input=''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => console.log(JSON.parse(input).version));")"
+
+          if [[ "$package_version" != "$version" ]]; then
+            echo "$release_tag points to package version $package_version" >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$release_commit" "$target_revision"; then
+            echo "$release_tag is not contained in main" >&2
+            exit 1
+          fi
+
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$release_commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minor_version=$minor_version" >> "$GITHUB_OUTPUT"
+          echo "major_version=$major_version" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=7 "$release_commit")" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm release tag validation passed
+        if: steps.release.outputs.should_publish == 'true'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+        with:
+          script: |
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "ci.yml",
+              event: "push",
+              status: "completed",
+              head_sha: process.env.RELEASE_COMMIT,
+              per_page: 100,
+            });
+            const validated = runs.some((run) =>
+              run.head_branch === process.env.RELEASE_TAG && run.conclusion === "success"
+            );
+            if (!validated) {
+              core.setFailed(`No successful tag CI run found for ${process.env.RELEASE_TAG}`);
+            }
 
   publish:
-    needs: validate
+    needs: resolve-release
+    if: needs.resolve-release.outputs.should_publish == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -62,6 +148,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-release.outputs.release_tag }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,10 +166,10 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short
+            type=raw,value=${{ needs.resolve-release.outputs.version }}
+            type=raw,value=${{ needs.resolve-release.outputs.minor_version }}
+            type=raw,value=${{ needs.resolve-release.outputs.major_version }}
+            type=raw,value=sha-${{ needs.resolve-release.outputs.short_sha }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6

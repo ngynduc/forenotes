@@ -11,6 +11,8 @@ import { createRequestScopedDatabase, runRequestTransaction } from "./db/transac
 import { env } from "./env.js";
 import { createMcpHttpHandler, type McpHttpConfig } from "./mcp/mcpHttpHandler.js";
 import { createAccessLogger, type AccessLogWriter } from "./middleware/accessLog.js";
+import { requireIncidentMembership } from "./permissions/permissionService.js";
+import { getAuthenticatedUser } from "./services/authService.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const clientDistDir = path.resolve(currentDir, "../client");
@@ -29,6 +31,24 @@ export function createApp(
     allowedOrigins: env.FORENOTES_MCP_ALLOWED_ORIGINS
   };
   app.all("/mcp", createMcpHttpHandler(database, mcpConfig));
+  // Saved reports include both generated Markdown and the incident context.
+  app.use(
+    "/api/incidents/:incidentId/reports",
+    async (request, _response, next) => {
+      if (!["POST", "PATCH", "PUT"].includes(request.method) || !request.is("application/json")) {
+        next();
+        return;
+      }
+      try {
+        const user = await getAuthenticatedUser(request, database);
+        await requireIncidentMembership(database, user.id, request.params.incidentId);
+        next();
+      } catch (error) {
+        next(error);
+      }
+    },
+    express.json({ limit: "50mb" })
+  );
   app.use(express.json());
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
@@ -76,6 +96,14 @@ export function createApp(
       response.status(error.statusCode).json({
         error: error.message,
         details: error.details ?? null
+      });
+      return;
+    }
+
+    if (error instanceof Error && "type" in error && error.type === "entity.too.large") {
+      response.status(413).json({
+        error: "Request body too large",
+        details: null
       });
       return;
     }
