@@ -435,8 +435,12 @@ Generated or manually authored reports.
 | title | text | Report title |
 | report_type | text | daily or incident |
 | report_date | date | Optional report date |
-| status | text | draft/final workflow status |
-| content_markdown | text | Report body |
+| timezone | text | Optional report timezone |
+| generation_mode | text | deterministic or llm |
+| content_file | text | Private body filename under `FORENOTES_DATA_DIR/reports/<incident-id>`; null for legacy inline reports |
+| markdown | text | Legacy inline Markdown; empty for file-backed reports |
+| generated_context | jsonb | Legacy inline context; empty object for file-backed reports |
+| unresolved_placeholders | jsonb | Unresolved template placeholder names |
 | created_by_user_id | uuid | FK → users |
 | updated_by_user_id | uuid | FK → users |
 | created_at | timestamptz | |
@@ -468,3 +472,5 @@ PDF export history for reports.
 | `007_llm_system_prompt.sql` | LLM system prompt storage |
 | `008_system_status.sql` | System status field |
 | `009_collapse_response_lead_roles.sql` | Normalize legacy lead roles to `commander` |
+| `010_mcp_provenance.sql` | MCP tokens, investigation runs, and provenance records |
+| `011_report_file_storage.sql` | Add the private report-body file reference; retain legacy inline content |

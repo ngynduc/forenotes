@@ -1,6 +1,6 @@
 import type { PoolClient, QueryResult } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import { afterTransactionCommit, withTransaction } from "../db/transaction.js";
+import { afterTransactionCommit, afterTransactionRollback, runRequestTransaction, withTransaction } from "../db/transaction.js";
 
 function fixture() {
   const query = vi.fn(async (sql: string): Promise<QueryResult> => {
@@ -15,6 +15,65 @@ function fixture() {
 }
 
 describe("nested transactions", () => {
+  it("runs rollback callbacks after a failed outer transaction", async () => {
+    const { database } = fixture();
+    const rolledBack = vi.fn();
+    await expect(withTransaction(database, async (outer) => {
+      await withTransaction(outer, async () => {
+        afterTransactionRollback(rolledBack);
+      });
+      expect(rolledBack).not.toHaveBeenCalled();
+      throw new Error("Abort report save");
+    })).rejects.toThrow("Abort report save");
+    expect(rolledBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards rollback callbacks when the transaction commits", async () => {
+    const { database } = fixture();
+    const rolledBack = vi.fn();
+    await withTransaction(database, async () => {
+      afterTransactionRollback(rolledBack);
+    });
+    expect(rolledBack).not.toHaveBeenCalled();
+  });
+
+  it("runs rollback callbacks if the database commit fails", async () => {
+    const { database, query, release } = fixture();
+    query.mockImplementation(async (sql) => {
+      if (sql === "commit") throw new Error("Commit failed");
+      return { rows: [], rowCount: 0, command: "", oid: 0, fields: [] };
+    });
+    const rolledBack = vi.fn();
+    await expect(withTransaction(database, async () => {
+      afterTransactionRollback(rolledBack);
+    })).rejects.toThrow("Commit failed");
+    expect(rolledBack).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a committed transaction if a post-commit callback throws", async () => {
+    const { database, query, release } = fixture();
+    const rolledBack = vi.fn();
+    await expect(withTransaction(database, async () => {
+      afterTransactionRollback(rolledBack);
+      afterTransactionCommit(() => { throw new Error("Callback failed"); });
+    })).rejects.toThrow("Callback failed");
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual(["begin", "commit"]);
+    expect(rolledBack).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs rollback callbacks when an HTTP request transaction is aborted", async () => {
+    const { database } = fixture();
+    const rolledBack = vi.fn();
+    let rollback: () => Promise<void> = async () => {};
+    await runRequestTransaction(database, () => {
+      afterTransactionRollback(rolledBack);
+    }, (_commit, abort) => { rollback = abort; });
+    await rollback();
+    expect(rolledBack).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses the connected client and defers callbacks until the outer commit", async () => {
     const { database, query, reconnect, release } = fixture();
     const committed = vi.fn();

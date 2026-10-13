@@ -242,6 +242,19 @@ curl -b "$COOKIE_FILE" -X DELETE \
 
 ## Reports And LLM Settings
 
+JSON requests under `/api/incidents/:incidentId/reports` accept up to 50 MiB,
+including report Markdown and generated context. Report Markdown is limited to
+10,485,760 characters. Other JSON routes retain the 100 KiB body limit.
+Requests exceeding a body limit return `413` with `Request body too large`;
+report field validation failures return `400`.
+
+Saved report Markdown and generated context are stored privately under
+`FORENOTES_DATA_DIR/reports/<incident-id>/`. PostgreSQL stores report metadata
+and a file reference. Existing reports stored in PostgreSQL remain readable;
+editing their Markdown moves the body to disk. Report reads, lists, and exports
+keep the same response format and permission checks. Missing or unreadable
+body files return `503` rather than an empty report.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/me/llm-settings` | Read masked current-user LLM settings |

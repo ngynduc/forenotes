@@ -352,12 +352,16 @@ Migrations are written to be re-runnable. Failures exit non-zero and are printed
 
 ## Backup And Restore
 
+Saved report bodies live in the app data volume. Keep the database dump and data
+archive together, and stop the app while taking or restoring this backup pair.
+
 Backup bundled PostgreSQL:
 
 ```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production stop app
 docker compose -f docker-compose.prod.yml --env-file .env.production exec postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > forenotes-backup.sql
 
-# Back up task notes and uploaded report images from the app data volume.
+# Back up saved report bodies, task notes, and uploaded images from the app data volume.
 APP_CONTAINER="$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -aq app)"
 docker run --rm --volumes-from "$APP_CONTAINER" -v "$PWD":/backup alpine \
   tar czf /backup/forenotes-app-data.tar.gz -C /app/data .
@@ -365,15 +369,16 @@ docker run --rm --volumes-from "$APP_CONTAINER" -v "$PWD":/backup alpine \
 # Preserve the environment file and especially FORENOTES_LLM_SECRET_KEY.
 umask 077
 cp .env.production forenotes-env.production.backup
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
 Restore bundled PostgreSQL:
 
 ```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production stop app
 cat forenotes-backup.sql | docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
 
 # Restore app data into the named volume after stopping the app.
-docker compose -f docker-compose.prod.yml --env-file .env.production stop app
 APP_CONTAINER="$(docker compose -f docker-compose.prod.yml --env-file .env.production ps -aq app)"
 docker run --rm --volumes-from "$APP_CONTAINER" -v "$PWD":/backup alpine \
   tar xzf /backup/forenotes-app-data.tar.gz -C /app/data

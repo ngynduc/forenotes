@@ -4,6 +4,9 @@ import type { Database } from "./types.js";
 import { bootstrapSecurityModel } from "./bootstrap.js";
 import { withTransaction } from "./transaction.js";
 
+// Baseline only the pre-tracking schema; new migrations must still execute.
+const LEGACY_BASELINE_LAST_MIGRATION = "010_mcp_provenance.sql";
+
 export async function runMigrations(database: Database) {
   const migrationsDir = path.resolve("src/server/db/migrations");
   const files = (await readdir(migrationsDir)).filter((file) => file.endsWith(".sql")).sort();
@@ -19,7 +22,7 @@ export async function runMigrations(database: Database) {
   if (existingSchema.rowCount && existingSchema.rowCount > 0) {
     const recorded = await database.query<{ filename: string }>("select filename from schema_migrations");
     if (recorded.rowCount === 0) {
-      for (const file of files) {
+      for (const file of files.filter((filename) => filename <= LEGACY_BASELINE_LAST_MIGRATION)) {
         await database.query("insert into schema_migrations (filename) values ($1) on conflict do nothing", [file]);
       }
     }

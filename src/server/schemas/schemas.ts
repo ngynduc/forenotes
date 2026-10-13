@@ -214,7 +214,7 @@ export const createReportSchema = z.object({
   reportType: z.enum(REPORT_TYPES),
   reportDate: z.iso.date().nullable().optional(),
   timezone: z.string().min(1).nullable().optional(),
-  markdown: z.string().min(1).max(2 * 1024 * 1024),
+  markdown: z.string().min(1).max(10 * 1024 * 1024),
   generationMode: z.enum(["deterministic", "llm"]),
   generatedContext: z.record(z.string(), z.unknown()),
   unresolvedPlaceholders: z.array(z.string()).optional()
@@ -222,7 +222,7 @@ export const createReportSchema = z.object({
 
 export const updateReportSchema = z.object({
   title: z.string().min(1).max(220).optional(),
-  markdown: z.string().min(1).max(2 * 1024 * 1024).optional()
+  markdown: z.string().min(1).max(10 * 1024 * 1024).optional()
 }).refine((value) => Object.keys(value).length > 0);
 
 const customHeadersSchema = z
