@@ -11,11 +11,14 @@ DOCKERHUB_USERNAME=your-dockerhub-username
 DOCKERHUB_TOKEN=your-dockerhub-access-token
 ```
 
-The workflow publishes on version tags or a manual workflow dispatch. Pull requests and pushes to `main` run CI without publishing a container image.
+Pull requests and version tags run validation. Merging a newly tagged release into
+`main` publishes both images without repeating validation. A manual workflow
+dispatch can republish a specific release tag that is already contained in
+`main`.
 
 ## Release a version
 
-Prepare and validate the release branch first. Review the release notes and confirm both Docker Hub repositories are available to the publishing token. For `0.2.4`, see [release notes](./releases/0.2.4.md) and [regression checks](./releases/0.2.4-validation.md).
+Prepare and validate the release branch first. Review the release notes and confirm both Docker Hub repositories are available to the publishing token. For `0.2.5`, see [release notes](./releases/0.2.5.md) and [regression checks](./releases/0.2.5-validation.md).
 
 Push the release branch for review, using the chosen version without the `v` prefix:
 
@@ -36,11 +39,15 @@ git tag -a "v$RELEASE_TAG" -m "Release v$RELEASE_TAG"
 git push origin "v$RELEASE_TAG"
 ```
 
-The tag workflow repeats validation before publishing. Merge the release branch
-into `main` through the normal review process afterward; publication does not
-depend on that merge. Do not move or overwrite an existing release tag.
+Wait for the tag's CI run to pass, then merge the release branch into `main`
+through the normal review process. The `main` workflow verifies that the merge
+introduces exactly one release tag and confirms that tag's CI run succeeded,
+then checks out and publishes the validated tag without running lint, tests, or
+the application build again. A normal `main` push that does not introduce a
+release tag does not publish. Do not move or overwrite an existing release tag.
 
-The tag workflow publishes matching full semver, minor, major, and SHA tags for both repositories:
+The `main` release workflow publishes matching full semver, minor, major, and
+SHA tags for both repositories:
 
 ```text
 ngynduc/forenotes:<release-tag>
@@ -51,8 +58,8 @@ Keep shipping defaults pinned to the last published version while preparing a
 release. Wait for both image publishing jobs to succeed and verify both full
 version tags can be pulled before promoting the pins in `install.sh`,
 `.env.production.example`, and `docker-compose.prod.yml` to `main`. A manual
-dispatch on a branch produces SHA tags; dispatch on a version tag to publish
-matching versioned tags.
+dispatch requires a `vMAJOR.MINOR.PATCH` tag and republishes the matching full
+version, minor, major, and SHA tags.
 
 Production installations should use the full semver tag or SHA tag for deliberate upgrades:
 
@@ -61,4 +68,7 @@ FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
 FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 ```
 
-The image build includes GitHub Actions layer caching, provenance attestations, and an SBOM. GitHub Actions runs lint, tests, the application build, and Compose validation before publishing is allowed by branch protection.
+The image build includes GitHub Actions layer caching, provenance attestations,
+and an SBOM. Tag CI runs lint, tests, the application build, and Compose
+validation. Publishing checks out that exact validated tag after it is merged
+into `main`.
