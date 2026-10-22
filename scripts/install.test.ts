@@ -63,7 +63,7 @@ describe("production installer", () => {
   it("configures the bundled report service on a fresh install", () => {
     const output = runInstaller();
     expect(environmentFile()).toContain("LITELLM_SERVICE_URL=http://report-llm-service:8001");
-    expect(environmentFile()).toContain("FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:0.2.2");
+    expect(environmentFile()).toContain("FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:0.2.5");
     expect(output).toContain("Report LLM service is installed");
     const commands = readFileSync(path.join(workspace, "docker.log"), "utf8");
     expect(commands).toContain(" pull\n");
