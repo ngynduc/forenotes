@@ -79,8 +79,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   umask 077
   cat >"$ENV_FILE" <<EOF
 NODE_ENV=production
-FORENOTES_IMAGE=${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.2}
-FORENOTES_REPORT_LLM_IMAGE=${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.2}
+FORENOTES_IMAGE=${FORENOTES_IMAGE:-ngynduc/forenotes:0.2.5}
+FORENOTES_REPORT_LLM_IMAGE=${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.5}
 
 APP_HOST=0.0.0.0
 APP_PORT=3000
@@ -120,7 +120,7 @@ else
     printf '\nLITELLM_SERVICE_URL=http://report-llm-service:8001\n' >>"$ENV_FILE"
   fi
   if ! grep -q '^FORENOTES_REPORT_LLM_IMAGE=' "$ENV_FILE"; then
-    printf '\nFORENOTES_REPORT_LLM_IMAGE=%s\n' "${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.2}" >>"$ENV_FILE"
+    printf '\nFORENOTES_REPORT_LLM_IMAGE=%s\n' "${FORENOTES_REPORT_LLM_IMAGE:-ngynduc/forenotes-report-llm:0.2.5}" >>"$ENV_FILE"
   fi
   if [[ "$SECURE_SESSION_COOKIES" == "true" ]]; then
     if grep -q '^SECURE_SESSION_COOKIES=' "$ENV_FILE"; then
