@@ -1,9 +1,9 @@
 ---
 title: Production install
-description: Install pinned Forenotes app and report-service images with Docker Compose.
+description: Install a pinned Forenotes image with Docker Compose.
 ---
 
-Production Compose runs the application, PostgreSQL, and an internal Python report LLM service. The application image alone does not contain Python or LiteLLM. The bundled report service is available from release 0.2.2; older releases may publish only the application image.
+Production Compose runs two services: the Forenotes application and PostgreSQL. The application calls your LLM provider directly for AI reports. Releases up to 0.2.5 also ran a separate report LLM service; it is no longer needed.
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ Production Compose runs the application, PostgreSQL, and an internal Python repo
 
 ## Choose a release
 
-Use matching artifacts from a published release. `<release-tag>` is a Git tag, such as `v0.2.2`; `<image-tag>` is a Docker tag, such as `0.2.2`. Replace placeholders without angle brackets.
+Use matching artifacts from a published release. `<release-tag>` is a Git tag, such as `v0.2.5`; `<image-tag>` is a Docker tag, such as `0.2.5`. Replace placeholders without angle brackets.
 
 ```bash
 RELEASE_TAG='<release-tag>'
@@ -60,7 +60,6 @@ Run the secret-generation command separately for each password or key. Edit `.en
 ```dotenv
 NODE_ENV=production
 FORENOTES_IMAGE=ngynduc/forenotes:<image-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<image-tag>
 APP_HOST=0.0.0.0
 APP_PORT=3000
 FORENOTES_HOST_PORT=3000
@@ -75,13 +74,12 @@ FORENOTES_BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-long-random-temporary-password
 FORENOTES_BOOTSTRAP_ADMIN_TEMPORARY=true
 FORENOTES_LLM_SECRET_KEY=replace-with-at-least-32-random-characters
 SECURE_SESSION_COOKIES=true
-LITELLM_SERVICE_URL=http://report-llm-service:8001
 FORENOTES_MCP_ENABLED=false
 ```
 
 The database password in `DATABASE_URL` must match `POSTGRES_PASSWORD`. Hex secrets avoid URL-encoding issues. Use `SECURE_SESSION_COOKIES=false` only for local HTTP testing. Preserve the LLM encryption key across upgrades and restores.
 
-Pull the images, wait for PostgreSQL, then start the complete stack:
+Pull the image, wait for PostgreSQL, then start the stack:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production pull
@@ -97,11 +95,9 @@ Startup applies database migrations and creates the bootstrap admin if no admin 
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
 curl --fail http://localhost:3000/api/health
 docker compose -f docker-compose.prod.yml --env-file .env.production \
-  exec app sh -c 'wget -qO- "$LITELLM_SERVICE_URL/health"'
-docker compose -f docker-compose.prod.yml --env-file .env.production \
-  logs --tail=100 app report-llm-service
+  logs --tail=100 app
 ```
 
-Use your configured host port for the health request. Expect `postgres`, `app`, and `report-llm-service` to be healthy. The report service exposes no host port and starts without a provider key. Configure a provider in [LLM settings](/docs/admin/llm-settings/) before generating a report draft.
+Use your configured host port for the health request. Expect `postgres` and `app` to be healthy. The health check queries the database and returns `503` while it is unreachable. Configure a provider in [LLM settings](/docs/admin/llm-settings/) before using AI Report Chat.
 
 MCP remains disabled until explicitly enabled. Follow [MCP investigation agents](/docs/admin/mcp/) to configure the endpoint and create a token.

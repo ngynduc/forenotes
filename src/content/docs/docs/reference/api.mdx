@@ -43,9 +43,17 @@ Read provenance with `GET /api/cases/{caseId}/investigation/{collection}`. Colle
 
 `limit` defaults to 50 and must be 1–100; `offset` defaults to 0 and must be nonnegative. `incidentId` filters every collection. `runId` is ignored by runs; `status` applies only to runs (`active`, `completed`, `failed`, `cancelled`). Read successive pages until `items` is shorter than `limit`. Explore the provenance PATCH schemas above for all optional fields, nullable values, and support-ID arrays. Human provenance edits do not require an active run and preserve audit history. Missing or cross-case support records return `409`; empty support arrays return `400`.
 
+## AI report chat
+
+`POST /api/incidents/{incidentId}/reports/chat` takes `{ "messages": [{ "role": "user" | "assistant", "content": "..." }] }` (1–40 messages, the last from the user) and answers with `text/event-stream`. Each `data:` line is one JSON event: `text` with a `delta`, `tool` with `name`, `args`, `status`, and `summary`, then `done` or `error`. Configuration and permission errors return normal JSON errors before the stream starts. Close the connection to cancel.
+
+`GET /api/me/report-chat-prompt` returns `{ prompt, builtIn }`; `PUT` with `{ "prompt": "..." }` (up to 8000 characters) saves the caller's instructions. Both require `report:read`.
+
+Reports export with `POST /api/incidents/{incidentId}/reports/{reportId}/export/html`; the PDF export endpoint was removed.
+
 ## User edits and tag removal
 
-`PATCH /api/users/{userId}` updates an existing user. It requires `user:manage`, accepts at least one of `username`, `email`, `displayName`, `globalRole`, or `status`, and rejects unknown fields. Duplicate usernames or emails return `409`. The response contains `user`, and the change is audited.
+`DELETE /api/users/{userId}` deactivates the account rather than deleting it and returns `204`. `PATCH /api/users/{userId}` updates an existing user. It requires `user:manage`, accepts at least one of `username`, `email`, `displayName`, `globalRole`, or `status`, and rejects unknown fields. Duplicate usernames or emails return `409`. The response contains `user`, and the change is audited.
 
 Use the tag-removal DELETE operations in the explorer to detach an ATT&CK tag from a finding, timeline event, or saved query. Findings and timeline events also support detaching custom tags. These operations return `204` and preserve the record and tag definition. Use the record's tag list to obtain the tag UUID; an ATT&CK technique code such as `T1001` is not the tag UUID.
 

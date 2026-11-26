@@ -8,7 +8,6 @@ description: Quick reference for required and optional Forenotes runtime configu
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `FORENOTES_IMAGE` | Yes | Pinned container image: `ngynduc/forenotes:<image-tag>` |
-| `FORENOTES_REPORT_LLM_IMAGE` | Yes* | Matching report-service image: `ngynduc/forenotes-report-llm:<image-tag>` |
 | `APP_HOST` | No | Listen address inside the container; defaults to `0.0.0.0` |
 | `APP_PORT` | No | Application port; defaults to `3000` in production Compose |
 | `FORENOTES_HOST_PORT` | No | Host port mapped to `APP_PORT`; defaults to `3000` |
@@ -17,8 +16,10 @@ description: Quick reference for required and optional Forenotes runtime configu
 | `POSTGRES_PASSWORD` | Yes* | Bundled PostgreSQL password |
 | `POSTGRES_DB` | Yes* | Bundled PostgreSQL database |
 | `FORENOTES_DATA_DIR` | No | Persistent upload directory; `/app/data` in Compose |
+| `DB_POOL_MAX` | No | Maximum PostgreSQL connections; defaults to `20` |
+| `DB_STATEMENT_TIMEOUT_MS` | No | Cancels a single query after this many milliseconds; defaults to `60000` |
 
-`POSTGRES_*` values are required when using the bundled database. Production Compose defaults both image variables to its release version; explicitly pin both for audited deployments with the bundled report service.
+`POSTGRES_*` values are required when using the bundled database. Production Compose defaults the image to its release version; pin it explicitly for audited deployments.
 
 ## Authentication and secrets
 
@@ -37,15 +38,17 @@ description: Quick reference for required and optional Forenotes runtime configu
 
 | Variable | Purpose |
 | --- | --- |
-| `LITELLM_SERVICE_URL` | Defaults to `http://report-llm-service:8001` in production Compose; override for an external service |
-| `LLM_PROVIDER` | Provider name |
+| `LLM_PROVIDER` | Provider name; known providers need no endpoint |
 | `LLM_MODEL` | Provider model identifier |
 | `LLM_API_KEY` | Deployment-level provider credential |
-| `LLM_API_ENDPOINT` | Custom provider endpoint |
+| `LLM_API_ENDPOINT` | OpenAI-compatible base URL; required for custom providers and gateways |
 | `FORENOTES_LLM_ALLOWED_HOSTS` | Comma-separated custom endpoint hostnames |
 | `FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS` | Disables endpoint protections; local labs only |
 | `LLM_SYSTEM_PROMPT` | Optional deployment prompt override |
 | `LLM_CUSTOM_HEADERS_JSON` | Extra provider headers as a JSON object |
+| `LLM_TIMEOUT_MS` | Provider request timeout; defaults to `180000` |
+
+`LITELLM_SERVICE_URL` and `FORENOTES_REPORT_LLM_IMAGE` from releases up to 0.2.5 are no longer used and are ignored if present.
 
 Never commit populated environment files. Preserve `FORENOTES_LLM_SECRET_KEY` across upgrades and restores.
 

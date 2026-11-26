@@ -1,13 +1,13 @@
 ---
 title: Troubleshooting
-description: Diagnose startup, database, port, cookie, and LLM service problems.
+description: Diagnose startup, database, port, cookie, and LLM provider problems.
 ---
 
 Start with container state and application logs:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
-docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=200 app postgres report-llm-service
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=200 app postgres
 ```
 
 ## HTTP access logs
@@ -65,21 +65,28 @@ Then recreate the stack and open port `3100`.
 
 Secure cookies require HTTPS. For a local-only HTTP evaluation set `SECURE_SESSION_COOKIES=false`; restore `true` before placing the service behind HTTPS.
 
-## No report-service container exists
+## The app is unhealthy or requests fail fast
 
-Production Compose from 0.2.2 includes `report-llm-service`. If `ps` shows only `app` and `postgres`, the installed Compose file may predate that release. Follow [Upgrade Forenotes](/docs/operations/upgrade/) to replace Compose and pin both images. An app image update alone does not add the service.
+`/api/health` runs a database query and returns `503` when PostgreSQL is unreachable. Check the `postgres` container and `DATABASE_URL`.
 
-## Report generation fails
+Errors such as `timeout exceeded when trying to connect` mean every database connection was busy for 10 seconds. Look for slow requests in the access logs, or raise `DB_POOL_MAX`. `canceling statement due to statement timeout` means a query ran longer than `DB_STATEMENT_TIMEOUT_MS`. The app logs dropped idle connections as `db_pool_error` and keeps running.
 
-Check the report service from inside the app container:
+Docker's restart policy restarts a container that exits, not one that is only marked unhealthy.
 
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production \
-  exec app sh -c 'wget -qO- "$LITELLM_SERVICE_URL/health"'
-```
+## A report-llm-service container is still running
 
-Also confirm the model, provider credential, endpoint allowlist, and user-level settings. Core investigation workflows do not depend on the LLM service.
+From 0.2.6 the app calls the provider directly. Remove the leftover container with `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans`.
 
+## AI reports fail
+
+Open **Settings → LLM** and choose **Test connection**. The message shows the provider's HTTP status and reason:
+
+- `404` or "not found": the model name is wrong or unavailable to your account;
+- `401` or `403`: the API key is invalid or lacks access;
+- "needs an OpenAI-compatible API base URL": a custom provider name requires `LLM_API_ENDPOINT`;
+- "must be listed in FORENOTES_LLM_ALLOWED_HOSTS": add the endpoint hostname in production.
+
+AI Report Chat also needs a model that supports tool calling. Requests stop after `LLM_TIMEOUT_MS`. Core investigation workflows do not depend on an LLM.
 
 ## MCP cannot connect
 

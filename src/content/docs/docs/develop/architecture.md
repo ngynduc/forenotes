@@ -46,6 +46,10 @@ Role, profile, membership, and workspace changes propagate to open clients throu
 
 ## Production runtime
 
-Production Compose runs PostgreSQL 16, the Forenotes application, and a separate Python report LLM service. The app container runs migrations before startup, serves API and client assets, and stores uploaded files under `/app/data`. It waits for the report-service healthcheck and reaches the service through the internal network at `http://report-llm-service:8001`; the service has no published host port.
+Production Compose runs PostgreSQL 16 and the Forenotes application. The app container waits for PostgreSQL, runs migrations before startup, serves API and client assets, and stores uploaded files under `/app/data`. It calls the configured LLM provider directly over its OpenAI-compatible Chat Completions API (`src/server/services/llmClient.ts`); there is no separate report service.
 
-MCP runs inside the application and does not require the report LLM service. See [MCP investigation agents](/docs/admin/mcp/) for its setup and review workflow.
+AI Report Chat (`POST /api/incidents/{incidentId}/reports/chat`) streams server-sent events. The server runs a tool-calling loop: the model requests `get_incident_overview` or `query_incident_data`, the server answers from the incident's report context using the caller's permissions, and the model continues until it writes its reply. Long, read-only LLM routes run outside the per-request database transaction so they do not hold a connection while waiting on the provider.
+
+The health check queries PostgreSQL. On `SIGTERM` the server stops accepting connections, closes the pool, and exits within 10 seconds.
+
+MCP runs inside the application and does not require an LLM provider. See [MCP investigation agents](/docs/admin/mcp/) for its setup and review workflow.

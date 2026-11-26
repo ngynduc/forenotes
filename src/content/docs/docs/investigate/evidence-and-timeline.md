@@ -16,7 +16,31 @@ Create a timeline event for each meaningful observation. Capture:
 
 ![Timeline page](/user-guide/timeline.png)
 
+Choose **Add Event** to add a row. Use the time filter above the table to narrow the list to a time range, by event time or by when records were created or updated. Choose **Details** on a row to open the full event.
+
+### Primary and supporting events
+
+Each timeline event has an **Event Role**. Use **primary** for a key moment in the incident and **supporting** for detail that belongs to it, such as the individual log lines behind one sign-in. A supporting event must name its **Primary Event**. Supporting events stay hidden in the relationship graph until you expand their primary event, which keeps the timeline readable.
+
 Normalize times to the investigation's selected timezone before comparing events. Keep the original source timestamp in the description or raw-evidence reference when conversion matters.
+
+![Timeline event details](/user-guide/timeline-event-details.png)
+
+## Record findings
+
+Open **Findings** to list the incident's conclusions with status, severity, confidence, summary, owner, and tags. Choose **Add Finding** to add a new row directly in the table; give it a title, status, severity, confidence, and summary.
+
+![Findings table](/user-guide/findings.png)
+
+![Adding a finding](/user-guide/add-finding.png)
+
+Use statuses to show where a conclusion stands: `draft` while you are still testing it, `confirmed` when the evidence supports it, `false_positive` when it was ruled out, and `resolved` once the issue it describes has been remediated.
+
+## Review record details
+
+Choose **Details** on a finding or timeline event to open it. Under **Investigation context** you see its investigation details: who created it and who owns it, when it was created and last updated, the event time and role, its evidence reference, linked evidence and related entities, and its ATT&CK and custom tags. Deactivated users are still shown as creators and owners, so attribution is preserved. Below the context you can edit every field, change tags, review linked entities, or **Delete** the record.
+
+![Finding details](/user-guide/finding-details.png)
 
 ## Separate observation from assessment
 
@@ -34,6 +58,8 @@ Before confirming a finding, check that:
 4. impact and recommendations are specific enough to act on.
 
 ## Review agent evidence
+
+![Investigation page](/user-guide/investigation.png)
 
 Select a case and open **Investigation** to review agent runs, evidence records, observations, hypotheses, and draft findings. Observations require evidence support; hypotheses and agent findings require observation support from the same case.
 

@@ -16,23 +16,35 @@ Forenotes combines a **global role** with a **case role**. Access to a specific 
 
 ## Add a user
 
+![Users](/user-guide/admin-users.png)
+
 1. Open **Admin → Users**.
-2. Select **Add user**.
+2. Select **Create User**.
 3. Enter a unique username, email address, display name, and temporary password.
 4. Choose the lowest global role that covers the person's responsibilities.
 5. Ask the user to sign in and replace the temporary password.
+
+![Create user](/user-guide/admin-create-user.png)
 
 Only admins can manage users and global roles.
 
 ## Edit an existing user
 
-Open **Admin → Users**, choose the user's edit action, and update their username, email, display name, global role, or active/disabled status. Saving updates the existing account. Duplicate usernames or email addresses are rejected, and edits are recorded in the audit trail.
+Open **Admin → Users**, choose **Edit**, and update their username, email, display name, global role, or active/disabled status. Saving updates the existing account. Duplicate usernames or email addresses are rejected, and edits are recorded in the audit trail. **Reset Password** sets a new temporary password.
+
+![Edit user](/user-guide/admin-edit-user.png)
 
 Role and profile changes refresh open workspaces. Disabling an account blocks browser and MCP access. Password changes and resets revoke browser sessions; the user must sign in again.
 
+## Deactivate a user
+
+Forenotes does not delete user accounts. Open **Admin → Users**, choose **Edit**, then **Deactivate user** and confirm. Deactivation sets the account to `disabled`, signs it out everywhere, revokes its MCP tokens, and records `user.deactivate` in the audit log.
+
+The profile, case memberships, authorship, assignments, audit history, and graph relationships remain, so findings and timeline events still show who created them. You cannot deactivate your own account, the bootstrap administrator, or the last active commander of a case. To restore access, set the status back to active; revoked MCP tokens must be issued again.
+
 ## Grant case access
 
-Open a case, select **Members**, and add the user as a commander, analyst, or viewer. Case membership does not grant global administration access.
+Open a case, select **Members**, and add the user as a commander, analyst, or viewer. See [Cases and incidents](/docs/investigate/cases-and-incidents/#review-the-selected-case). Case membership does not grant global administration access.
 
 Case membership grants the corresponding incident access throughout the case. Removing case membership removes access to all its incidents. The compatibility incident-member removal endpoint also removes parent-case membership; it cannot limit removal to one incident.
 
