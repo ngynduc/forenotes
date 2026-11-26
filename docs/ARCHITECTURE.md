@@ -70,7 +70,7 @@ The client is a React/Vite app organized around pages, reusable UI components, a
 | Entity modal | `src/client/src/components/entity-modal` | Rich entity edit, links, tags, MITRE mapping |
 | Graph | `src/client/src/components/graph` | Relationship graph and node inspection |
 | MITRE | `src/client/src/components/mitre` | ATT&CK matrix and technique inspection |
-| Reports | `src/client/src/components/reports` | PDF template workspace |
+| Reports | `src/client/src/components/reports` | AI report chat, report editor, HTML template workspace |
 | Hooks | `src/client/src/hooks` | Query and mutation hooks for API domains |
 | Stores | `src/client/src/stores` | UI, scope, and graph state |
 
@@ -94,7 +94,7 @@ Services encapsulate business logic and database access.
 | `evidenceLinkService` | Finding and task evidence relationships |
 | `dashboardService` | Activity, SLA, and summary metrics |
 | `searchService` | Global/case/incident search |
-| `reportService` | Markdown reports and PDF export |
+| `reportService` | Markdown reports and HTML export |
 | `notificationService` | Notification records and event stream |
 | `auditLogService` | Mutation history |
 | MCP token and investigation services | Token lifecycle, runs, provenance records, idempotency, and agent action history |
@@ -104,7 +104,6 @@ Services encapsulate business logic and database access.
 Production uses `docker-compose.prod.yml`:
 
 - `postgres`: PostgreSQL 16 with a named volume.
-- `report-llm-service`: published Python/LiteLLM image, internal port 8001, healthcheck; the app waits for it.
 - `app`: published Forenotes image, environment-driven config, `/app/data` named volume, `/api/health` healthcheck.
 
 The production image runs migrations before starting the app. It refuses unsafe production settings such as default database credentials, demo mode, header auth, short bootstrap passwords, or a missing `FORENOTES_LLM_SECRET_KEY`.

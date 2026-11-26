@@ -14,16 +14,10 @@ import { getDataDir, getUploadsDir } from "../storage.js";
 import type { AuthenticatedUser } from "./authService.js";
 import { createAuditLog } from "./auditLogService.js";
 import { discardReportBody, readReportBody, writeReportBody } from "./reportBodyStorage.js";
-import {
-  buildLiteLlmGenerateReportPayload,
-  callLiteLlmGenerateReportService,
-  resolveLiteLlmServiceUrl,
-  type LiteLlmServiceConfig
-} from "./litellmServiceClient.js";
+import { completeChat } from "./llmClient.js";
 import {
   DEFAULT_PDF_CSS,
   DEFAULT_PDF_HTML_TEMPLATE,
-  renderHtmlToPdf,
   renderMarkdownToSanitizedHtml,
   renderPdfHtml
 } from "./reportPdfRenderer.js";
@@ -31,11 +25,9 @@ import {
 export {
   DEFAULT_PDF_CSS,
   DEFAULT_PDF_HTML_TEMPLATE,
-  renderHtmlToPdf,
   renderMarkdownToSanitizedHtml,
   renderPdfHtml
 } from "./reportPdfRenderer.js";
-export { buildLiteLlmGenerateReportPayload } from "./litellmServiceClient.js";
 
 interface CreateTemplateInput {
   name: string;
@@ -105,7 +97,6 @@ type DbRow = Record<string, unknown>;
 interface LlmProviderConfig {
   provider: string;
   baseUrl: string | null;
-  serviceUrl: string;
   model: string;
   systemPrompt: string;
   apiKey: string;
@@ -866,87 +857,19 @@ export async function testLlmSettings(database: Database, user: AuthenticatedUse
     throw new AppError(400, "LLM settings are not configured.");
   }
   try {
-    await callLiteLlmGenerateReportService(
-      config.serviceUrl,
-      buildLiteLlmGenerateReportPayload(
-        toLiteLlmServiceConfig(config),
-        "incident",
-        "# LLM connection test\n\nReturn a short Markdown response.",
-        buildLlmConnectionTestContext()
-      )
-    );
+    await completeChat(config, buildReportMessages(
+      config.systemPrompt,
+      "incident",
+      "# LLM connection test\n\nReturn a short Markdown response.",
+      buildLlmConnectionTestContext()
+    ));
     return { ok: true, model: config.model, source: config.source };
-  } catch {
-    return { ok: false, error: "LLM generation service failed", model: config.model, source: config.source };
-  }
-}
-
-export async function exportReportPdf(
-  database: Database,
-  user: AuthenticatedUser,
-  incidentId: string,
-  reportId: string,
-  options: { pdfTemplateId?: string } = {}
-) {
-  await requirePermission(database, user, "report:export");
-  await requireIncidentMembership(database, user.id, incidentId);
-  const report = await getReportRow(database, incidentId, reportId);
-  const incident = await one(
-    database,
-    `
-      select i.*, c.client_name
-      from incidents i
-      inner join cases c on c.id = i.case_id
-      where i.id = $1
-    `,
-    [incidentId],
-    "Incident not found"
-  );
-  const pdfTemplate = await resolvePdfTemplate(database, user, incidentId, options.pdfTemplateId);
-  const renderedHtml = renderPdfHtml({
-    report: {
-      title: String(report.title),
-      type: String(report.report_type),
-      generatedAt: new Date().toISOString(),
-      markdown: String(report.markdown)
-    },
-    incident: {
-      name: String(incident.name ?? "Not provided"),
-      clientName: String(incident.client_name ?? "Not provided"),
-      status: String(incident.status ?? "Not provided")
-    },
-    htmlTemplate: pdfTemplate.htmlTemplate,
-    css: pdfTemplate.css
-  });
-  const finalHtml = await inlineReportUploadImagesForPdf(renderedHtml, incidentId);
-  let pdf: Buffer;
-  try {
-    pdf = await renderHtmlToPdf(finalHtml);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new AppError(500, `PDF export failed: ${message}`);
+    // Show the provider's reason (wrong model, bad key...) so the user can fix it; never echo the key itself.
+    const reason = error instanceof Error ? error.message : "LLM provider request failed";
+    const safe = config.apiKey ? reason.split(config.apiKey).join("[redacted]") : reason;
+    return { ok: false, error: safe, model: config.model, source: config.source };
   }
-  const exportId = randomUUID();
-  const fileName = `${safePathSegment(String(report.title)) || "report"}.pdf`;
-  await database.query(
-    `
-      insert into report_exports (id, report_id, incident_id, file_url, file_name, created_by_user_id)
-      values ($1, $2, $3, $4, $5, $6)
-    `,
-    [exportId, reportId, incidentId, "", fileName, user.id]
-  );
-
-  return {
-    pdf,
-    fileName,
-    metadata: {
-      id: exportId,
-      reportId,
-      incidentId,
-      fileName,
-      createdAt: new Date().toISOString()
-    }
-  };
 }
 
 async function assertLlmDestinationResolvesPublicly(baseUrl: string | null) {
@@ -1781,7 +1704,6 @@ async function readLlmSettings(database: Database, userId: string, options: { to
   return {
     provider,
     baseUrl,
-    serviceUrl: resolveLiteLlmServiceUrl(),
     model,
     systemPrompt: row.system_prompt ? String(row.system_prompt) : "",
     apiKey: decryptedApiKey.value,
@@ -1800,16 +1722,30 @@ async function generateLlmMarkdown(database: Database, user: AuthenticatedUser, 
     throw new AppError(400, "LLM is not configured. Add provider settings or set LLM_PROVIDER, LLM_MODEL, and LLM_API_KEY.");
   }
   try {
-    return await callLiteLlmGenerateReportService(
-      config.serviceUrl,
-      buildLiteLlmGenerateReportPayload(toLiteLlmServiceConfig(config), context.reportType, template, context)
-    );
+    return await completeChat(config, buildReportMessages(config.systemPrompt, context.reportType, template, context));
   } catch {
     throw new AppError(502, "LLM generation service failed.");
   }
 }
 
-async function resolveLlmConfig(
+const REPORT_SYSTEM_PROMPT = [
+  "You are assisting with DFIR report writing.",
+  "Generate a professional Markdown report using only the provided incident context.",
+  "Do not invent facts.",
+  "If data is missing, write \"Not provided\" or omit the section.",
+  "Return Markdown only.",
+  "Do not wrap the response in JSON.",
+  "Do not include HTML."
+].join(" ");
+
+export function buildReportMessages(systemPrompt: string, reportType: ReportType, templateMarkdown: string, incidentContext: ReportContext) {
+  return [
+    { role: "system", content: systemPrompt.trim() || REPORT_SYSTEM_PROMPT },
+    { role: "user", content: JSON.stringify({ task: "Generate report markdown", reportType, templateMarkdown, incidentContext }) }
+  ];
+}
+
+export async function resolveLlmConfig(
   database: Database,
   userId: string,
   options: { tolerateInvalidApiKey?: boolean } = {}
@@ -1836,7 +1772,6 @@ async function resolveLlmConfig(
   return {
     provider,
     baseUrl,
-    serviceUrl: resolveLiteLlmServiceUrl(),
     model,
     systemPrompt,
     apiKey: apiKey ?? "",
@@ -1897,18 +1832,6 @@ function isEncryptedSecretShape(encrypted: string) {
     return false;
   }
   return Buffer.from(ivRaw, "base64").length === 12 && Buffer.from(tagRaw, "base64").length === 16;
-}
-
-function toLiteLlmServiceConfig(config: LlmProviderConfig): LiteLlmServiceConfig {
-  return {
-    serviceUrl: config.serviceUrl,
-    provider: config.provider,
-    model: config.model,
-    systemPrompt: config.systemPrompt,
-    apiKey: config.apiKey,
-    apiBase: config.baseUrl,
-    customHeaders: config.customHeaders
-  };
 }
 
 function buildLlmConnectionTestContext(): ReportContext {

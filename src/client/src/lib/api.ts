@@ -111,6 +111,14 @@ export interface AttackTagItem {
   tactic?: string;
 }
 
+export interface EvidenceLinkItem {
+  id: string;
+  evidenceType: string;
+  evidenceId: string;
+  linkedByUserId: string;
+  createdAt: string;
+}
+
 export interface FindingItem {
   id: string;
   title: string;
@@ -121,8 +129,15 @@ export interface FindingItem {
   impact?: string;
   recommendation?: string;
   ownerUserId?: string;
+  ownerDisplayName?: string;
+  ownerStatus?: string;
+  createdByUserId?: string;
+  creatorDisplayName?: string;
+  creatorEmail?: string;
+  creatorStatus?: string;
   customTags?: TagItem[];
   attackTags?: AttackTagItem[];
+  evidenceLinks?: EvidenceLinkItem[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -148,6 +163,15 @@ export interface TimelineEventItem {
   systemId?: string;
   accountId?: string;
   ownerUserId?: string;
+  eventRole?: "primary" | "supporting";
+  primaryEventId?: string | null;
+  primaryEventTitle?: string;
+  ownerDisplayName?: string;
+  ownerStatus?: string;
+  createdByUserId?: string;
+  creatorDisplayName?: string;
+  creatorEmail?: string;
+  creatorStatus?: string;
   customTags?: TagItem[];
   attackTags?: AttackTagItem[];
   createdAt?: string;
@@ -163,6 +187,8 @@ export interface CreateTimelineEventInput {
   systemId?: string;
   accountId?: string;
   ownerUserId?: string;
+  eventRole?: "primary" | "supporting";
+  primaryEventId?: string | null;
 }
 
 export interface TaskItem {
@@ -388,6 +414,12 @@ export interface GenerateReportInput {
   useLlm?: boolean;
 }
 
+export type ReportChatEvent =
+  | { type: "text"; delta: string }
+  | { type: "tool"; id: string; name: string; args: unknown; status: "done" | "error"; summary: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
 export interface CreateReportInput {
   templateId?: string;
   title: string;
@@ -503,8 +535,21 @@ interface RawFindingItem {
   impact?: string;
   recommendation?: string;
   owner_user_id?: string;
+  owner_display_name?: string;
+  owner_status?: string;
+  created_by_user_id?: string;
+  creator_display_name?: string;
+  creator_email?: string;
+  creator_status?: string;
   custom_tags?: RawTagItem[];
   attack_tags?: RawAttackTagItem[];
+  evidence_links?: Array<{
+    id: string;
+    evidence_type: string;
+    evidence_id: string;
+    linked_by_user_id: string;
+    created_at: string;
+  }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -519,6 +564,15 @@ interface RawTimelineEventItem {
   system_id?: string;
   account_id?: string;
   owner_user_id?: string;
+  event_role?: "primary" | "supporting";
+  primary_event_id?: string | null;
+  primary_event_title?: string;
+  owner_display_name?: string;
+  owner_status?: string;
+  created_by_user_id?: string;
+  creator_display_name?: string;
+  creator_email?: string;
+  creator_status?: string;
   custom_tags?: RawTagItem[];
   attack_tags?: RawAttackTagItem[];
   created_at?: string;
@@ -776,8 +830,21 @@ function normalizeFinding(item: RawFindingItem): FindingItem {
     impact: item.impact,
     recommendation: item.recommendation,
     ownerUserId: item.owner_user_id,
+    ownerDisplayName: item.owner_display_name,
+    ownerStatus: item.owner_status,
+    createdByUserId: item.created_by_user_id,
+    creatorDisplayName: item.creator_display_name,
+    creatorEmail: item.creator_email,
+    creatorStatus: item.creator_status,
     customTags: item.custom_tags?.map(normalizeTag),
     attackTags: item.attack_tags?.map(normalizeAttackTag),
+    evidenceLinks: item.evidence_links?.map((link) => ({
+      id: link.id,
+      evidenceType: link.evidence_type,
+      evidenceId: link.evidence_id,
+      linkedByUserId: link.linked_by_user_id,
+      createdAt: link.created_at,
+    })),
     createdAt: item.created_at,
     updatedAt: item.updated_at,
   };
@@ -794,6 +861,15 @@ function normalizeTimelineEvent(item: RawTimelineEventItem): TimelineEventItem {
     systemId: item.system_id,
     accountId: item.account_id,
     ownerUserId: item.owner_user_id,
+    eventRole: item.event_role ?? "primary",
+    primaryEventId: item.primary_event_id,
+    primaryEventTitle: item.primary_event_title,
+    ownerDisplayName: item.owner_display_name,
+    ownerStatus: item.owner_status,
+    createdByUserId: item.created_by_user_id,
+    creatorDisplayName: item.creator_display_name,
+    creatorEmail: item.creator_email,
+    creatorStatus: item.creator_status,
     customTags: item.custom_tags?.map(normalizeTag),
     attackTags: item.attack_tags?.map(normalizeAttackTag),
     createdAt: item.created_at,
@@ -1451,6 +1527,47 @@ class ApiClient {
 
   generateReport = async (incidentId: string, data: GenerateReportInput) =>
     this.request<{ preview: CreateReportInput }>(`/incidents/${incidentId}/reports/generate`, "POST", data);
+
+  getReportChatPrompt = () => this.request<{ prompt: string; builtIn: string }>("/me/report-chat-prompt");
+
+  saveReportChatPrompt = (prompt: string) =>
+    this.request<{ prompt: string; builtIn: string }>("/me/report-chat-prompt", "PUT", { prompt });
+
+  getReportContext = async (incidentId: string) =>
+    (await this.request<{ context: ReportContext }>(`/incidents/${incidentId}/reports/context?type=incident`)).context;
+
+  /** Streams SSE events from the report chat agent; resolves when the stream ends. */
+  streamReportChat = async (
+    incidentId: string,
+    messages: Array<{ role: "user" | "assistant"; content: string }>,
+    onEvent: (event: ReportChatEvent) => void,
+    signal: AbortSignal
+  ) => {
+    const res = await fetchWithSession(`${BASE}/incidents/${incidentId}/reports/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.headers() },
+      credentials: "include",
+      body: JSON.stringify({ messages }),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error ?? "Report chat failed");
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const line = buffer.slice(0, end).replace(/^data: /, "");
+        buffer = buffer.slice(end + 2);
+        if (line) onEvent(JSON.parse(line) as ReportChatEvent);
+      }
+    }
+  };
 
   listReports = async (incidentId: string) => {
     const payload = await this.request<{ reports: RawIncidentReport[] }>(`/incidents/${incidentId}/reports`);

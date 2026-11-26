@@ -82,4 +82,13 @@ describe("Hierarchical placement", () => {
     expect(layout).toEqual(layoutNodes(nodes, edges));
     expectNoOverlap(layout);
   });
+  it("orders primary timeline events chronologically within a rank", () => {
+    const events: GraphNode[] = [
+      { ...node("late"), type: "timeline_event", metadata: { eventRole: "primary", eventTime: "2026-01-03T00:00:00Z" } },
+      { ...node("early"), type: "timeline_event", metadata: { eventRole: "primary", eventTime: "2026-01-01T00:00:00Z" } },
+      { ...node("middle"), type: "timeline_event", metadata: { eventRole: "primary", eventTime: "2026-01-02T00:00:00Z" } },
+    ];
+    const result = layoutNodes(events);
+    expect([...result].sort((a, b) => a.x - b.x).map((item) => item.id)).toEqual(["early", "middle", "late"]);
+  });
 });

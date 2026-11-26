@@ -23,8 +23,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      report-llm-service:
-        condition: service_started
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://forenotes:forenotes@db:5432/forenotes
@@ -37,17 +35,12 @@ services:
       FORENOTES_MCP_ENABLED: ${FORENOTES_MCP_ENABLED:-false}
       FORENOTES_MCP_PUBLIC_URL: ${FORENOTES_MCP_PUBLIC_URL:-}
       FORENOTES_MCP_ALLOWED_ORIGINS: ${FORENOTES_MCP_ALLOWED_ORIGINS:-}
-      LITELLM_SERVICE_URL: http://report-llm-service:8001
     env_file:
       - .env.demo
     ports:
       - "${FORENOTES_DEMO_HOST_PORT:-3000}:3000"
     volumes:
       - forenotes_demo_data:/app/data
-
-  report-llm-service:
-    build: ./services/report-llm-service
-    restart: unless-stopped
 
 volumes:
   forenotes_demo_pgdata:

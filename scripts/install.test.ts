@@ -60,35 +60,23 @@ function environmentFile() {
 }
 
 describe("production installer", () => {
-  it("configures the bundled report service on a fresh install", () => {
+  it("writes a single-image configuration on a fresh install", () => {
     const output = runInstaller();
-    expect(environmentFile()).toContain("LITELLM_SERVICE_URL=http://report-llm-service:8001");
-    expect(environmentFile()).toContain("FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:0.2.5");
-    expect(output).toContain("Report LLM service is installed");
+    expect(environmentFile()).not.toContain("LITELLM_SERVICE_URL");
+    expect(environmentFile()).not.toContain("FORENOTES_REPORT_LLM_IMAGE");
+    expect(environmentFile()).toContain("LLM_PROVIDER=");
+    expect(output).toContain("AI reports are built in");
     const commands = readFileSync(path.join(workspace, "docker.log"), "utf8");
     expect(commands).toContain(" pull\n");
     expect(commands).toContain(" up -d\n");
   });
 
   it("uses image overrides for new installations", () => {
-    runInstaller({ FORENOTES_IMAGE: "example/app:test", FORENOTES_REPORT_LLM_IMAGE: "example/report:test" });
+    runInstaller({ FORENOTES_IMAGE: "example/app:test" });
     expect(environmentFile()).toContain("FORENOTES_IMAGE=example/app:test");
-    expect(environmentFile()).toContain("FORENOTES_REPORT_LLM_IMAGE=example/report:test");
   });
 
-  it.each(["", "LITELLM_SERVICE_URL=\n"])("adds the bundled service URL to an old install (%j)", (url) => {
-    const existing = "FORENOTES_IMAGE=example/app:old\nFORENOTES_LLM_SECRET_KEY=keep-this-key\nFORENOTES_BOOTSTRAP_ADMIN_PASSWORD=keep-this-password\n";
-    writeFileSync(path.join(installDirectory, ".env.production"), existing + url);
-    runInstaller();
-    expect(environmentFile()).toContain(existing);
-    expect(environmentFile()).toContain("LITELLM_SERVICE_URL=http://report-llm-service:8001");
-    expect(environmentFile()).toContain("FORENOTES_REPORT_LLM_IMAGE=");
-    const migrated = environmentFile();
-    runInstaller();
-    expect(environmentFile()).toBe(migrated);
-  });
-
-  it("preserves external report URLs, image pins, and existing credentials", () => {
+  it("leaves an existing install's settings and credentials untouched", () => {
     const existing = "LITELLM_SERVICE_URL=https://report.example.com\nFORENOTES_REPORT_LLM_IMAGE=example/report:old\nFORENOTES_BOOTSTRAP_ADMIN_PASSWORD=keep-this-password\n";
     writeFileSync(path.join(installDirectory, ".env.production"), existing);
     runInstaller();
@@ -118,14 +106,13 @@ try {
 }
 
 describe.skipIf(!dockerAvailable)("production Compose", () => {
-  it.each([undefined, "", "https://report.example.com"])("includes the service and routes reports with URL override %j", (serviceUrl) => {
+  it("runs only Postgres and the app, which talks to the LLM provider directly", () => {
     const environment = { ...process.env };
     for (const key of Object.keys(environment)) {
-      if (key.startsWith("FORENOTES_") || key.startsWith("LLM_") || key === "LITELLM_SERVICE_URL") {
+      if (key.startsWith("FORENOTES_") || key.startsWith("LLM_")) {
         delete environment[key];
       }
     }
-    if (serviceUrl !== undefined) environment.LITELLM_SERVICE_URL = serviceUrl;
     const config = JSON.parse(execFileSync("docker", [
       "compose", "--env-file", path.join(repository, ".env.production.example"),
       "-f", path.join(repository, "docker-compose.prod.yml"), "config", "--format", "json",
@@ -133,12 +120,11 @@ describe.skipIf(!dockerAvailable)("production Compose", () => {
       env: { ...environment, FORENOTES_LLM_ALLOWED_HOSTS: "models.example.com", FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS: "true" },
       encoding: "utf8",
     }));
-    expect(Object.keys(config.services).sort()).toEqual(["app", "postgres", "report-llm-service"]);
-    expect(config.services.app.environment.LITELLM_SERVICE_URL).toBe(serviceUrl || "http://report-llm-service:8001");
-    expect(config.services.app.depends_on["report-llm-service"].condition).toBe("service_healthy");
-    expect(config.services["report-llm-service"].ports).toBeUndefined();
-    expect(config.services["report-llm-service"].environment.FORENOTES_LLM_ALLOWED_HOSTS).toBe("models.example.com");
-    expect(config.services["report-llm-service"].environment.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS).toBe("true");
+    expect(Object.keys(config.services).sort()).toEqual(["app", "postgres"]);
+    expect(config.services.app.depends_on.postgres.condition).toBe("service_healthy");
+    expect(config.services.app.environment.LITELLM_SERVICE_URL).toBeUndefined();
+    expect(config.services.app.environment.FORENOTES_LLM_ALLOWED_HOSTS).toBe("models.example.com");
+    expect(config.services.app.environment.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS).toBe("true");
     expect(config.services.app.volumes).toContainEqual(expect.objectContaining({ source: "forenotes_app_data", target: "/app/data" }));
   });
 });

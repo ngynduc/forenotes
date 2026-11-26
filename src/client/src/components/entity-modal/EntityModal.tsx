@@ -17,11 +17,12 @@ import { useScopeStore } from "@/stores/scope-store";
 import type { EntityDefinition } from "@/config/entity-definitions";
 import { useCurrentUser } from "@/hooks/use-auth";
 import { fetchWithSession } from "@/lib/session-state";
-import { useUsers } from "@/hooks/use-entities";
+import { useTimelineEvents, useUsers } from "@/hooks/use-entities";
 import { useIncidentMembers } from "@/hooks/use-incidents";
 import { EntityLinksSection } from "@/components/entity-modal/EntityLinksSection";
 import { EntityTagsSection } from "@/components/entity-modal/EntityTagsSection";
 import type { AttackTagItem, TagItem } from "@/lib/api";
+import { InvestigationDetailsPanel } from "@/components/entity-modal/InvestigationDetailsPanel";
 
 interface EntityModalProps {
   open: boolean;
@@ -49,6 +50,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
   }, [role, open, onOpenChange]);
   const { data: usersData } = useUsers(open && Boolean(session?.permissions.includes("user:manage")));
   const { data: incidentMembersData } = useIncidentMembers(selectedIncidentId || undefined);
+  const { data: timelineData } = useTimelineEvents();
 
   const userOptions = (usersData?.users ?? []).map((user) => ({
     value: user.id,
@@ -58,6 +60,9 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
     value: member.userId,
     label: String(member.displayName ?? member.email),
   }));
+  const primaryEventOptions = (timelineData?.timelineEvents ?? [])
+    .filter((event) => event.eventRole !== "supporting" && event.id !== itemId)
+    .map((event) => ({ value: event.id, label: `${event.title} · ${new Date(event.eventTime).toLocaleString()}` }));
 
   useEffect(() => {
     if (open) {
@@ -122,12 +127,12 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
 
   async function handleDelete() {
     if (!definition.delete || !item?.id) return;
-    if (!confirm(`Delete this ${definition.label.toLowerCase()}?`)) return;
+    if (!confirm(definition.deleteConfirmation ?? `Delete this ${definition.label.toLowerCase()}?`)) return;
     setSaving(true);
     try {
       const { url, method } = definition.delete(String(item.id));
       await requestApi(url, { method, headers: authHeaders() });
-      setFlash({ kind: "success", message: `${definition.label} deleted.` });
+      setFlash({ kind: "success", message: definition.deleteSuccess ?? `${definition.label} deleted.` });
       qc.invalidateQueries();
       onSuccess?.();
       onOpenChange(false);
@@ -138,7 +143,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
     }
   }
 
-  const fields = definition.fields();
+  const fields = definition.fields().filter((field) => field.name !== "primaryEventId" || form.eventRole === "supporting");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,6 +162,13 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
             </div>
           )}
 
+          {mode === "edit" && item && (definition.collection === "findings" || definition.collection === "timelineEvents") ? (
+            <InvestigationDetailsPanel
+              item={item}
+              kind={definition.collection === "findings" ? "finding" : "timeline_event"}
+            />
+          ) : null}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {fields.map((field) => (
               <div key={field.name} className={field.span === 2 ? "sm:col-span-2" : ""}>
@@ -172,12 +184,12 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
                     onChange={(e) => updateField(field.name, e.target.value)}
                     autoFocus={field.autofocus}
                   />
-                ) : field.type === "select" || field.type === "user-select" || field.type === "member-select" ? (
+                ) : field.type === "select" || field.type === "user-select" || field.type === "member-select" || field.type === "timeline-event-select" ? (
                   <Select
                     value={String(form[field.name] ?? "")}
                     onChange={(e) => updateField(field.name, e.target.value)}
                   >
-                    {getSelectOptions(field.type, field.options, userOptions, memberOptions).map((opt) => (
+                    {getSelectOptions(field.type, field.options, userOptions, memberOptions, primaryEventOptions).map((opt) => (
                       <option key={opt.value || "__empty__"} value={opt.value}>
                         {opt.label || "—"}
                       </option>
@@ -268,7 +280,7 @@ export function EntityModal({ open, onOpenChange, definition, item, mode, onSucc
         <DialogFooter className="border-t border-[var(--color-border)] px-4 py-4 sm:px-6">
           {mode === "edit" && definition.delete && (
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
-              Delete
+              {definition.deleteAction ?? "Delete"}
             </Button>
           )}
           <div className="flex-1" />
@@ -288,13 +300,17 @@ function getSelectOptions(
   fieldType: string,
   options: string[] | undefined,
   userOptions: Array<{ value: string; label: string }>,
-  memberOptions: Array<{ value: string; label: string }>
+  memberOptions: Array<{ value: string; label: string }>,
+  timelineEventOptions: Array<{ value: string; label: string }>
 ) {
   if (fieldType === "user-select") {
     return [{ value: "", label: "Select user" }, ...userOptions];
   }
   if (fieldType === "member-select") {
     return [{ value: "", label: "Unassigned" }, ...memberOptions];
+  }
+  if (fieldType === "timeline-event-select") {
+    return [{ value: "", label: "Select primary event" }, ...timelineEventOptions];
   }
   return (options ?? []).map((option) => ({ value: option, label: option }));
 }

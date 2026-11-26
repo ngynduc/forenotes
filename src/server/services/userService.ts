@@ -31,13 +31,20 @@ export async function listUsers(database: Database) {
 export async function createUser(database: Database, input: CreateUserInput) {
   const userId = randomUUID();
   const username = normalizeUsername(input.username ?? input.email.split("@")[0]);
-  await database.query(
-    `
-      insert into users (id, username, email, display_name, global_role, status, password_hash, must_change_password)
-      values ($1, $2, $3, $4, $5, 'active', $6, $7)
-    `,
-    [userId, username, input.email, input.displayName, input.globalRole, input.passwordHash ?? null, input.mustChangePassword ?? false]
-  );
+  try {
+    await database.query(
+      `
+        insert into users (id, username, email, display_name, global_role, status, password_hash, must_change_password)
+        values ($1, $2, $3, $4, $5, 'active', $6, $7)
+      `,
+      [userId, username, input.email, input.displayName, input.globalRole, input.passwordHash ?? null, input.mustChangePassword ?? false]
+    );
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      throw new AppError(409, "Username or email already exists");
+    }
+    throw error;
+  }
 
   const result = await database.query(
     `
@@ -56,18 +63,21 @@ function normalizeUsername(username: string) {
 
 export async function deleteUser(database: Database, actor: AuthenticatedUser, userId: string) {
   await requirePermission(database, actor, "user:manage");
-  if (userId === actor.id) throw new AppError(409, "Cannot delete your own account");
+  if (userId === actor.id) throw new AppError(409, "Cannot deactivate your own account");
 
-  try {
-    await withTransaction(database, async (transaction) => {
+  await withTransaction(database, async (transaction) => {
       const existing = await transaction.query(
         `select id, username, email, display_name, global_role, status, is_bootstrap_admin
          from users where id = $1 for update`,
         [userId]
       );
       if (existing.rowCount === 0) throw new AppError(404, "User not found");
-      if (existing.rows[0].is_bootstrap_admin) throw new AppError(409, "Cannot delete the bootstrap admin account");
-
+      if (existing.rows[0].is_bootstrap_admin) throw new AppError(409, "Cannot deactivate the bootstrap admin account");
+      if (existing.rows[0].status === "disabled") {
+        await transaction.query("delete from sessions where user_id = $1", [userId]);
+        await transaction.query("update mcp_access_tokens set revoked_at = coalesce(revoked_at, now()) where user_id = $1", [userId]);
+        return;
+      }
       const memberships = await transaction.query<{ case_id: string }>(
         "select case_id from case_members where user_id = $1 and case_role = 'commander' order by case_id",
         [userId]
@@ -75,33 +85,23 @@ export async function deleteUser(database: Database, actor: AuthenticatedUser, u
       for (const membership of memberships.rows) {
         await transaction.query("select id from cases where id = $1 for update", [membership.case_id]);
         const commanders = await transaction.query<{ count: number }>(
-          "select count(*)::int as count from case_members where case_id = $1 and case_role = 'commander'",
+          `select count(*)::int as count from case_members cm
+           inner join users u on u.id = cm.user_id
+           where cm.case_id = $1 and cm.case_role = 'commander' and u.status = 'active'`,
           [membership.case_id]
         );
-        if (commanders.rows[0].count <= 1) throw new AppError(409, "Cannot delete the last case commander");
+        if (commanders.rows[0].count <= 1) throw new AppError(409, "Cannot deactivate the last case commander");
       }
 
-      // Polymorphic graph endpoints have no foreign key to protect their user references.
-      const links = await transaction.query(
-        `select id from incident_entity_links
-         where (source_type = 'user' and source_id = $1) or (target_type = 'user' and target_id = $1) limit 1`,
-        [userId]
-      );
-      if (links.rowCount) throw new AppError(409, "User is referenced by existing records. Disable the account instead.");
-
-      await transaction.query("delete from users where id = $1", [userId]);
+      await transaction.query("update users set status = 'disabled', updated_at = now() where id = $1", [userId]);
+      await transaction.query("delete from sessions where user_id = $1", [userId]);
+      await transaction.query("update mcp_access_tokens set revoked_at = coalesce(revoked_at, now()) where user_id = $1", [userId]);
       await createAuditLog(transaction, {
-        actorUserId: actor.id, action: "user.delete", entityType: "user", entityId: userId,
-        beforeJson: existing.rows[0]
+        actorUserId: actor.id, action: "user.deactivate", entityType: "user", entityId: userId,
+        beforeJson: existing.rows[0], afterJson: { ...existing.rows[0], status: "disabled" }
       });
       publishUserStateEvent({ userId, type: "session.ended" });
     });
-  } catch (error) {
-    if ((error as { code?: string }).code === "23503") {
-      throw new AppError(409, "User is referenced by existing records. Disable the account instead.");
-    }
-    throw error;
-  }
 }
 
 interface UpdateUserInput {

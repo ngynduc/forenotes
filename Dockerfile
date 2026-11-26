@@ -21,7 +21,6 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 
-RUN apk add --no-cache chromium
 RUN addgroup -S forenotes && adduser -S -G forenotes forenotes
 
 WORKDIR /app
@@ -30,7 +29,6 @@ ENV NODE_ENV=production
 ENV APP_HOST=0.0.0.0
 ENV APP_PORT=3000
 ENV FORENOTES_DATA_DIR=/app/data
-ENV PDF_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force

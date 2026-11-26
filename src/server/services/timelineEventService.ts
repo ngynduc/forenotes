@@ -16,6 +16,8 @@ interface CreateTimelineEventInput {
   systemId?: string;
   accountId?: string;
   ownerUserId?: string;
+  eventRole?: "primary" | "supporting";
+  primaryEventId?: string | null;
 }
 
 interface TimelineTimeFilter {
@@ -39,6 +41,25 @@ async function ensureTimelineRelationshipEntity(
 
   if (result.rows[0].incident_id !== incidentId) {
     throw new AppError(409, `Timeline event ${entityType} must belong to the same incident`);
+  }
+}
+
+async function ensurePrimaryTimelineEvent(
+  database: Database,
+  incidentId: string,
+  primaryEventId: string,
+  timelineEventId?: string
+) {
+  if (primaryEventId === timelineEventId) {
+    throw new AppError(409, "A timeline event cannot support itself");
+  }
+  const result = await database.query<{ incident_id: string; event_role: string }>(
+    "select incident_id, event_role from timeline_events where id = $1",
+    [primaryEventId]
+  );
+  if (result.rowCount === 0) throw new AppError(404, "Primary timeline event not found");
+  if (result.rows[0].incident_id !== incidentId || result.rows[0].event_role !== "primary") {
+    throw new AppError(409, "Supporting events must reference a primary event in the same incident");
   }
 }
 
@@ -85,7 +106,7 @@ export async function listTimelineEvents(
 }
 
 function buildTimelineListQuery(filter?: TimelineTimeFilter) {
-  const clauses = ["incident_id = $1"];
+  const clauses = ["te.incident_id = $1"];
   const column = mapTimelineTimeField(filter?.field);
 
   if (filter?.start) {
@@ -96,7 +117,17 @@ function buildTimelineListQuery(filter?: TimelineTimeFilter) {
     clauses.push(`${column} <= $${clauses.length + 1}`);
   }
 
-  return `select * from timeline_events where ${clauses.join(" and ")} order by event_time desc, created_at desc`;
+  return `
+    select te.*,
+      creator.display_name as creator_display_name, creator.email as creator_email, creator.status as creator_status,
+      owner.display_name as owner_display_name, owner.email as owner_email, owner.status as owner_status,
+      primary_event.title as primary_event_title
+    from timeline_events te
+    inner join users creator on creator.id = te.created_by_user_id
+    left join users owner on owner.id = te.owner_user_id
+    left join timeline_events primary_event on primary_event.id = te.primary_event_id
+    where ${clauses.join(" and ")}
+    order by te.event_time desc, te.created_at desc`;
 }
 
 function buildTimelineListParams(incidentId: string, filter?: TimelineTimeFilter) {
@@ -113,11 +144,11 @@ function buildTimelineListParams(incidentId: string, filter?: TimelineTimeFilter
 function mapTimelineTimeField(field: TimelineTimeFilter["field"]) {
   switch (field) {
     case "createdAt":
-      return "created_at";
+      return "te.created_at";
     case "updatedAt":
-      return "updated_at";
+      return "te.updated_at";
     default:
-      return "event_time";
+      return "te.event_time";
   }
 }
 
@@ -133,14 +164,24 @@ export async function createTimelineEvent(database: Database, user: Authenticate
     await ensureTimelineRelationshipEntity(database, input.incidentId, "account", input.accountId);
   }
 
+  const eventRole = input.eventRole ?? "primary";
+  const primaryEventId = eventRole === "supporting" ? input.primaryEventId : null;
+  if (eventRole === "supporting" && !primaryEventId) {
+    throw new AppError(400, "Supporting events require a primary event");
+  }
+  if (primaryEventId) {
+    await ensurePrimaryTimelineEvent(database, input.incidentId, primaryEventId);
+  }
+
   const ownerUserId = input.ownerUserId ?? user.id;
   await requireIncidentMembership(database, ownerUserId, input.incidentId);
   const timelineEventId = randomUUID();
   await database.query(
     `
       insert into timeline_events (
-        id, incident_id, event_time, title, description, source, raw_evidence_ref, system_id, account_id, owner_user_id, created_by_user_id
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        id, incident_id, event_time, title, description, source, raw_evidence_ref, system_id, account_id,
+        owner_user_id, created_by_user_id, event_role, primary_event_id
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `,
     [
       timelineEventId,
@@ -153,7 +194,9 @@ export async function createTimelineEvent(database: Database, user: Authenticate
       input.systemId ?? null,
       input.accountId ?? null,
       ownerUserId,
-      user.id
+      user.id,
+      eventRole,
+      primaryEventId
     ]
   );
 
@@ -221,6 +264,21 @@ export async function updateTimelineEvent(
     throw new AppError(404, "Timeline event not found");
   }
 
+  const eventRole = input.eventRole ?? existing.rows[0].event_role ?? "primary";
+  const primaryEventId = eventRole === "supporting"
+    ? (input.primaryEventId === undefined ? existing.rows[0].primary_event_id : input.primaryEventId)
+    : null;
+  if (eventRole === "supporting" && !primaryEventId) {
+    throw new AppError(400, "Supporting events require a primary event");
+  }
+  if (primaryEventId) {
+    await ensurePrimaryTimelineEvent(database, incidentId, primaryEventId, timelineEventId);
+  }
+  if (eventRole === "supporting" && existing.rows[0].event_role === "primary") {
+    const children = await database.query("select id from timeline_events where primary_event_id = $1 limit 1", [timelineEventId]);
+    if (children.rowCount) throw new AppError(409, "Move supporting events before changing this primary event");
+  }
+
   const next = {
     ...existing.rows[0],
     event_time: input.eventTime ?? existing.rows[0].event_time,
@@ -230,13 +288,17 @@ export async function updateTimelineEvent(
     raw_evidence_ref: input.rawEvidenceRef ?? existing.rows[0].raw_evidence_ref,
     system_id: input.systemId ?? existing.rows[0].system_id,
     account_id: input.accountId ?? existing.rows[0].account_id,
-    owner_user_id: existing.rows[0].owner_user_id
+    owner_user_id: existing.rows[0].owner_user_id,
+    event_role: eventRole,
+    primary_event_id: primaryEventId
   };
 
   await database.query(
     `
       update timeline_events
-      set event_time = $3, title = $4, description = $5, source = $6, raw_evidence_ref = $7, system_id = $8, account_id = $9, owner_user_id = $10, updated_at = now()
+      set event_time = $3, title = $4, description = $5, source = $6, raw_evidence_ref = $7,
+          system_id = $8, account_id = $9, owner_user_id = $10, event_role = $11,
+          primary_event_id = $12, updated_at = now()
       where id = $1 and incident_id = $2
     `,
     [
@@ -249,7 +311,9 @@ export async function updateTimelineEvent(
       next.raw_evidence_ref,
       next.system_id,
       next.account_id,
-      next.owner_user_id
+      next.owner_user_id,
+      next.event_role,
+      next.primary_event_id
     ]
   );
 

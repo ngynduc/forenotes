@@ -33,12 +33,12 @@ async function setup() {
   return { app: createApp(pool, { accessLogWriter: () => undefined }), pool, users };
 }
 
-describe("Admin user deletion", () => {
+describe("Admin user deactivation", () => {
   let context: Awaited<ReturnType<typeof setup>>;
   beforeEach(async () => { context = await setup(); });
   afterEach(async () => { await context.pool.end(); });
 
-  it("deletes the account, revokes browser/MCP access, and audits public fields", async () => {
+  it("deactivates the account, revokes browser/MCP access, and preserves profile data", async () => {
     const { app, pool, users } = context;
     await pool.query("update users set password_hash = $2 where id = $1", [users.analyst, await hashPassword("DeleteSession123!")]);
     const session = request.agent(app);
@@ -65,23 +65,24 @@ describe("Admin user deletion", () => {
     } finally {
       unsubscribe();
     }
-    for (const table of ["users", "sessions", "mcp_access_tokens", "llm_settings", "notifications"]) {
-      const column = table === "users" ? "id" : table === "notifications" ? "recipient_user_id" : "user_id";
-      expect((await pool.query(`select * from ${table} where ${column} = $1`, [users.analyst])).rows).toEqual([]);
-    }
+    expect((await pool.query("select status from users where id = $1", [users.analyst])).rows).toEqual([{ status: "disabled" }]);
+    expect((await pool.query("select * from sessions where user_id = $1", [users.analyst])).rows).toEqual([]);
+    expect((await pool.query("select revoked_at from mcp_access_tokens where user_id = $1", [users.analyst])).rows[0].revoked_at).toBeTruthy();
+    expect((await pool.query("select * from llm_settings where user_id = $1", [users.analyst])).rowCount).toBe(1);
+    expect((await pool.query("select * from notifications where recipient_user_id = $1", [users.analyst])).rowCount).toBe(1);
     expect((await session.get("/api/auth/me")).status).toBe(401);
-    expect((await request(app).get("/api/auth/me").set("x-user-id", users.analyst)).status).toBe(401);
+    expect((await request(app).get("/api/auth/me").set("x-user-id", users.analyst)).status).toBe(403);
     const list = await request(app).get("/api/users").set("x-user-id", users.admin);
-    expect(list.body.users.some((user: { id: string }) => user.id === users.analyst)).toBe(false);
-    const audit = await pool.query("select actor_user_id, entity_id, before_json, after_json from audit_logs where action = 'user.delete'");
-    expect(audit.rows).toEqual([expect.objectContaining({ actor_user_id: users.admin, entity_id: users.analyst, after_json: null })]);
+    expect(list.body.users).toContainEqual(expect.objectContaining({ id: users.analyst, status: "disabled" }));
+    const audit = await pool.query("select actor_user_id, entity_id, before_json, after_json from audit_logs where action = 'user.deactivate'");
+    expect(audit.rows).toEqual([expect.objectContaining({ actor_user_id: users.admin, entity_id: users.analyst })]);
+    expect(audit.rows[0].after_json).toMatchObject({ status: "disabled" });
     expect(audit.rows[0].before_json).toMatchObject({ username: "delete-analyst", global_role: "analyst" });
     expect(JSON.stringify(audit.rows)).not.toContain("password_hash");
     const recreate = await request(app).post("/api/users").set("x-user-id", users.admin).send({
       username: "delete-analyst", email: "delete-analyst@example.com", displayName: "Replacement", globalRole: "analyst"
     });
-    expect(recreate.status).toBe(201);
-    expect(recreate.body.user.id).not.toBe(users.analyst);
+    expect(recreate.status).toBe(409);
   });
 
   it.each(["commander", "analyst", "viewer"] as const)("rejects deletion by a %s", async (role) => {
@@ -103,20 +104,21 @@ describe("Admin user deletion", () => {
     const { app, pool, users } = context;
     const own = await request(app).delete(`/api/users/${users.admin}`).set("x-user-id", users.admin);
     expect(own.status).toBe(409);
-    expect(own.body.error).toBe("Cannot delete your own account");
+    expect(own.body.error).toBe("Cannot deactivate your own account");
     await pool.query("update users set global_role = 'admin', is_bootstrap_admin = true where id = $1", [users.viewer]);
     const bootstrap = await request(app).delete(`/api/users/${users.viewer}`).set("x-user-id", users.admin);
     expect(bootstrap.status).toBe(409);
-    expect(bootstrap.body.error).toBe("Cannot delete the bootstrap admin account");
+    expect(bootstrap.body.error).toBe("Cannot deactivate the bootstrap admin account");
     for (const userId of [users.admin, users.viewer]) {
       expect((await pool.query("select id from users where id = $1", [userId])).rowCount).toBe(1);
     }
   });
 
-  it.each(["active", "disabled"])("deletes an unreferenced %s administrator", async (status) => {
+  it.each(["active", "disabled"])("keeps an unreferenced %s administrator as disabled", async (status) => {
     const { app, pool, users } = context;
     await pool.query("update users set global_role = 'admin', status = $2 where id = $1", [users.viewer, status]);
     expect((await request(app).delete(`/api/users/${users.viewer}`).set("x-user-id", users.admin)).status).toBe(204);
+    expect((await pool.query("select status from users where id = $1", [users.viewer])).rows).toEqual([{ status: "disabled" }]);
   });
 
   async function createScope() {
@@ -128,22 +130,22 @@ describe("Admin user deletion", () => {
     return { caseId, incidentId };
   }
 
-  it("protects the last case commander, then removes memberships when another remains", async () => {
+  it("protects the last case commander, then preserves membership history when another remains", async () => {
     const { app, pool, users } = context;
     const { caseId, incidentId } = await createScope();
     await pool.query("insert into case_members (case_id, user_id, case_role, added_by_user_id) values ($1, $2, 'commander', $3)", [caseId, users.commander, users.admin]);
     await pool.query("insert into incident_members (incident_id, user_id, incident_role, added_by_user_id) values ($1, $2, 'commander', $3)", [incidentId, users.commander, users.admin]);
     const blocked = await request(app).delete(`/api/users/${users.commander}`).set("x-user-id", users.admin);
     expect(blocked.status).toBe(409);
-    expect(blocked.body.error).toBe("Cannot delete the last case commander");
+    expect(blocked.body.error).toBe("Cannot deactivate the last case commander");
     await pool.query("insert into case_members (case_id, user_id, case_role, added_by_user_id) values ($1, $2, 'commander', $2)", [caseId, users.admin]);
     expect((await request(app).delete(`/api/users/${users.commander}`).set("x-user-id", users.admin)).status).toBe(204);
-    expect((await pool.query("select * from case_members where user_id = $1", [users.commander])).rows).toEqual([]);
-    expect((await pool.query("select * from incident_members where user_id = $1", [users.commander])).rows).toEqual([]);
+    expect((await pool.query("select * from case_members where user_id = $1", [users.commander])).rowCount).toBe(1);
+    expect((await pool.query("select * from incident_members where user_id = $1", [users.commander])).rowCount).toBe(1);
     expect((await pool.query("select id from cases where id = $1", [caseId])).rowCount).toBe(1);
   });
 
-  it.each(["authorship", "assignment", "audit", "MCP provenance", "graph source", "graph target"])("preserves accounts referenced by %s", async (reference) => {
+  it.each(["authorship", "assignment", "audit", "MCP provenance", "graph source", "graph target"])("deactivates accounts referenced by %s without removing history", async (reference) => {
     const { app, pool, users } = context;
     const { caseId, incidentId } = await createScope();
     if (reference === "authorship") {
@@ -163,14 +165,12 @@ describe("Admin user deletion", () => {
     const unsubscribe = subscribeToUserStateEvents(users.analyst, (event) => events.push(event.type));
     try {
       const response = await request(app).delete(`/api/users/${users.analyst}`).set("x-user-id", users.admin);
-      expect(response.status).toBe(409);
-      expect(response.body.error).toBe("User is referenced by existing records. Disable the account instead.");
-      expect(events).toEqual([]);
+      expect(response.status).toBe(204);
+      await expect.poll(() => events).toEqual(["session.ended"]);
     } finally {
       unsubscribe();
     }
-    expect((await pool.query("select status from users where id = $1", [users.analyst])).rows).toEqual([{ status: "active" }]);
-    expect((await pool.query("select id from audit_logs where action = 'user.delete'")).rows).toEqual([]);
-    expect((await request(app).patch(`/api/users/${users.analyst}`).set("x-user-id", users.admin).send({ status: "disabled" })).status).toBe(200);
+    expect((await pool.query("select status from users where id = $1", [users.analyst])).rows).toEqual([{ status: "disabled" }]);
+    expect((await pool.query("select id from audit_logs where action = 'user.deactivate'")).rowCount).toBe(1);
   });
 });

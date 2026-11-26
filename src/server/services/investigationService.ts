@@ -136,10 +136,11 @@ export async function listInvestigationRuns(
   if (filters.incidentId) {
     await requireIncidentInCase(database, filters.incidentId, filters.caseId);
     params.push(filters.incidentId);
-    conditions.push(`exists (
-      select 1 from evidence_records e where e.run_id = r.id and e.incident_id = $${params.length}
-      union select 1 from observations o where o.run_id = r.id and o.incident_id = $${params.length}
-      union select 1 from hypotheses h where h.run_id = r.id and h.incident_id = $${params.length}
+    // Uncorrelated IN subqueries: the in-memory demo database cannot resolve outer columns inside EXISTS.
+    conditions.push(`(
+      r.id in (select run_id from evidence_records where incident_id = $${params.length})
+      or r.id in (select run_id from observations where incident_id = $${params.length})
+      or r.id in (select run_id from hypotheses where incident_id = $${params.length})
     )`);
   }
   params.push(limit, offset);

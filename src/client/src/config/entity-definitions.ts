@@ -12,7 +12,8 @@ export type FieldType =
   | "code"
   | "color"
   | "user-select"
-  | "member-select";
+  | "member-select"
+  | "timeline-event-select";
 type EntityLinkSourceType = Extract<GraphNodeType, "finding" | "timeline_event">;
 
 export interface EntityField {
@@ -44,6 +45,9 @@ export interface EntityDefinition {
   create: () => { url: string; method: string };
   update: (id: string) => { url: string; method: string };
   delete?: (id: string) => { url: string; method: string };
+  deleteAction?: string;
+  deleteConfirmation?: string;
+  deleteSuccess?: string;
   fields: () => EntityField[];
   values: (item?: Record<string, unknown> | null) => Record<string, unknown>;
   fromForm: (data: Record<string, unknown>) => Record<string, unknown>;
@@ -216,6 +220,8 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       fields: () => [
         { name: "title", label: "Title", type: "text", required: true, autofocus: true },
         { name: "eventTime", label: "Event Time", type: "datetime-local", required: true },
+        { name: "eventRole", label: "Event Role", type: "select", options: ["primary", "supporting"], required: true },
+        { name: "primaryEventId", label: "Primary Event", type: "timeline-event-select" },
         { name: "source", label: "Source", type: "text" },
         { name: "description", label: "Details", type: "textarea", span: 2 },
         { name: "rawEvidenceRef", label: "Raw Evidence Ref", type: "text", span: 2 },
@@ -226,6 +232,8 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
         source: (item?.source as string) || "",
         description: (item?.description as string) || "",
         rawEvidenceRef: (item?.rawEvidenceRef as string) || "",
+        eventRole: (item?.eventRole as string) || "primary",
+        primaryEventId: (item?.primaryEventId as string) || "",
       }),
       fromForm: (data) =>
         cleanObject({
@@ -452,6 +460,9 @@ export function getEntityDefinitions(getScope: GetScope): Record<string, EntityD
       create: () => ({ url: "/api/users", method: "POST" }),
       update: (id) => ({ url: `/api/users/${id}`, method: "PATCH" }),
       delete: (id) => ({ url: `/api/users/${id}`, method: "DELETE" }),
+      deleteAction: "Deactivate user",
+      deleteConfirmation: "Deactivate this user? They will lose access, but their historical attribution will be preserved.",
+      deleteSuccess: "User deactivated.",
       fields: () => [
         { name: "username", label: "Username", type: "text", required: true, autofocus: true },
         { name: "email", label: "Email", type: "email", required: true },

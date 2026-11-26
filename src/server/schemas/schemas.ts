@@ -113,7 +113,7 @@ export const createFindingSchema = z.object({
 
 export const updateFindingSchema = createFindingSchema.partial().refine((value) => Object.keys(value).length > 0);
 
-export const createTimelineEventSchema = z.object({
+const timelineEventSchema = z.object({
   eventTime: utcIsoDatetimeSchema,
   title: z.string().min(1),
   description: z.string().optional(),
@@ -121,10 +121,20 @@ export const createTimelineEventSchema = z.object({
   rawEvidenceRef: z.string().optional(),
   systemId: uuidSchema.optional(),
   accountId: uuidSchema.optional(),
-  ownerUserId: uuidSchema.optional()
+  ownerUserId: uuidSchema.optional(),
+  eventRole: z.enum(["primary", "supporting"]).optional().default("primary"),
+  primaryEventId: uuidSchema.nullable().optional()
 });
 
-export const updateTimelineEventSchema = createTimelineEventSchema.partial().refine((value) => Object.keys(value).length > 0);
+export const createTimelineEventSchema = timelineEventSchema.superRefine((value, ctx) => {
+  if (value.eventRole === "supporting" && !value.primaryEventId) {
+    ctx.addIssue({ code: "custom", path: ["primaryEventId"], message: "Supporting events require a primary event" });
+  }
+});
+
+export const updateTimelineEventSchema = timelineEventSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0);
 
 export const createIndicatorSchema = z.object({
   indicatorType: z.enum(INDICATOR_TYPES),
@@ -191,6 +201,12 @@ export const reportContextQuerySchema = z.object({
     });
   }
 });
+
+export const reportChatPromptSchema = z.object({ prompt: z.string().max(8000) });
+
+export const reportChatSchema = z.object({
+  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(40000) })).min(1).max(40)
+}).refine((value) => value.messages[value.messages.length - 1].role === "user", { message: "The last message must be from the user." });
 
 export const generateReportSchema = z.object({
   templateId: uuidSchema,

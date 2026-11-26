@@ -17,6 +17,8 @@ import { getAuthenticatedUser } from "./services/authService.js";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const clientDistDir = path.resolve(currentDir, "../client");
 
+const LONG_READ_ONLY_ROUTE = /\/(reports\/(chat|generate)|llm-settings\/test)$/;
+
 export function createApp(
   database: Database = pool,
   options: { mcp?: McpHttpConfig; accessLogWriter?: AccessLogWriter } = {}
@@ -50,13 +52,19 @@ export function createApp(
     express.json({ limit: "50mb" })
   );
   app.use(express.json());
-  app.get("/api/health", (_request, response) => {
-    response.json({ ok: true });
+  app.get("/api/health", async (_request, response) => {
+    try {
+      await database.query("select 1");
+      response.json({ ok: true });
+    } catch {
+      response.status(503).json({ ok: false, error: "Database unavailable" });
+    }
   });
 
   const requestDatabase = createRequestScopedDatabase(database);
   app.use(async (request, response, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    // These routes are read-only and wait on the LLM for minutes; a transaction would pin a pool connection meanwhile.
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method) || LONG_READ_ONLY_ROUTE.test(request.path)) {
       next();
       return;
     }

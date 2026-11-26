@@ -38,7 +38,7 @@ export async function listFindings(
     return [];
   }
   const findingIds = result.rows.map((row) => row.id);
-  const [attackTagsResult, customTagsResult] = await Promise.all([
+  const [attackTagsResult, customTagsResult, evidenceLinksResult] = await Promise.all([
     database.query<{ finding_id: string }>(
       `
         select fat.finding_id, at.id, at.attack_id, at.name, at.type, at.tactic
@@ -58,14 +58,25 @@ export async function listFindings(
         order by ct.name asc
       `,
       [incidentId, findingIds]
+    ),
+    database.query<{ finding_id: string }>(
+      `
+        select finding_id, id, evidence_type, evidence_id, linked_by_user_id, created_at
+        from finding_evidence_links
+        where incident_id = $1 and finding_id = any($2)
+        order by created_at desc
+      `,
+      [incidentId, findingIds]
     )
   ]);
   const attackTagsByFinding = groupRowsById(attackTagsResult.rows);
   const customTagsByFinding = groupRowsById(customTagsResult.rows);
+  const evidenceLinksByFinding = groupRowsById(evidenceLinksResult.rows);
   return result.rows.map((row) => ({
     ...row,
     attack_tags: attackTagsByFinding.get(row.id) ?? [],
-    custom_tags: customTagsByFinding.get(row.id) ?? []
+    custom_tags: customTagsByFinding.get(row.id) ?? [],
+    evidence_links: evidenceLinksByFinding.get(row.id) ?? []
   }));
 }
 
@@ -82,7 +93,7 @@ function groupRowsById(rows: Array<{ finding_id: string }>) {
 }
 
 function buildFindingListQuery(filter?: FindingTimeFilter) {
-  const clauses = ["incident_id = $1"];
+  const clauses = ["f.incident_id = $1"];
   const column = mapFindingTimeField(filter?.field);
 
   if (filter?.start) {
@@ -94,7 +105,15 @@ function buildFindingListQuery(filter?: FindingTimeFilter) {
   }
   clauses.push(`true`);
 
-  return `select * from findings where ${clauses.slice(0, -1).join(" and ")} order by created_at desc limit $${clauses.length}`;
+  return `
+    select f.*,
+      creator.display_name as creator_display_name, creator.email as creator_email, creator.status as creator_status,
+      owner.display_name as owner_display_name, owner.email as owner_email, owner.status as owner_status
+    from findings f
+    inner join users creator on creator.id = f.created_by_user_id
+    left join users owner on owner.id = f.owner_user_id
+    where ${clauses.slice(0, -1).join(" and ")}
+    order by f.created_at desc limit $${clauses.length}`;
 }
 
 function buildFindingListParams(incidentId: string, filter?: FindingTimeFilter) {
@@ -110,7 +129,7 @@ function buildFindingListParams(incidentId: string, filter?: FindingTimeFilter) 
 }
 
 function mapFindingTimeField(field: FindingTimeFilter["field"]) {
-  return field === "createdAt" ? "created_at" : "updated_at";
+  return field === "createdAt" ? "f.created_at" : "f.updated_at";
 }
 
 export async function createFinding(database: Database, user: AuthenticatedUser, input: CreateFindingInput) {

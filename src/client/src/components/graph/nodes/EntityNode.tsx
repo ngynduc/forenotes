@@ -17,6 +17,8 @@ export function EntityNode({ data, selected }: NodeProps) {
     isSelected?: boolean;
     isConnected?: boolean;
     isDimmed?: boolean;
+    supportingCount?: number;
+    isExpanded?: boolean;
   };
   const Icon = ENTITY_ICON_MAP[node.type] ?? DEFAULT_ENTITY_ICON;
   const severityClass = node.severity ? SEVERITY_COLORS[node.severity] ?? "" : "";
@@ -34,7 +36,9 @@ export function EntityNode({ data, selected }: NodeProps) {
         isDimmed && "opacity-40"
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--color-primary)]" />
+      {([Position.Top, Position.Right, Position.Bottom, Position.Left] as const).map((position) => (
+        <Handle key={`target-${position}`} id={`target-${position}`} type="target" position={position} className="!h-2 !w-2 !bg-[var(--color-primary)]" />
+      ))}
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
         <span className="min-w-0 text-xs font-semibold leading-snug [overflow-wrap:anywhere]">{node.label}</span>
@@ -49,7 +53,14 @@ export function EntityNode({ data, selected }: NodeProps) {
           {node.status}
         </Badge>
       )}
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--color-primary)]" />
+      {node.supportingCount ? (
+        <p className="mt-1 text-[10px] font-medium text-[var(--color-primary)]">
+          {node.isExpanded ? "−" : "+"} {node.supportingCount} supporting event{node.supportingCount === 1 ? "" : "s"}
+        </p>
+      ) : null}
+      {([Position.Top, Position.Right, Position.Bottom, Position.Left] as const).map((position) => (
+        <Handle key={`source-${position}`} id={`source-${position}`} type="source" position={position} className="!h-2 !w-2 !bg-[var(--color-primary)]" />
+      ))}
     </div>
   );
 }

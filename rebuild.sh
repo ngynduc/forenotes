@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-services=("app" "report-llm-service")
+services=("app")
 no_cache="0"
 service_arg_seen="0"
 compose_file="docker-compose.demo.yml"
@@ -34,7 +34,6 @@ for arg in "$@"; do
       echo "  ./rebuild.sh --no-cache"
       echo "  ./rebuild.sh --prod"
       echo "  ./rebuild.sh app --no-cache"
-      echo "  ./rebuild.sh report-llm-service --no-cache"
       exit 0
       ;;
     *)

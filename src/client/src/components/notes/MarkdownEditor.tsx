@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { useTheme } from "@/providers/ThemeProvider";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { Button } from "@/components/ui/Button";
 import ReactMarkdown from "react-markdown";
@@ -25,6 +26,7 @@ export function MarkdownEditor({
   uploadStatusLabel = "Uploading pasted image...",
   helperText = "Images paste as Markdown when uploads are enabled."
 }: MarkdownEditorProps) {
+  const { theme } = useTheme();
   const cmRef = useRef<ReactCodeMirrorRef>(null);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [pasteError, setPasteError] = useState<string | null>(null);
@@ -116,6 +118,7 @@ export function MarkdownEditor({
             value={value}
             onChange={onChange}
             extensions={[markdown({ base: markdownLanguage })]}
+            theme={theme}
             height="420px"
             basicSetup={{
               lineNumbers: true,

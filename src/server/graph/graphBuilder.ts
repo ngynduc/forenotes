@@ -328,10 +328,23 @@ export async function buildIncidentGraph(
       owner: getUserDisplayName(userById.get(row.owner_user_id)),
       metadata: {
         eventTime: row.event_time,
+        eventRole: row.event_role ?? "primary",
+        primaryEventId: row.primary_event_id ?? undefined,
         createdAt: row.created_at ?? undefined,
         updatedAt: row.updated_at ?? undefined
       }
     });
+
+    if (row.primary_event_id) {
+      pushEdge(edges, edgeDedupe, {
+        source: makeNodeId("timeline_event", row.primary_event_id),
+        target: makeNodeId("timeline_event", row.id),
+        type: "related_to",
+        label: "supports",
+        derived: true,
+        sourceDescription: "Derived from timeline.primaryEventId"
+      });
+    }
 
     if (row.owner_user_id && userById.has(row.owner_user_id)) {
       pushEdge(edges, edgeDedupe, {

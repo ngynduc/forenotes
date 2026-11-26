@@ -22,7 +22,7 @@ const LLM_PROVIDER_OPTIONS = [
   { value: "groq", label: "Groq", modelExample: "llama-3.3-70b-versatile" },
   { value: "zai", label: "Z.ai", modelExample: "glm-4.7" },
   { value: "ollama", label: "Ollama", modelExample: "llama3.1" },
-  { value: "custom", label: "Custom / Any LiteLLM provider", modelExample: "deepseek/deepseek-v4-flash" }
+  { value: "custom", label: "Custom OpenAI-compatible endpoint", modelExample: "deepseek/deepseek-v4-flash" }
 ] as const;
 
 function messageFromError(error: unknown, fallback: string) {
@@ -244,7 +244,7 @@ export default function SettingsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold">LLM Provider</h3>
-              <p className="text-xs text-[var(--color-text-muted)]">Choose a provider, or enter any LiteLLM provider name such as `nano-gpt`, then add the model name and API key.</p>
+              <p className="text-xs text-[var(--color-text-muted)]">Choose a provider, or a custom name such as `nano-gpt` with its OpenAI-compatible API base URL, then add the model name and API key.</p>
             </div>
             <span className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -262,13 +262,13 @@ export default function SettingsPage() {
                 System prompt: {llmStatus.systemPromptConfigured ? "customized" : "default service prompt"}.
               </p>
               <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                API base: {llmStatus.endpointConfigured ? "configured" : "provider default or LiteLLM default"}.
+                API base: {llmStatus.endpointConfigured ? "configured" : "provider default"}.
                 Custom headers: {llmStatus.customHeadersConfigured ? llmStatus.customHeaders.map((header) => header.name).join(", ") : "none"}.
               </p>
             </div>
           ) : (
             <div className="rounded border border-dashed border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">
-              Add user settings here or set `LITELLM_SERVICE_URL`, `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` in `.env`.
+              Add user settings here or set `LLM_PROVIDER`, `LLM_MODEL`, and `LLM_API_KEY` in `.env`.
             </div>
           )}
 
@@ -328,7 +328,7 @@ export default function SettingsPage() {
               <Input
                 value={llmForm.baseUrl}
                 onChange={(event) => setLlmForm((value) => ({ ...value, baseUrl: event.target.value }))}
-                placeholder="Optional override. Leave blank to use provider or LiteLLM defaults."
+                placeholder="Optional for known providers; required for custom providers and gateways."
               />
             </label>
             <label className="space-y-1 text-sm font-medium md:col-span-2">
@@ -344,7 +344,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Custom Headers</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">Optional headers forwarded to LiteLLM for this user configuration.</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">Optional headers sent to the provider for this user configuration.</p>
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={addCustomHeader}>
                   <Plus className="h-4 w-4" />

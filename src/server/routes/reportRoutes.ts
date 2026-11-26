@@ -15,7 +15,6 @@ import {
   duplicatePdfTemplate,
   duplicateReportTemplate,
   exportReportHtml,
-  exportReportPdf,
   generateReportPreview,
   getMaskedLlmSettings,
   getReport,
@@ -39,6 +38,8 @@ import {
   duplicateReportTemplateSchema,
   exportReportPdfSchema,
   generateReportSchema,
+  reportChatPromptSchema,
+  reportChatSchema,
   previewPdfTemplateSchema,
   reportContextQuerySchema,
   updatePdfTemplateSchema,
@@ -46,6 +47,7 @@ import {
   updateReportTemplateSchema,
   upsertLlmSettingsSchema
 } from "../schemas/schemas.js";
+import { getReportChatPrompt, runReportChat, saveReportChatPrompt } from "../services/reportChatService.js";
 import { getRequiredParam } from "./params.js";
 
 export function createReportRoutes(database: Database) {
@@ -215,6 +217,37 @@ export function createReportRoutes(database: Database) {
   );
 
   router.get(
+    "/me/report-chat-prompt",
+    asyncHandler(async (request, response) => {
+      response.json(await getReportChatPrompt(database, await getAuthenticatedUser(request, database)));
+    })
+  );
+
+  router.put(
+    "/me/report-chat-prompt",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      response.json(await saveReportChatPrompt(database, user, reportChatPromptSchema.parse(request.body).prompt));
+    })
+  );
+
+  router.post(
+    "/incidents/:incidentId/reports/chat",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const { messages } = reportChatSchema.parse(request.body);
+      const controller = new AbortController();
+      response.on("close", () => controller.abort());
+      const send = (event: unknown) => { if (!response.writableEnded) response.write(`data: ${JSON.stringify(event)}\n\n`); };
+      await runReportChat(database, user, incidentId, messages, send, controller.signal, () => {
+        response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+      });
+      response.end();
+    })
+  );
+
+  router.get(
     "/incidents/:incidentId/reports",
     asyncHandler(async (request, response) => {
       const user = await getAuthenticatedUser(request, database);
@@ -300,21 +333,6 @@ export function createReportRoutes(database: Database) {
       response.setHeader("Content-Type", "text/html; charset=utf-8");
       response.setHeader("Content-Disposition", `attachment; filename="${exported.fileName}"`);
       response.status(200).send(exported.html);
-    })
-  );
-
-  router.post(
-    "/incidents/:incidentId/reports/:reportId/export/pdf",
-    asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
-      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
-      const reportId = getRequiredParam(request.params.reportId, "reportId");
-      const payload = exportReportPdfSchema.parse(request.body);
-      const exported = await exportReportPdf(database, user, incidentId, reportId, payload);
-      response.setHeader("Content-Type", "application/pdf");
-      response.setHeader("Content-Disposition", `attachment; filename="${exported.fileName}"`);
-      response.setHeader("Content-Length", String(exported.pdf.length));
-      response.status(200).send(exported.pdf);
     })
   );
 

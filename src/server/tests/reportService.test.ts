@@ -16,8 +16,8 @@ import {
   deleteReport,
   getReport,
   updateReport,
-  exportReportPdf,
-  buildLiteLlmGenerateReportPayload,
+  exportReportHtml,
+  buildReportMessages,
   inlineReportUploadImagesForPdf,
   renderPdfHtml,
   renderMarkdownToSanitizedHtml,
@@ -26,6 +26,7 @@ import {
   getMaskedLlmSettings,
   testLlmSettings
 } from "../services/reportService.js";
+import { resolveChatCompletionsRequest } from "../services/llmClient.js";
 
 const originalLlmEnv = {
   apiKey: process.env.LLM_API_KEY,
@@ -34,7 +35,6 @@ const originalLlmEnv = {
   provider: process.env.LLM_PROVIDER,
   systemPrompt: process.env.LLM_SYSTEM_PROMPT,
   customHeaders: process.env.LLM_CUSTOM_HEADERS_JSON,
-  serviceUrl: process.env.LITELLM_SERVICE_URL,
   allowUnsafeEndpoints: process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS
 };
 
@@ -45,7 +45,6 @@ function clearLlmEnv() {
   delete process.env.LLM_PROVIDER;
   delete process.env.LLM_SYSTEM_PROMPT;
   delete process.env.LLM_CUSTOM_HEADERS_JSON;
-  delete process.env.LITELLM_SERVICE_URL;
   delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
 }
 
@@ -62,8 +61,6 @@ function restoreLlmEnv() {
   else process.env.LLM_SYSTEM_PROMPT = originalLlmEnv.systemPrompt;
   if (originalLlmEnv.customHeaders === undefined) delete process.env.LLM_CUSTOM_HEADERS_JSON;
   else process.env.LLM_CUSTOM_HEADERS_JSON = originalLlmEnv.customHeaders;
-  if (originalLlmEnv.serviceUrl === undefined) delete process.env.LITELLM_SERVICE_URL;
-  else process.env.LITELLM_SERVICE_URL = originalLlmEnv.serviceUrl;
   if (originalLlmEnv.allowUnsafeEndpoints === undefined) delete process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS;
   else process.env.FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS = originalLlmEnv.allowUnsafeEndpoints;
 }
@@ -300,7 +297,7 @@ describe("report service", () => {
     expect(html).toContain("<h1>Executive Summary</h1>");
   });
 
-  it("builds the LiteLLM service request without leaking secrets into headers", () => {
+  it("builds OpenAI-compatible report messages and provider requests", () => {
     const context = {
       generatedAt: "2026-05-22T00:00:00.000Z",
       reportType: "incident" as const,
@@ -317,31 +314,28 @@ describe("report service", () => {
       tags: { custom: [], attack: [] }
     };
 
-    const payload = buildLiteLlmGenerateReportPayload(
-      {
-        serviceUrl: "http://localhost:8001",
-        provider: "openai",
-        model: "openai/gpt-4o-mini",
-        systemPrompt: "Follow the incident timeline closely.",
-        apiKey: "sk-test-secret",
-        apiBase: "https://api.example.test",
-        customHeaders: { "HTTP-Referer": "https://forenotes.local" }
-      },
-      "incident",
-      "# {{incident.name}}",
-      context
-    );
+    const messages = buildReportMessages("Follow the incident timeline closely.", "incident", "# {{incident.name}}", context);
+    expect(messages[0]).toEqual({ role: "system", content: "Follow the incident timeline closely." });
+    expect(JSON.parse(messages[1].content)).toMatchObject({ reportType: "incident", templateMarkdown: "# {{incident.name}}", incidentContext: { incident: { name: "Incident One" } } });
+    expect(buildReportMessages("  ", "incident", "", context)[0].content).toContain("DFIR report writing");
 
-    expect(payload).toMatchObject({
+    const request = resolveChatCompletionsRequest({
       provider: "openai",
       model: "openai/gpt-4o-mini",
-      systemPrompt: "Follow the incident timeline closely.",
       apiKey: "sk-test-secret",
-      apiBase: "https://api.example.test",
-      customHeaders: { "HTTP-Referer": "https://forenotes.local" },
-      reportType: "incident",
-      templateMarkdown: "# {{incident.name}}"
+      baseUrl: "https://api.example.test",
+      customHeaders: { "HTTP-Referer": "https://forenotes.local" }
     });
+    expect(request).toEqual({
+      url: "https://api.example.test/chat/completions",
+      model: "gpt-4o-mini",
+      headers: { "HTTP-Referer": "https://forenotes.local", "Content-Type": "application/json", Authorization: "Bearer sk-test-secret" }
+    });
+    expect(resolveChatCompletionsRequest({ provider: "openai-compatible", model: "ag/gemini", apiKey: "", baseUrl: "https://gw.test/v1/chat/completions", customHeaders: {} }))
+      .toMatchObject({ url: "https://gw.test/v1/chat/completions", model: "ag/gemini" });
+    expect(resolveChatCompletionsRequest({ provider: "groq", model: "llama", apiKey: "k", baseUrl: null, customHeaders: {} }).url)
+      .toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(() => resolveChatCompletionsRequest({ provider: "nano-gpt", model: "x", apiKey: "k", baseUrl: null, customHeaders: {} })).toThrow(/base URL/);
   });
 
   it("masks stored LLM settings without returning plaintext API keys", async () => {
@@ -421,7 +415,7 @@ describe("report service", () => {
     }
   });
 
-  it("allows custom LiteLLM providers without forcing a base URL", async () => {
+  it("allows custom providers to be saved without a base URL", async () => {
     const response = await saveLlmSettings(database, user(userId), {
       provider: "nano-gpt",
       model: "deepseek/deepseek-v4-flash",
@@ -452,9 +446,8 @@ describe("report service", () => {
       customHeaders: []
     });
 
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ ok: true, markdown: "OK" }),
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "OK" } }] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -462,18 +455,16 @@ describe("report service", () => {
     const response = await testLlmSettings(database, user(userId));
 
     expect(response).toEqual({ ok: true, model: "deepseek/deepseek-v4-flash", source: "user" });
-    const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
-    expect(fetchBody).toMatchObject({
-      provider: "nano-gpt",
-      model: "deepseek/deepseek-v4-flash",
-      systemPrompt: "Use an executive summary style.",
-      apiKey: "sk-test-secret",
-      apiBase: "https://nano-gpt.example.test/v1",
-      customHeaders: {
-        "HTTP-Referer": "https://forenotes.local",
-        "X-Title": "Forenotes"
-      }
+    const [fetchUrl, fetchOptions] = (fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0];
+    expect(fetchUrl).toBe("https://nano-gpt.example.test/v1/chat/completions");
+    expect(fetchOptions.headers).toMatchObject({
+      Authorization: "Bearer sk-test-secret",
+      "HTTP-Referer": "https://forenotes.local",
+      "X-Title": "Forenotes"
     });
+    const fetchBody = JSON.parse(String(fetchOptions.body));
+    expect(fetchBody).toMatchObject({ model: "deepseek/deepseek-v4-flash", stream: false });
+    expect(fetchBody.messages[0]).toEqual({ role: "system", content: "Use an executive summary style." });
   });
 
   it("lets users recover LLM settings when the stored API key cannot be decrypted", async () => {
@@ -582,14 +573,13 @@ describe("report service", () => {
     });
   });
 
-  it("tests the configured LiteLLM service using env fallback", async () => {
+  it("tests the configured LLM provider using env fallback", async () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_API_ENDPOINT = "https://api.example.test/v1";
     process.env.LLM_MODEL = "gpt-env";
     process.env.LLM_SYSTEM_PROMPT = "Return a concise validation response.";
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ ok: true, markdown: "OK" }),
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "OK" } }] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -599,33 +589,25 @@ describe("report service", () => {
     expect(response).toEqual({ ok: true, model: "gpt-env", source: "env" });
     expect(JSON.stringify(response)).not.toContain("sk-env-secret");
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://litellm.test/generate-report",
+      "https://api.example.test/v1/chat/completions",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          "Content-Type": "application/json"
-        })
+        headers: expect.objectContaining({ "Content-Type": "application/json", Authorization: "Bearer sk-env-secret" })
       })
     );
     const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
-    expect(fetchBody).toMatchObject({
-      provider: "openai",
-      model: "gpt-env",
-      systemPrompt: "Return a concise validation response.",
-      apiKey: "sk-env-secret",
-      apiBase: "https://api.example.test/v1",
-      reportType: "incident"
-    });
+    expect(fetchBody.model).toBe("gpt-env");
+    expect(fetchBody.messages[0]).toEqual({ role: "system", content: "Return a concise validation response." });
+    expect(JSON.parse(fetchBody.messages[1].content)).toMatchObject({ reportType: "incident" });
   });
 
-  it("passes custom provider env configs through to the LiteLLM service unchanged", async () => {
+  it("sends custom provider env configs to their OpenAI-compatible endpoint unchanged", async () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_API_ENDPOINT = "https://nano-gpt.example.test/v1";
     process.env.LLM_PROVIDER = "nano-gpt";
     process.env.LLM_MODEL = "deepseek/deepseek-v4-flash";
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ ok: true, markdown: "OK" }),
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "OK" } }] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -633,25 +615,20 @@ describe("report service", () => {
     const response = await testLlmSettings(database, user(userId));
 
     expect(response).toEqual({ ok: true, model: "deepseek/deepseek-v4-flash", source: "env" });
-    const fetchBody = JSON.parse(String((fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0][1].body));
-    expect(fetchBody).toMatchObject({
-      provider: "nano-gpt",
-      model: "deepseek/deepseek-v4-flash",
-      apiKey: "sk-env-secret",
-      apiBase: "https://nano-gpt.example.test/v1",
-      reportType: "incident"
-    });
+    const [fetchUrl, fetchOptions] = (fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls[0];
+    expect(fetchUrl).toBe("https://nano-gpt.example.test/v1/chat/completions");
+    expect(fetchOptions.headers).toMatchObject({ Authorization: "Bearer sk-env-secret" });
+    expect(JSON.parse(String(fetchOptions.body)).model).toBe("deepseek/deepseek-v4-flash");
   });
 
-  it("sends LiteLLM service custom headers and structured report payloads", async () => {
+  it("sends provider custom headers and structured report payloads", async () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_API_ENDPOINT = "https://api.example.test";
     process.env.LLM_MODEL = "gpt-env";
     process.env.LLM_SYSTEM_PROMPT = "Focus on client-ready wording.";
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     process.env.LLM_CUSTOM_HEADERS_JSON = "{\"HTTP-Referer\":\"https://forenotes.local\",\"X-Title\":\"Forenotes\"}";
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ ok: true, markdown: "# Generated Report" }),
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "# Generated Report" } }] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -670,33 +647,24 @@ describe("report service", () => {
     expect(response.status).toBe(200);
     expect(response.body.preview.markdown).toBe("# Generated Report");
     const fetchCalls = (fetchMock as unknown as { mock: { calls: Array<[unknown, RequestInit]> } }).mock.calls;
-    expect(fetchCalls[0][0]).toBe("http://litellm.test/generate-report");
+    expect(fetchCalls[0][0]).toBe("https://api.example.test/chat/completions");
     const fetchOptions = fetchCalls[0][1];
+    expect(fetchOptions.headers).toMatchObject({ "HTTP-Referer": "https://forenotes.local", "X-Title": "Forenotes" });
     const fetchBody = JSON.parse(String(fetchOptions.body));
-    expect(fetchBody).toMatchObject({
-      provider: "openai",
-      model: "gpt-env",
-      systemPrompt: "Focus on client-ready wording.",
-      apiKey: "sk-env-secret",
-      apiBase: "https://api.example.test",
-      customHeaders: {
-        "HTTP-Referer": "https://forenotes.local",
-        "X-Title": "Forenotes"
-      },
-      reportType: "incident",
-      templateMarkdown: "# {{incident.name}}"
-    });
-    expect(JSON.stringify(fetchOptions.headers)).not.toContain("sk-env-secret");
+    expect(fetchBody.model).toBe("gpt-env");
+    expect(fetchBody.messages[0]).toEqual({ role: "system", content: "Focus on client-ready wording." });
+    expect(JSON.parse(fetchBody.messages[1].content)).toMatchObject({ reportType: "incident", templateMarkdown: "# {{incident.name}}" });
+    // The key travels only in the Authorization header, never in the request body.
+    expect(String(fetchOptions.body)).not.toContain("sk-env-secret");
     expect(JSON.stringify(response.body)).not.toContain("sk-env-secret");
   });
 
-  it("returns a safe LLM error when the LiteLLM service fails", async () => {
+  it("returns a safe LLM error when the provider fails", async () => {
     process.env.LLM_API_KEY = "sk-env-secret";
     process.env.LLM_MODEL = "gpt-env";
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
-      JSON.stringify({ ok: false, error: "LLM generation failed: sk-env-secret" }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ error: { message: "Invalid key sk-env-secret" } }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
     )));
     const template = await createReportTemplate(database, user(userId), incidentId, {
       name: "LLM",
@@ -786,7 +754,7 @@ describe("report service", () => {
     expect(listResponse.body.templates[0].htmlTemplate).toBe(originalHtml);
   });
 
-  it("persists preview-approved reports and exports a non-empty PDF buffer", async () => {
+  it("persists preview-approved reports and exports themed HTML", async () => {
     const template = await createReportTemplate(database, user(userId), incidentId, {
       name: "Incident report",
       reportType: "incident",
@@ -803,12 +771,12 @@ describe("report service", () => {
       unresolvedPlaceholders: []
     });
 
-    const exported = await exportReportPdf(database, user(userId), incidentId, String(report.id));
+    const exported = await exportReportHtml(database, user(userId), incidentId, String(report.id));
 
-    expect(exported.fileName).toBe("Incident_One_Report.pdf");
-    expect(exported.pdf.byteLength).toBeGreaterThan(0);
-    expect(exported.pdf.toString("utf8", 0, 5)).toBe("%PDF-");
-  }, 30000);
+    expect(exported.fileName).toBe("Incident_One_Report.html");
+    expect(exported.html).toContain("<html>");
+    expect(exported.html).toContain("Final report");
+  });
 
   it("saves, lists, and updates large AI reports without truncating their content or context", async () => {
     const app = createApp(database, { accessLogWriter: () => {} });
@@ -1031,19 +999,18 @@ describe("report service", () => {
     const reportId = saveResponse.body.report.id as string;
 
     const exportResponse = await request(app)
-      .post(`/api/incidents/${incidentId}/reports/${reportId}/export/pdf`)
+      .post(`/api/incidents/${incidentId}/reports/${reportId}/export/html`)
       .set("x-user-id", userId);
     expect(exportResponse.status).toBe(200);
-    expect(exportResponse.headers["content-type"]).toContain("application/pdf");
+    expect(exportResponse.headers["content-type"]).toContain("text/html");
     expect(exportResponse.headers["content-disposition"]).toContain("attachment");
-    expect(exportResponse.body.length).toBeGreaterThan(0);
+    expect(exportResponse.text).toContain("Incident One");
 
     process.env.LLM_API_KEY = "sk-route-secret";
     process.env.LLM_API_ENDPOINT = "https://api.example.test/v1/chat/completions";
     process.env.LLM_MODEL = "gpt-route";
-    process.env.LITELLM_SERVICE_URL = "http://litellm.test";
     const fetchMock = vi.fn(async () => new Response(
-      JSON.stringify({ ok: true, markdown: "OK" }),
+      JSON.stringify({ choices: [{ message: { role: "assistant", content: "OK" } }] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     ));
     vi.stubGlobal("fetch", fetchMock);
@@ -1070,7 +1037,7 @@ describe("report service", () => {
     expect(llmTestResponse.body).toEqual({ ok: true, model: "gpt-route", source: "env" });
     expect(JSON.stringify(llmTestResponse.body)).not.toContain("sk-route-secret");
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://litellm.test/generate-report",
+      "https://api.example.test/v1/chat/completions",
       expect.objectContaining({ method: "POST" })
     );
 
