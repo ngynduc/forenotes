@@ -73,7 +73,7 @@ Zod validation errors return `400` with flattened validation details.
 | `GET` | `/api/users` | List users |
 | `POST` | `/api/users` | Create a user |
 | `PATCH` | `/api/users/:userId` | Update profile, role, or status |
-| `DELETE` | `/api/users/:userId` | Delete an unreferenced user account |
+| `DELETE` | `/api/users/:userId` | Deactivate a user account |
 | `POST` | `/api/users/:userId/reset-password` | Reset a user's password |
 
 Requires `user:manage`. User updates accept any non-empty subset of `username`,
@@ -82,18 +82,18 @@ and `status` (`active`, `disabled`). Password resets remain a separate operation
 Unknown fields are rejected. Updates return `{ user }` using the same public
 fields as user listing; duplicate usernames/emails return `409`.
 
-In **Admin → Users**, open **Edit** and choose **Delete**, then confirm.
-Deletion returns `204`, removes browser sessions, MCP tokens, memberships,
-notifications addressed to the user, and personal LLM settings, and records
-`user.delete` in the audit log. Your own account, the bootstrap admin, and the
-last commander of any case cannot be deleted (`409`). Accounts referenced by
-existing records, assignments, audit history, or manual graph links also return
-`409`; disable them to preserve attribution. Missing users return `404` and
-invalid UUIDs return `400`.
+In **Admin → Users**, open **Edit** and choose **Deactivate user**, then confirm.
+Deactivation returns `204`, sets the account status to `disabled`, revokes
+browser sessions and MCP tokens, and records `user.deactivate` in the audit log.
+The user profile, case memberships, authorship, assignments, audit history, and
+graph relationships remain intact so historical attribution stays visible. Your
+own account, the bootstrap admin, and the last active commander of any case
+cannot be deactivated (`409`). Missing users return `404` and invalid UUIDs
+return `400`.
 
 ```bash
 curl -b "$COOKIE_FILE" -X DELETE "http://localhost:8787/api/users/$USER_ID"
-# Expected: 204 No Content for an unreferenced account.
+# Expected: 204 No Content after the account is deactivated.
 ```
 
 ```bash
