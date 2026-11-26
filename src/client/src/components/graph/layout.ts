@@ -9,7 +9,7 @@ export interface LayoutNode {
   height: number;
 }
 
-export const GRAPH_SPACING = { horizontalGap: 88, rankGap: 96, siblingGap: 64 };
+export const GRAPH_SPACING = { horizontalGap: 112, rankGap: 120, siblingGap: 88 };
 export const NODE_WIDTH = 240;
 export type NodeDimensions = ReadonlyMap<string, { width: number; height: number }>;
 
@@ -71,7 +71,14 @@ export function layoutNodes(nodes: GraphNode[], edges: GraphEdge[] = [], dimensi
       const values = [...parents.get(node.id)!].flatMap((id) => centers.has(id) ? [centers.get(id)!] : []);
       return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
     };
-    row.sort((a, b) => parentCenter(a) - parentCenter(b));
+    row.sort((a, b) => {
+      const aPrimaryTime = primaryTimelineTime(a);
+      const bPrimaryTime = primaryTimelineTime(b);
+      if (aPrimaryTime !== null && bPrimaryTime !== null && aPrimaryTime !== bPrimaryTime) {
+        return aPrimaryTime - bPrimaryTime;
+      }
+      return parentCenter(a) - parentCenter(b) || a.id.localeCompare(b.id);
+    });
     const sized = row.map((node) => ({ node, width: dimensions.get(node.id)?.width ?? NODE_WIDTH, height: dimensions.get(node.id)?.height ?? estimateHeight(node) }));
     const gap = Math.max(GRAPH_SPACING.horizontalGap, GRAPH_SPACING.siblingGap);
     const totalWidth = sized.reduce((sum, node) => sum + node.width, 0) + Math.max(0, row.length - 1) * gap;
@@ -84,6 +91,14 @@ export function layoutNodes(nodes: GraphNode[], edges: GraphEdge[] = [], dimensi
     y += Math.max(...sized.map((node) => node.height)) + GRAPH_SPACING.rankGap;
   }
   return result;
+}
+
+function primaryTimelineTime(node: GraphNode) {
+  if (node.type !== "timeline_event" || node.metadata?.eventRole === "supporting") return null;
+  const value = node.metadata?.eventTime;
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 export function placeNewNodes(layout: LayoutNode[], existing: LayoutNode[]): LayoutNode[] {
@@ -104,4 +119,40 @@ export function placeNewNodes(layout: LayoutNode[], existing: LayoutNode[]): Lay
     occupied.push(candidate);
     return candidate;
   });
+}
+
+const FOCUS_COLUMNS = { findings: 5, related: 4 };
+
+// Findings form a wrapped grid; everything revealed by a focused finding sits in
+// wrapped rows below it, centred under that finding. Sizes drive positions, so nothing overlaps.
+export function layoutFocused(nodes: GraphNode[], edges: GraphEdge[], focusedId: string | null, dimensions: NodeDimensions = new Map()): LayoutNode[] {
+  const size = (node: GraphNode) => ({ width: dimensions.get(node.id)?.width ?? NODE_WIDTH, height: dimensions.get(node.id)?.height ?? estimateHeight(node) });
+  const gap = GRAPH_SPACING.horizontalGap;
+  const result: LayoutNode[] = [];
+  const place = (group: GraphNode[], columns: number, startY: number, centerOn?: number) => {
+    let y = startY;
+    const placed: LayoutNode[] = [];
+    for (let i = 0; i < group.length; i += columns) {
+      const row = group.slice(i, i + columns).map((node) => ({ node, ...size(node) }));
+      const rowWidth = row.reduce((sum, item) => sum + item.width, 0) + (row.length - 1) * gap;
+      let x = (centerOn ?? 0) - rowWidth / 2;
+      for (const { node, width, height } of row) {
+        placed.push({ id: node.id, type: node.type, x, y, width, height });
+        x += width + gap;
+      }
+      y += Math.max(...row.map((item) => item.height)) + GRAPH_SPACING.rankGap;
+    }
+    result.push(...placed);
+    return { placed, bottom: y };
+  };
+
+  const findings = nodes.filter((node) => node.type === "finding");
+  const { placed, bottom } = place(findings, FOCUS_COLUMNS.findings, 0);
+  const focused = placed.find((node) => node.id === focusedId);
+  const direct = new Set(edges.flatMap((edge) => edge.source === focusedId ? [edge.target] : edge.target === focusedId ? [edge.source] : []));
+  const related = nodes.filter((node) => node.type !== "finding")
+    .sort((a, b) => Number(direct.has(b.id)) - Number(direct.has(a.id)) || (primaryTimelineTime(a) ?? 0) - (primaryTimelineTime(b) ?? 0) || a.id.localeCompare(b.id));
+  const center = focused ? focused.x + focused.width / 2 : 0;
+  place(related, FOCUS_COLUMNS.related, bottom, center);
+  return result;
 }

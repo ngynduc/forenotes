@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useRef } from "react";
+import { useMemo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -15,11 +15,13 @@ import "@xyflow/react/dist/style.css";
 import { EntityNode } from "./nodes/EntityNode";
 import { LabeledEdge } from "./edges/LabeledEdge";
 import { Button } from "@/components/ui/Button";
-import { layoutNodes, placeNewNodes } from "./layout";
+import { layoutFocused, placeNewNodes } from "./layout";
 import { useGraph } from "@/hooks/use-graph";
 import { useGraphStore } from "@/stores/graph-store";
 import { NodeInspector } from "./NodeInspector";
 import type { GraphNode } from "@shared/graph-types";
+import { filterSupportingTimelineEvents, filterToFocusedFinding } from "./graphVisibility";
+import { edgeAttachment } from "./edgeGeometry";
 
 const nodeTypes = { entity: EntityNode };
 const edgeTypes = { labeled: LabeledEdge };
@@ -29,6 +31,8 @@ type EntityFlowNodeData = GraphNode & Record<string, unknown> & {
   isSelected?: boolean;
   isConnected?: boolean;
   isDimmed?: boolean;
+  supportingCount?: number;
+  isExpanded?: boolean;
 };
 
 type LabeledEdgeData = Record<string, unknown> & {
@@ -41,12 +45,24 @@ type EntityFlowNode = Node<EntityFlowNodeData>;
 type LabeledFlowEdge = Edge<LabeledEdgeData>;
 
 export function RelationshipGraph() {
-  const { data, isLoading } = useGraph();
+  const { data: rawData, isLoading } = useGraph();
+  const [expandedPrimaryEventIds, setExpandedPrimaryEventIds] = useState<Set<string>>(() => new Set());
+  const [focusedFindingId, setFocusedFindingId] = useState<string | null>(null);
+  const data = useMemo(() => {
+    if (!rawData) return undefined;
+    const focused = filterToFocusedFinding(rawData, focusedFindingId, expandedPrimaryEventIds);
+    return filterSupportingTimelineEvents(focused, expandedPrimaryEventIds);
+  }, [rawData, focusedFindingId, expandedPrimaryEventIds]);
   const scopeRef = useRef("");
   const measuredLayoutDone = useRef(false);
   const flowRef = useRef<ReactFlowInstance<EntityFlowNode, LabeledFlowEdge> | null>(null);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const setSelectedNode = useGraphStore((s) => s.setSelectedNode);
+
+  useEffect(() => {
+    setExpandedPrimaryEventIds(new Set());
+    setFocusedFindingId(null);
+  }, [rawData?.incidentId]);
 
   useEffect(() => {
     if (data && selectedNodeId && !data.nodes.some((node) => node.id === selectedNodeId)) {
@@ -57,9 +73,17 @@ export function RelationshipGraph() {
   const { nodes: baseNodes, edges: baseEdges } = useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
 
-    const layout = layoutNodes(data.nodes, data.edges);
+    const layout = layoutFocused(data.nodes, data.edges, focusedFindingId);
 
     const graphNodes = new Map(data.nodes.map((node) => [node.id, node]));
+    const layoutById = new Map(layout.map((node) => [node.id, node]));
+    const supportingCounts = new Map<string, number>();
+    for (const node of rawData?.nodes ?? []) {
+      const primaryEventId = node.metadata?.primaryEventId;
+      if (node.type === "timeline_event" && typeof primaryEventId === "string") {
+        supportingCounts.set(primaryEventId, (supportingCounts.get(primaryEventId) ?? 0) + 1);
+      }
+    }
     const nodes: EntityFlowNode[] = layout.map((ln) => {
       const gn = graphNodes.get(ln.id)!;
       return {
@@ -67,21 +91,33 @@ export function RelationshipGraph() {
         type: "entity",
         position: { x: ln.x, y: ln.y },
         style: { width: ln.width, minHeight: 84 },
-        data: { ...gn, label: gn.label },
+        data: {
+          ...gn,
+          label: gn.label,
+          supportingCount: supportingCounts.get(gn.entityId) ?? 0,
+          isExpanded: expandedPrimaryEventIds.has(gn.entityId),
+        },
       };
     });
 
-    const edges: LabeledFlowEdge[] = data.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      type: "labeled",
-      data: { ...e, label: e.label },
-      animated: e.derived,
-    }));
+    const edges: LabeledFlowEdge[] = data.edges.map((e) => {
+      const sourceNode = layoutById.get(e.source);
+      const targetNode = layoutById.get(e.target);
+      const attachment = sourceNode && targetNode ? edgeAttachment(sourceNode, targetNode) : undefined;
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: attachment ? `source-${attachment.sourcePosition}` : undefined,
+        targetHandle: attachment ? `target-${attachment.targetPosition}` : undefined,
+        type: "labeled",
+        data: { ...e, label: e.label },
+        animated: e.derived,
+      };
+    });
 
     return { nodes, edges };
-  }, [data]);
+  }, [data, focusedFindingId, expandedPrimaryEventIds, rawData?.nodes]);
 
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<EntityFlowNode>(baseNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<LabeledFlowEdge>(baseEdges);
@@ -90,7 +126,8 @@ export function RelationshipGraph() {
     // Query-key changes briefly have no data; retain positions through that
     // loading interval and reset only when a different incident/mode arrives.
     if (!data) return;
-    const scope = `${data.incidentId}:${data.mode}`;
+    // Re-lay out from scratch when the visible set changes, so revealed nodes never land on kept ones.
+    const scope = `${data.incidentId}:${data.mode}:${focusedFindingId}:${[...expandedPrimaryEventIds].sort().join(",")}`;
     const sameScope = scope === scopeRef.current;
     if (!sameScope) measuredLayoutDone.current = false;
     scopeRef.current = scope;
@@ -103,7 +140,7 @@ export function RelationshipGraph() {
         height: node.measured?.height ?? 84,
       });
       const placements = placeNewNodes(
-        data ? layoutNodes(data.nodes, data.edges) : [], current.map(toLayoutNode)
+        data ? layoutFocused(data.nodes, data.edges, focusedFindingId) : [], current.map(toLayoutNode)
       );
       const positions = new Map(placements.map((node) => [node.id, { x: node.x, y: node.y }]));
       return baseNodes.map((node) => ({
@@ -112,17 +149,17 @@ export function RelationshipGraph() {
         position: positions.get(node.id) ?? node.position,
       }));
     });
-  }, [baseNodes, data, setFlowNodes]);
+  }, [baseNodes, data, focusedFindingId, expandedPrimaryEventIds, setFlowNodes]);
 
   const applyLayout = useCallback(() => {
     if (!data) return;
     const dimensions = new Map(flowNodes.flatMap((node) => node.measured?.width && node.measured?.height
       ? [[node.id, { width: node.measured.width, height: node.measured.height }] as const] : []));
-    const positions = new Map(layoutNodes(data.nodes, data.edges, dimensions).map((node) => [node.id, { x: node.x, y: node.y }]));
+    const positions = new Map(layoutFocused(data.nodes, data.edges, focusedFindingId, dimensions).map((node) => [node.id, { x: node.x, y: node.y }]));
     measuredLayoutDone.current = true;
     setFlowNodes((current) => current.map((node) => ({ ...node, position: positions.get(node.id) ?? node.position })));
     requestAnimationFrame(() => void flowRef.current?.fitView({ padding: 0.2 }));
-  }, [data, flowNodes, setFlowNodes]);
+  }, [data, flowNodes, focusedFindingId, setFlowNodes]);
 
   useEffect(() => {
     const ids = new Set(data?.nodes.map((node) => node.id));
@@ -198,6 +235,18 @@ export function RelationshipGraph() {
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: EntityFlowNode) => {
       setSelectedNode(node.id);
+      if (node.data.type === "finding") {
+        setFocusedFindingId((current) => (current === node.id ? null : node.id));
+        setExpandedPrimaryEventIds(new Set());
+      }
+      if (node.data.type === "timeline_event" && node.data.metadata?.eventRole !== "supporting" && node.data.supportingCount) {
+        setExpandedPrimaryEventIds((current) => {
+          const next = new Set(current);
+          if (next.has(node.data.entityId)) next.delete(node.data.entityId);
+          else next.add(node.data.entityId);
+          return next;
+        });
+      }
     },
     [setSelectedNode]
   );
@@ -212,6 +261,7 @@ export function RelationshipGraph() {
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    setFocusedFindingId(null);
   }, [setSelectedNode]);
 
   if (isLoading) {

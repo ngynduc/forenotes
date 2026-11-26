@@ -183,11 +183,15 @@ export function createForenotesMcpServer(context: RegistrationContext) {
   }), true, async (database, input) => updateHypothesis(database, context.principal.user, input.hypothesisId as string, input as never));
   register("add_timeline_event", "Add an incident timeline event.", z.object({
     ...writeBase, incidentId: incidentIdSchema, eventTime: z.string().datetime(), title: z.string().min(1), description: z.string().optional(),
-    source: z.string().optional(), rawEvidenceRef: z.string().optional(), systemId: uuid.describe("System UUID from get_entities systems[].id or create_entity id for a system.").optional(), accountId: uuid.describe("Account UUID from get_entities accounts[].id or create_entity id for an account.").optional()
+    source: z.string().optional(), rawEvidenceRef: z.string().optional(), eventRole: z.enum(["primary", "supporting"]).optional(),
+    primaryEventId: uuid.describe("Primary timeline event UUID from get_timeline items[].id; required when eventRole is supporting.").optional(),
+    systemId: uuid.describe("System UUID from get_entities systems[].id or create_entity id for a system.").optional(), accountId: uuid.describe("Account UUID from get_entities accounts[].id or create_entity id for an account.").optional()
   }), true, async (database, input) => { await requireRunIncident(database, context.principal.user, input.runId as string, input.incidentId as string); return camelize(await createTimelineEvent(database, context.principal.user, input as never)); });
   register("update_timeline_event", "Update an incident timeline event.", z.object({
     ...writeBase, incidentId: incidentIdSchema, timelineEventId: uuid.describe("Timeline event UUID from get_timeline items[].id or add_timeline_event id."), eventTime: z.string().datetime().optional(), title: z.string().min(1).optional(),
-    description: z.string().optional(), source: z.string().optional(), rawEvidenceRef: z.string().optional(), systemId: uuid.describe("System UUID from get_entities systems[].id or create_entity id for a system.").optional(), accountId: uuid.describe("Account UUID from get_entities accounts[].id or create_entity id for an account.").optional()
+    description: z.string().optional(), source: z.string().optional(), rawEvidenceRef: z.string().optional(), eventRole: z.enum(["primary", "supporting"]).optional(),
+    primaryEventId: uuid.describe("Primary timeline event UUID from get_timeline items[].id; required when eventRole is supporting.").nullable().optional(),
+    systemId: uuid.describe("System UUID from get_entities systems[].id or create_entity id for a system.").optional(), accountId: uuid.describe("Account UUID from get_entities accounts[].id or create_entity id for an account.").optional()
   }), true, async (database, input) => { await requireRunIncident(database, context.principal.user, input.runId as string, input.incidentId as string); return camelize(await updateTimelineEvent(database, context.principal.user, input.incidentId as string, input.timelineEventId as string, input as never)); });
   register("create_entity", "Create a system, account, or indicator.", entityCreateSchema(), true,
     async (database, input) => createInvestigationEntity(database, context.principal, input));

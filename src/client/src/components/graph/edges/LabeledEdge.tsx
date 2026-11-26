@@ -1,4 +1,4 @@
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, useInternalNode, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useInternalNode, type EdgeProps } from "@xyflow/react";
 
 import { edgeAttachment } from "../edgeGeometry";
 
@@ -21,7 +21,7 @@ export function LabeledEdge({
     { ...sourceNode.internals.positionAbsolute, width: sourceNode.measured.width ?? sourceNode.width ?? 240, height: sourceNode.measured.height ?? sourceNode.height ?? 84 },
     { ...targetNode.internals.positionAbsolute, width: targetNode.measured.width ?? targetNode.width ?? 240, height: targetNode.measured.height ?? targetNode.height ?? 84 },
   ) : { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
-  const [edgePath, labelX, labelY] = getBezierPath(attachment);
+  const [edgePath, labelX, labelY] = getSmoothStepPath({ ...attachment, borderRadius: 12, offset: 24 });
 
   const edgeData = (data ?? {}) as {
     label?: string;
