@@ -276,6 +276,16 @@
   max-width: 100%;
 }
 
+/* The built-in CodeMirror themes hardcode their own background; follow the app palette instead. */
+.cm-editor-wrapper .cm-editor {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.cm-editor-wrapper .cm-editor .cm-cursor {
+  border-left-color: var(--color-text);
+}
+
 .cm-editor-wrapper .cm-editor .cm-scroller {
   font-family: ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace;
 }
@@ -450,14 +460,5 @@
 
   .reports-tab-trigger {
     flex: 0 0 auto;
-  }
-
-  [data-report-guide-copy] {
-    width: 2rem;
-    padding-inline: 0;
-  }
-
-  [data-report-guide-copy] .report-guide-copy-label {
-    display: none;
   }
 }
