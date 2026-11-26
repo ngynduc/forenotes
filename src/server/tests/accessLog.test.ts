@@ -67,13 +67,14 @@ describe("HTTP access logs", () => {
       mcp: { enabled: true, publicUrl: "http://127.0.0.1/mcp", allowedOrigins: [] }
     });
 
-    await request(app).get("/api/health?key=hidden").expect(200);
+    // No Postgres in this suite, so the DB-backed health check reports unavailable.
+    await request(app).get("/api/health?key=hidden").expect(503);
     await request(app).get("/api/cases").expect(401);
     await request(app).post("/mcp").set("Host", "127.0.0.1").send({}).expect(401);
     await request(app).post("/api/auth/login").set("Content-Type", "application/json").send("{invalid").expect(500);
 
     expect(entries.map(({ method, path, status }) => ({ method, path, status }))).toEqual([
-      { method: "GET", path: "/api/health", status: 200 },
+      { method: "GET", path: "/api/health", status: 503 },
       { method: "GET", path: "/api/cases", status: 401 },
       { method: "POST", path: "/mcp", status: 401 },
       { method: "POST", path: "/api/auth/login", status: 500 }
