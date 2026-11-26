@@ -3,7 +3,7 @@ title: From case to report
 description: Follow the primary Forenotes investigation workflow from initial scope to final communication.
 ---
 
-Use this guide when starting a new investigation. The goal is a report whose conclusions remain traceable to the underlying evidence and response work.
+New to the workspace? Start with [Find your way around](/docs/investigate/getting-around/). Use this guide when starting a new investigation. The goal is a report whose conclusions remain traceable to the underlying evidence and response work.
 
 ## 1. Create the case
 
@@ -47,10 +47,16 @@ Use task notes for working detail. Keep durable evidence and conclusions in thei
 
 ## 6. Review relationships
 
-Open the entity graph to find disconnected records, unclear manual relationships, and findings with weak evidence support. Use MITRE ATT&CK tags to communicate observed techniques, not as a substitute for evidence.
+![Graph focused on one finding](/user-guide/graph-focused.png)
+
+Open the graph, click a finding to see what supports it, and look for disconnected records, unclear manual relationships, and findings with weak evidence support. Use MITRE ATT&CK tags to communicate observed techniques, not as a substitute for evidence.
 
 ## 7. Produce the report
 
-Open Reports, choose or create a template, build the report context, and generate a draft. Review every generated statement against the source records before saving or exporting it.
+Open **Reports → AI Report Chat**, ask for the report you need, and save the answer to the **Report Editor**. See [Reports](/docs/investigate/reports/) for the full flow.
+
+![AI Report Chat answer](/user-guide/reports-chat-answer.png)
+
+Review every generated statement against the source records before saving or exporting it.
 
 The investigation is ready for handoff when another authorized responder can understand the event, inspect the evidence behind each material finding, see open work, and reproduce the report narrative from Forenotes.

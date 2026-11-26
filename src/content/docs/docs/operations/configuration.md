@@ -5,15 +5,13 @@ description: Configure networking, PostgreSQL, sessions, bootstrap access, stora
 
 Production Compose reads `.env.production`. Keep this file outside source control, restrict its permissions, and include it in protected backups.
 
-## Image pins and report service
+## Image pin
 
 ```dotenv
 FORENOTES_IMAGE=ngynduc/forenotes:<image-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<image-tag>
-LITELLM_SERVICE_URL=http://report-llm-service:8001
 ```
 
-Pin both images to the same published release. Production Compose includes the internal report service from 0.2.2. Configure provider credentials using [LLM settings](/docs/admin/llm-settings/); the service can be healthy before a provider is configured.
+Pin the image to a published release. AI reports call the provider directly from the app; configure credentials using [LLM settings](/docs/admin/llm-settings/).
 
 ## Networking
 
@@ -37,6 +35,15 @@ DATABASE_URL=postgres://forenotes:replace-with-a-long-random-password@postgres:5
 ```
 
 For managed PostgreSQL, set `DATABASE_URL` to the provider connection string and apply its TLS requirements.
+
+### Connection limits and timeouts
+
+```dotenv
+DB_POOL_MAX=20
+DB_STATEMENT_TIMEOUT_MS=60000
+```
+
+The app keeps at most `DB_POOL_MAX` connections. A request that cannot get a connection within 10 seconds fails instead of waiting forever, and PostgreSQL cancels any single query running longer than `DB_STATEMENT_TIMEOUT_MS`. Transactions left idle for 5 minutes are closed. Raise the statement timeout only if very large incidents need longer queries. Migrations run without these limits.
 
 ## Persistent files
 

@@ -19,7 +19,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 Forenotes is an open-source workspace for incident response and digital forensics teams. It keeps cases, incidents, findings, timelines, entities, tasks, evidence links, and reports in one permission-aware system.
 
-Release 0.2.2 adds a bundled report LLM service, optional authenticated MCP investigation agents, and user, tag, graph, and access-refresh fixes. Review [release notes](/docs/reference/releases/) before upgrading.
+Forenotes drafts reports through an AI chat that reads your incident records, keeps the graph focused on findings, and runs as a single application image beside PostgreSQL. Review [release notes](/docs/reference/releases/) before upgrading.
 
 <CardGrid>
   <Card title="I need to deploy it" icon="rocket">
@@ -47,7 +47,7 @@ After opening a new Forenotes installation:
 3. Create an incident inside the case.
 4. Record a timeline event and a finding.
 5. Link the finding to its supporting evidence.
-6. Assign follow-up work and generate a report draft.
+6. Assign follow-up work and draft the report with AI Report Chat.
 
 The [case-to-report guide](/docs/investigate/case-to-report/) walks through that sequence.
 

@@ -31,7 +31,9 @@ export default defineConfig({
         {
           label: "Investigator Guide",
           items: [
+            "docs/investigate/getting-around",
             "docs/investigate/case-to-report",
+            "docs/investigate/cases-and-incidents",
             "docs/investigate/evidence-and-timeline",
             "docs/investigate/entities-and-graph",
             "docs/investigate/tasks-and-notes",

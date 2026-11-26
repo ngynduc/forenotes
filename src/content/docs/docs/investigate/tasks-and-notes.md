@@ -7,6 +7,10 @@ Tasks represent work that someone can own and complete. Use them for collection,
 
 ![Tasks board](/user-guide/tasks.png)
 
+The **Board** view groups tasks into To Do, In Progress, Blocked, and Done columns, with priority, due date, assignee, and owner on each card. Switch to **Table** for a compact list with a **Notes** button on each row. Choose **Create Task** to add one.
+
+![Tasks table](/user-guide/tasks-table.png)
+
 ## Write actionable tasks
 
 A useful task states the outcome, not merely the activity. Include the relevant scope, assign an owner or assignee, set priority, and add a due date when timing matters.
@@ -22,7 +26,7 @@ Use these statuses consistently:
 
 ## Keep working notes with the task
 
-Task notes support Markdown and image attachments. Use them for commands, intermediate observations, handoff context, and analysis that is not yet a durable finding.
+Choose **Open Notes** on a card, or **Notes** in the table. Task notes support Markdown and image attachments: paste a screenshot straight into the editor to upload it, and use **Preview** to check the result before **Save Note**. Use them for commands, intermediate observations, handoff context, and analysis that is not yet a durable finding.
 
 ![Task notes](/user-guide/task-notes.png)
 

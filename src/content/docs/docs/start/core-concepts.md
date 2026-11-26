@@ -18,7 +18,7 @@ Forenotes organizes work around two access boundaries: a **case** and the **inci
 | Task | Assigned response work with priority, due date, and status. |
 | Query | A saved KQL, SQL, SPL, or other investigation query. |
 | Entity link | A manual or derived relationship between records. |
-| Report | A Markdown investigation narrative that can be exported to PDF. |
+| Report | A Markdown investigation narrative, drafted with AI Report Chat or by hand, that can be exported as themed HTML. |
 
 ## Scope before detail
 

@@ -29,7 +29,7 @@ Case membership is authoritative. Incident membership records are derived from i
 | Entities | `systems`, `accounts`, `incident_entity_links` | Affected assets and manual relationships |
 | Work | `tasks`, `task_links`, `queries` | Assignments, notes, evidence links, and saved searches |
 | Classification | `attack_tags`, `custom_tags`, tag junctions | ATT&CK and case-defined labels |
-| Reporting | `report_templates`, `reports`, `report_exports` | Narrative output and PDF history |
+| Reporting | `reports`, `report_exports`, `pdf_templates`, `report_chat_prompts`, `report_templates` | Narrative output, export history, HTML export themes (stored as `pdf_templates`), per-user chat instructions, and legacy Markdown templates |
 | Operations | `notifications`, `audit_logs`, `schema_migrations` | Activity, accountability, and schema state |
 | Agent access | `mcp_access_tokens`, `mcp_idempotency_results` | Hashed user-owned tokens and repeatable tool writes |
 | Provenance | `investigation_runs`, `evidence_records`, `observations`, `hypotheses` | Case-scoped agent investigation records |

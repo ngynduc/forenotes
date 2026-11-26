@@ -3,7 +3,7 @@
   "info": {
     "title": "Forenotes REST API",
     "version": "0.2.2",
-    "description": "Forenotes REST API route catalog for 0.2.2, including name-based discovery, user updates, tag removal, user-owned MCP tokens, and investigation provenance review. REST uses the session cookie. The separate /mcp Streamable HTTP endpoint uses bearer tokens; see the MCP investigation agents guide for its tool catalog."
+    "description": "Forenotes REST API route catalog for 0.2.2 with the 0.2.6 report changes (AI report chat, chat prompt, HTML-only export), including name-based discovery, user updates, tag removal, user-owned MCP tokens, and investigation provenance review. REST uses the session cookie. The separate /mcp Streamable HTTP endpoint uses bearer tokens; see the MCP investigation agents guide for its tool catalog."
   },
   "servers": [
     {
@@ -3464,9 +3464,13 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Database unavailable"
           }
         },
-        "security": []
+        "security": [],
+        "description": "Runs a database query. Returns {ok:true}, or 503 {ok:false,error:\"Database unavailable\"} when PostgreSQL is unreachable."
       }
     },
     "/api/incidents/{incidentId}": {
@@ -7115,93 +7119,6 @@
           "report"
         ],
         "summary": "POST /api/incidents/{incidentId}/reports/{reportId}/export/html",
-        "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
-        "responses": {
-          "200": {
-            "description": "Successful response"
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "incidentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
-          },
-          {
-            "name": "reportId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Resource identifier or path segment."
-          }
-        ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": true
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/incidents/{incidentId}/reports/{reportId}/export/pdf": {
-      "post": {
-        "operationId": "post_api_incidents_incidentId_reports_reportId_export_pdf",
-        "tags": [
-          "report"
-        ],
-        "summary": "POST /api/incidents/{incidentId}/reports/{reportId}/export/pdf",
         "description": "Request fields, validation rules, and copyable examples are documented in the API Reference page.",
         "responses": {
           "200": {
@@ -11629,6 +11546,178 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/incidents/{incidentId}/reports/chat": {
+      "post": {
+        "operationId": "post_api_incidents_incidentId_reports_chat",
+        "tags": [
+          "report"
+        ],
+        "summary": "POST /api/incidents/{incidentId}/reports/chat",
+        "description": "Streams an AI report-chat reply as server-sent events. Each data line is JSON: {type:\"text\",delta}, {type:\"tool\",id,name,args,status,summary}, {type:\"done\"} or {type:\"error\",message}. The model reads incident data through read-only tools under the caller's permissions.",
+        "parameters": [
+          {
+            "name": "incidentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Incident UUID returned as incidents[].id by GET /api/cases/{caseId}/incidents; use q to search name/summary."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "messages"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 40,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string",
+                          "maxLength": 40000
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "messages": [
+                  {
+                    "role": "user",
+                    "content": "Write an executive summary of this incident."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"type\":\"tool\",\"name\":\"query_incident_data\",\"args\":{\"entity\":\"findings\"},\"status\":\"done\",\"summary\":\"4 of 4 records\"}\n\ndata: {\"type\":\"text\",\"delta\":\"## Summary\"}\n\ndata: {\"type\":\"done\"}\n\n"
+              }
+            }
+          },
+          "400": {
+            "description": "LLM not configured or invalid messages"
+          },
+          "401": {
+            "description": "Not signed in"
+          },
+          "403": {
+            "description": "Missing report:read or incident membership"
+          }
+        }
+      }
+    },
+    "/api/me/report-chat-prompt": {
+      "get": {
+        "operationId": "get_api_me_report_chat_prompt",
+        "tags": [
+          "report"
+        ],
+        "summary": "GET /api/me/report-chat-prompt",
+        "description": "Returns the caller's saved report-chat instructions and the read-only built-in rules.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "builtIn": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "put_api_me_report_chat_prompt",
+        "tags": [
+          "report"
+        ],
+        "summary": "PUT /api/me/report-chat-prompt",
+        "description": "Saves the caller's report-chat instructions (up to 8000 characters).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "prompt"
+                ],
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "maxLength": 8000
+                  }
+                }
+              },
+              "example": {
+                "prompt": "Write for an executive audience in British English."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "prompt": {
+                      "type": "string"
+                    },
+                    "builtIn": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
