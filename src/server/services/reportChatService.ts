@@ -3,7 +3,8 @@ import type { Database } from "../db/types.js";
 import { AppError } from "../errors.js";
 import type { AuthenticatedUser } from "./authService.js";
 import { requirePermission } from "../permissions/permissionService.js";
-import { buildReportContext, resolveLlmConfig, toLiteLlmServiceConfig } from "./reportService.js";
+import { streamChat } from "./llmClient.js";
+import { buildReportContext, resolveLlmConfig } from "./reportService.js";
 
 export interface ChatMessage { role: "user" | "assistant"; content: string }
 export type ChatEvent =
@@ -98,47 +99,6 @@ export function executeChatTool(context: ReportContext, name: string, args: Reco
   return { entity, total: matches.length, returned: items.length, truncated: items.length < matches.length, items };
 }
 
-interface StreamResult { text: string; toolCalls: Array<{ id: string; name: string; arguments: string }> }
-
-async function streamCompletion(
-  config: NonNullable<Awaited<ReturnType<typeof resolveLlmConfig>>>,
-  messages: unknown[],
-  customPrompt: string,
-  signal: AbortSignal,
-  onText: (delta: string) => void
-): Promise<StreamResult> {
-  const llm = toLiteLlmServiceConfig(config);
-  const serviceUrl = llm.serviceUrl;
-  const response = await fetch(`${serviceUrl}/chat-stream`, {
-    method: "POST", signal, headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      provider: llm.provider, model: llm.model, apiKey: llm.apiKey || undefined, apiBase: llm.apiBase || undefined, customHeaders: llm.customHeaders,
-      systemPrompt: [BUILT_IN_CHAT_PROMPT, customPrompt && `Additional instructions from the user:\n${customPrompt}`].filter(Boolean).join("\n\n"),
-      messages, tools: TOOLS
-    })
-  });
-  if (!response.ok || !response.body) {
-    const detail = await response.json().then((body: { detail?: unknown }) => String(body.detail ?? ""), () => "");
-    throw new AppError(502, detail ? `LLM request failed: ${detail.slice(0, 300)}` : `LLM service returned HTTP ${response.status}.`);
-  }
-  const result: StreamResult = { text: "", toolCalls: [] };
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let end: number;
-    while ((end = buffer.indexOf("\n\n")) >= 0) {
-      const line = buffer.slice(0, end).replace(/^data: /, "");
-      buffer = buffer.slice(end + 2);
-      const event = JSON.parse(line) as { type: string; delta?: string; message?: string; toolCalls?: StreamResult["toolCalls"] };
-      if (event.type === "text") { result.text += event.delta ?? ""; onText(event.delta ?? ""); }
-      else if (event.type === "error") throw new AppError(502, String(event.message).slice(0, 400));
-      else if (event.type === "done") result.toolCalls = event.toolCalls ?? [];
-    }
-  }
-  return result;
-}
-
 /** Runs the tool-calling loop. `onStart` fires once config and data access are validated, before any event is emitted. */
 export async function runReportChat(
   database: Database, user: AuthenticatedUser, incidentId: string, history: ChatMessage[],
@@ -148,12 +108,13 @@ export async function runReportChat(
   if (!config) throw new AppError(400, "LLM is not configured. Add provider settings or set LLM_PROVIDER, LLM_MODEL, and LLM_API_KEY.");
   const context = await buildReportContext(database, user, incidentId, "incident");
   const { prompt: customPrompt } = await getReportChatPrompt(database, user);
+  const systemPrompt = [BUILT_IN_CHAT_PROMPT, customPrompt && `Additional instructions from the user:\n${customPrompt}`].filter(Boolean).join("\n\n");
   onStart();
 
   const messages: unknown[] = history.map(({ role, content }) => ({ role, content }));
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
-      const { text, toolCalls } = await streamCompletion(config, messages, customPrompt, signal, (delta) => emit({ type: "text", delta }));
+      const { text, toolCalls } = await streamChat(config, [{ role: "system", content: systemPrompt }, ...messages], TOOLS, signal, (delta) => emit({ type: "text", delta }));
       if (!toolCalls.length) return emit({ type: "done" });
       const calls = toolCalls.map((call, index) => ({ ...call, id: call.id || `call_${step}_${index}` }));
       messages.push({ role: "assistant", content: text || null, tool_calls: calls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } })) });

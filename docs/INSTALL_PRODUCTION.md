@@ -5,7 +5,6 @@ This guide is for a new operator installing the published Forenotes production i
 The production install runs:
 
 - the Forenotes application image from Docker Hub
-- the report LLM service image (`report-llm-service`), reachable only inside the Compose network
 - PostgreSQL from the Compose file, or an external PostgreSQL database if you change `DATABASE_URL`
 - persistent volumes for database state and uploaded app data
 - startup migrations and first-admin bootstrap
@@ -41,14 +40,13 @@ Storage: 20 GB minimum
 
 ## Image Tags
 
-Pin both images to a published release that includes the report service:
+Pin the image to a published release:
 
 ```dotenv
 FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 ```
 
-Replace `<release-tag>` with an available full version tag. The app and report service are separate images; the app image alone does not contain Python or LiteLLM. Older releases may have only the app image.
+Replace `<release-tag>` with an available full version tag. Since this release the app calls the LLM provider directly; the separate `forenotes-report-llm` image is no longer used.
 
 ## Clean Folder Install
 
@@ -94,7 +92,6 @@ Set these values in `.env.production`:
 ```text
 NODE_ENV=production
 FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 APP_HOST=0.0.0.0
 APP_PORT=3000
 FORENOTES_HOST_PORT=3000
@@ -125,7 +122,6 @@ Forenotes uses database-backed opaque session cookies in this release. `SESSION_
 ```dotenv
 NODE_ENV=production
 FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 
 APP_HOST=0.0.0.0
 APP_PORT=3000
@@ -149,7 +145,6 @@ FORENOTES_MCP_ENABLED=false
 FORENOTES_MCP_PUBLIC_URL=
 FORENOTES_MCP_ALLOWED_ORIGINS=
 
-LITELLM_SERVICE_URL=http://report-llm-service:8001
 LLM_PROVIDER=
 LLM_MODEL=
 LLM_API_KEY=
@@ -161,7 +156,7 @@ LLM_CUSTOM_HEADERS_JSON={}
 
 ## Docker Compose Production Services
 
-Use the downloaded `docker-compose.prod.yml` as the source of truth. It starts `postgres`, `app`, and `report-llm-service`. The app waits for the report service healthcheck. The report service does not publish a host port.
+Use the downloaded `docker-compose.prod.yml` as the source of truth. It starts `postgres` and `app`. The app waits for the Postgres healthcheck.
 
 ## Pull And Start
 
@@ -238,13 +233,12 @@ Pin the next version in `.env.production`:
 
 ```dotenv
 FORENOTES_IMAGE=ngynduc/forenotes:<release-tag>
-FORENOTES_REPORT_LLM_IMAGE=ngynduc/forenotes-report-llm:<release-tag>
 ```
 
 Pull and recreate the app:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production pull app report-llm-service
+docker compose -f docker-compose.prod.yml --env-file .env.production pull app
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
@@ -271,52 +265,26 @@ DATABASE_URL=postgres://forenotes:<password>@db.example.internal:5432/forenotes
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d app
 ```
 
-The external database must already exist and the configured user must be able to create tables, indexes, and constraints. `up -d app` also starts the report service dependency, but does not start bundled PostgreSQL.
+The external database must already exist and the configured user must be able to create tables, indexes, and constraints. `up -d app` does not start bundled PostgreSQL.
 
-## Report LLM Service
+## AI Reports
 
-The production stack includes the Python report service. AI report requests follow this path:
+The app calls the configured model provider directly over its OpenAI-compatible Chat Completions API:
 
 ```text
-Forenotes app → report-llm-service:8001 → configured model provider
+Forenotes app → configured model provider
 ```
 
-The default service URL is:
+The container starts without provider credentials. Configure a provider, model, and API key in user settings or the `LLM_*` environment variables before using AI reports. Manual reports work without provider settings. `FORENOTES_LLM_SECRET_KEY` encrypts saved keys; it is not a provider API key. Requests time out after `LLM_TIMEOUT_MS` (default 180000).
 
-```dotenv
-LITELLM_SERVICE_URL=http://report-llm-service:8001
-```
+Known providers (OpenAI, Anthropic, Gemini, OpenRouter, xAI, Groq, Z.ai, Ollama) work without an API base URL. Any other provider, or a gateway, needs `LLM_API_ENDPOINT` set to its OpenAI-compatible base URL. In production, custom endpoints must also be listed in `FORENOTES_LLM_ALLOWED_HOSTS`.
 
-The container starts without provider credentials. Configure a provider, model, and API key in user settings or the environment before generating AI reports. Manual reports work without provider settings. `FORENOTES_LLM_SECRET_KEY` encrypts saved keys; it is not a provider API key.
-
-For an independently hosted report service, override `LITELLM_SERVICE_URL` with a URL reachable from the app container. Do not use `localhost` to reach another container or the Docker host.
-
-To add the service to an existing installation, download the updated Compose file, keep your existing environment and secrets, set `FORENOTES_REPORT_LLM_IMAGE` to a published report-service image, and replace an empty or absent `LITELLM_SERVICE_URL` with the default above. Then run:
+Upgrading from a release with the separate report service: download the updated Compose file, remove `LITELLM_SERVICE_URL` and `FORENOTES_REPORT_LLM_IMAGE` from `.env.production` (they are ignored if left), then run:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production pull app report-llm-service
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d app report-llm-service
+docker compose -f docker-compose.prod.yml --env-file .env.production pull app
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --remove-orphans app
 ```
-
-Optional environment-level provider defaults:
-
-```dotenv
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4.1-mini
-LLM_API_KEY=<provider key>
-LLM_API_ENDPOINT=
-FORENOTES_LLM_ALLOWED_HOSTS=<comma-separated provider hostnames allowed for custom endpoints>
-FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS=false
-LLM_SYSTEM_PROMPT=
-LLM_CUSTOM_HEADERS_JSON={}
-```
-
-Users can also configure LLM settings inside the app.
-
-For a self-hosted or HTTP OpenAI-compatible gateway such as 9router, set
-`FORENOTES_ALLOW_UNSAFE_LLM_ENDPOINTS=true`. This disables HTTPS, private-host,
-DNS-rebinding, and production host-allowlist checks for the configured endpoint.
-Use it only when the endpoint is trusted and reachable from the app container.
 
 ## Bootstrap Admin
 
@@ -389,7 +357,7 @@ For external PostgreSQL, use your database platform's backup and restore procedu
 
 ## Publisher Build And Push Commands
 
-See [RELEASING.md](./RELEASING.md). Publish both images before updating installation defaults to that release.
+See [RELEASING.md](./RELEASING.md). Publish the image before updating installation defaults to that release.
 
 ## Troubleshooting
 
@@ -463,15 +431,13 @@ Open:
 http://localhost:3100
 ```
 
-### Report LLM service errors
+### AI report errors
 
-Check that `LITELLM_SERVICE_URL` points to the report LLM service from inside the app container:
+Use **Settings → LLM → Test connection**. The error shows the provider's HTTP status and message. Check the model name, API key, and base URL, and that the app container can reach the provider:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production exec app sh -c 'wget -qO- "$LITELLM_SERVICE_URL/health"'
+docker compose -f docker-compose.prod.yml --env-file .env.production logs app
 ```
-
-Check `docker compose -f docker-compose.prod.yml --env-file .env.production ps report-llm-service` and its logs. An empty URL uses the client fallback `localhost:8001`, where the app container has no report service. Set the Compose service URL and recreate the app.
 
 ### Cannot log in
 

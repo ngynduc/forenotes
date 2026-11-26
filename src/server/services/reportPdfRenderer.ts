@@ -1,16 +1,7 @@
-import { execFile } from "node:child_process";
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import MarkdownIt from "markdown-it";
 import sanitizeHtml from "sanitize-html";
 
-const execFileAsync = promisify(execFile);
-const MAX_CONCURRENT_PDF_EXPORTS = 2;
-let activePdfExports = 0;
-const pdfExportWaiters: Array<() => void> = [];
 
 const markdown = new MarkdownIt({
   html: false,
@@ -579,114 +570,6 @@ export function renderPdfHtml(input: {
 
 function stripRemoteImageSources(html: string) {
   return html.replace(/(<img\b[^>]*\bsrc=")((?:https?:)?\/\/)[^"]*("[^>]*>)/gi, "$1$3");
-}
-
-export async function renderHtmlToPdf(html: string) {
-  await acquirePdfExportSlot();
-  let executable: string;
-  try {
-    executable = await resolveChromiumExecutable();
-  } catch (error) {
-    releasePdfExportSlot();
-    throw error;
-  }
-  const workDir = await mkdtemp(path.join(tmpdir(), "forenotes-pdf-"));
-  const htmlPath = path.join(workDir, "report.html");
-  const pdfPath = path.join(workDir, "report.pdf");
-  try {
-    await writeFile(htmlPath, html, "utf8");
-    const chromiumArgs = [
-      "--headless=new",
-      "--disable-gpu",
-      "--disable-dev-shm-usage",
-      "--run-all-compositor-stages-before-draw",
-      "--no-pdf-header-footer",
-      `--print-to-pdf=${pdfPath}`,
-      pathToFileURL(htmlPath).href
-    ];
-    try {
-      await execFileAsync(executable, chromiumArgs, { timeout: 30_000, maxBuffer: 1024 * 1024 });
-    } catch (error) {
-      await execFileAsync(executable, ["--no-sandbox", ...chromiumArgs], { timeout: 30_000, maxBuffer: 1024 * 1024 });
-    }
-    const pdf = await readFile(pdfPath);
-    if (pdf.byteLength === 0) {
-      throw new Error("Chromium produced an empty PDF.");
-    }
-    return pdf;
-  } finally {
-    await rm(workDir, { recursive: true, force: true });
-    releasePdfExportSlot();
-  }
-}
-
-async function acquirePdfExportSlot() {
-  if (activePdfExports < MAX_CONCURRENT_PDF_EXPORTS) {
-    activePdfExports += 1;
-    return;
-  }
-  await new Promise<void>((resolve) => pdfExportWaiters.push(resolve));
-  activePdfExports += 1;
-}
-
-function releasePdfExportSlot() {
-  activePdfExports -= 1;
-  pdfExportWaiters.shift()?.();
-}
-
-async function resolveChromiumExecutable() {
-  const candidates = [
-    process.env.PDF_CHROMIUM_EXECUTABLE_PATH,
-    process.env.CHROME_PATH,
-    ...(await agentBrowserChromeCandidates()),
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser"
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate && await pathExists(candidate)) {
-      return candidate;
-    }
-  }
-
-  for (const command of ["google-chrome-stable", "google-chrome", "chromium", "chromium-browser"]) {
-    try {
-      const { stdout } = await execFileAsync("which", [command]);
-      const resolved = stdout.trim();
-      if (resolved) {
-        return resolved;
-      }
-    } catch {
-      // Try the next executable name.
-    }
-  }
-
-  throw new Error("Chromium executable not found for PDF export.");
-}
-
-async function agentBrowserChromeCandidates() {
-  const root = path.join(homedir(), ".agent-browser", "browsers");
-  try {
-    const entries = await readdir(root, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith("chrome-"))
-      .map((entry) => path.join(root, entry.name, "chrome"))
-      .sort()
-      .reverse();
-  } catch {
-    return [];
-  }
-}
-
-async function pathExists(filePath: string) {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function sanitizeCss(value: string) {

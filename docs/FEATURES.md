@@ -106,15 +106,15 @@ Save and share investigation queries used during analysis.
 - **MITRE ATT&CK tagging** — map queries to the techniques they detect
 - **Ownership** tracking
 
-## Reports And PDF Export
+## Reports And HTML Export
 
-Reports turn investigation records into stakeholder-ready markdown and PDF output.
+Reports turn investigation records into stakeholder-ready markdown and themed HTML output.
 
 - **Daily and incident report types**
 - **Markdown report authoring** with incident context
 - **Template library** scoped to incidents
-- **PDF template workspace** for report layout control
-- **PDF export** from saved reports
+- **HTML template workspace** for report layout control
+- **HTML export** from saved reports
 - **Optional LLM-assisted report generation** through configured user/provider settings
 - **Per-user LLM settings** encrypted with `FORENOTES_LLM_SECRET_KEY`
 

@@ -279,7 +279,6 @@ body files return `503` rather than an empty report.
 | `GET` | `/api/incidents/:incidentId/reports/:reportId` | Read a report |
 | `PATCH` | `/api/incidents/:incidentId/reports/:reportId` | Update a report |
 | `DELETE` | `/api/incidents/:incidentId/reports/:reportId` | Delete a report |
-| `POST` | `/api/incidents/:incidentId/reports/:reportId/export-pdf` | Export a report to PDF |
 
 User LLM API keys are encrypted with `FORENOTES_LLM_SECRET_KEY`.
 

@@ -1,6 +1,6 @@
 # Forenotes
 
-Forenotes is a DFIR case notebook for incident records, findings, timelines, tasks, hunt queries, notes, notifications, and report/PDF generation.
+Forenotes is a DFIR case notebook for incident records, findings, timelines, tasks, hunt queries, notes, notifications, and AI-assisted report generation with HTML export.
 
 Forenotes can also expose an optional, stateless MCP investigation interface for authorized agents. It is disabled by default; see [the MCP guide](docs/MCP.md) for secure setup and client configuration.
 
@@ -14,7 +14,7 @@ For a fresh Docker host, install Forenotes with generated secrets and a generate
 curl -fsSL https://raw.githubusercontent.com/ngynduc/forenotes/main/install.sh | bash
 ```
 
-The production stack runs the app, PostgreSQL, and a separate report LLM service. Configure provider credentials in user settings or `LLM_*` environment variables to enable AI reports.
+The production stack runs the app and PostgreSQL; the app calls the LLM provider directly. Configure provider credentials in user settings or `LLM_*` environment variables to enable AI reports.
 
 Open `http://localhost:3000`. The installer prints the admin password and saves it in `forenotes-prod/.bootstrap-admin-password`. For a non-default directory or port:
 

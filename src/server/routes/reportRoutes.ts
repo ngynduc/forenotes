@@ -15,7 +15,6 @@ import {
   duplicatePdfTemplate,
   duplicateReportTemplate,
   exportReportHtml,
-  exportReportPdf,
   generateReportPreview,
   getMaskedLlmSettings,
   getReport,
@@ -334,21 +333,6 @@ export function createReportRoutes(database: Database) {
       response.setHeader("Content-Type", "text/html; charset=utf-8");
       response.setHeader("Content-Disposition", `attachment; filename="${exported.fileName}"`);
       response.status(200).send(exported.html);
-    })
-  );
-
-  router.post(
-    "/incidents/:incidentId/reports/:reportId/export/pdf",
-    asyncHandler(async (request, response) => {
-      const user = await getAuthenticatedUser(request, database);
-      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
-      const reportId = getRequiredParam(request.params.reportId, "reportId");
-      const payload = exportReportPdfSchema.parse(request.body);
-      const exported = await exportReportPdf(database, user, incidentId, reportId, payload);
-      response.setHeader("Content-Type", "application/pdf");
-      response.setHeader("Content-Disposition", `attachment; filename="${exported.fileName}"`);
-      response.setHeader("Content-Length", String(exported.pdf.length));
-      response.status(200).send(exported.pdf);
     })
   );
 

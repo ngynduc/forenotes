@@ -140,9 +140,6 @@ jobs:
           - image: ngynduc/forenotes
             context: .
             dockerfile: ./Dockerfile
-          - image: ngynduc/forenotes-report-llm
-            context: ./services/report-llm-service
-            dockerfile: ./services/report-llm-service/Dockerfile
     runs-on: ubuntu-latest
 
     steps:
