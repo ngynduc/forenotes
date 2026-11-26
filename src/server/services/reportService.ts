@@ -1809,7 +1809,7 @@ async function generateLlmMarkdown(database: Database, user: AuthenticatedUser, 
   }
 }
 
-async function resolveLlmConfig(
+export async function resolveLlmConfig(
   database: Database,
   userId: string,
   options: { tolerateInvalidApiKey?: boolean } = {}
@@ -1899,7 +1899,7 @@ function isEncryptedSecretShape(encrypted: string) {
   return Buffer.from(ivRaw, "base64").length === 12 && Buffer.from(tagRaw, "base64").length === 16;
 }
 
-function toLiteLlmServiceConfig(config: LlmProviderConfig): LiteLlmServiceConfig {
+export function toLiteLlmServiceConfig(config: LlmProviderConfig): LiteLlmServiceConfig {
   return {
     serviceUrl: config.serviceUrl,
     provider: config.provider,

@@ -39,6 +39,8 @@ import {
   duplicateReportTemplateSchema,
   exportReportPdfSchema,
   generateReportSchema,
+  reportChatPromptSchema,
+  reportChatSchema,
   previewPdfTemplateSchema,
   reportContextQuerySchema,
   updatePdfTemplateSchema,
@@ -46,6 +48,7 @@ import {
   updateReportTemplateSchema,
   upsertLlmSettingsSchema
 } from "../schemas/schemas.js";
+import { getReportChatPrompt, runReportChat, saveReportChatPrompt } from "../services/reportChatService.js";
 import { getRequiredParam } from "./params.js";
 
 export function createReportRoutes(database: Database) {
@@ -211,6 +214,37 @@ export function createReportRoutes(database: Database) {
       const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
       const payload = generateReportSchema.parse(request.body);
       response.json(await generateReportPreview(database, user, incidentId, payload));
+    })
+  );
+
+  router.get(
+    "/me/report-chat-prompt",
+    asyncHandler(async (request, response) => {
+      response.json(await getReportChatPrompt(database, await getAuthenticatedUser(request, database)));
+    })
+  );
+
+  router.put(
+    "/me/report-chat-prompt",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      response.json(await saveReportChatPrompt(database, user, reportChatPromptSchema.parse(request.body).prompt));
+    })
+  );
+
+  router.post(
+    "/incidents/:incidentId/reports/chat",
+    asyncHandler(async (request, response) => {
+      const user = await getAuthenticatedUser(request, database);
+      const incidentId = getRequiredParam(request.params.incidentId, "incidentId");
+      const { messages } = reportChatSchema.parse(request.body);
+      const controller = new AbortController();
+      response.on("close", () => controller.abort());
+      const send = (event: unknown) => { if (!response.writableEnded) response.write(`data: ${JSON.stringify(event)}\n\n`); };
+      await runReportChat(database, user, incidentId, messages, send, controller.signal, () => {
+        response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+      });
+      response.end();
     })
   );
 

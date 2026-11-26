@@ -5,24 +5,24 @@ import type { IncidentReport } from "@shared/reportTypes";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/Dialog";
-import { GenerateReportWorkspace } from "@/components/reports/GenerateReportWorkspace";
-import { MarkdownTemplateWorkspace } from "@/components/reports/MarkdownTemplateWorkspace";
+import { ReportChatPromptWorkspace } from "@/components/reports/ReportChatPromptWorkspace";
+import { ReportChatWorkspace } from "@/components/reports/ReportChatWorkspace";
+import { ReportEditorWorkspace } from "@/components/reports/ReportEditorWorkspace";
 import { PdfTemplateWorkspace } from "@/components/reports/PdfTemplateWorkspace";
 import { SavedReportsWorkspace } from "@/components/reports/SavedReportsWorkspace";
-import { TemplateGuideWorkspace } from "@/components/reports/TemplateGuideWorkspace";
 import { ScopeGate } from "@/components/shared/ScopeGate";
 import { useExportReportHtml, useLlmSettings, usePdfTemplates, useReportTemplates, useReports } from "@/hooks/use-entities";
 import { useTimezone } from "@/providers/TimezoneProvider";
 import { useScopeStore } from "@/stores/scope-store";
 
-type ReportsTab = "generate" | "saved" | "markdownTemplates" | "htmlTemplates" | "templateGuide";
+type ReportsTab = "chat" | "chatPrompt" | "editor" | "saved" | "htmlTemplates";
 
 const REPORT_TABS: Array<{ value: ReportsTab; label: string }> = [
-  { value: "generate", label: "Generate Report" },
+  { value: "chat", label: "AI Report Chat" },
+  { value: "chatPrompt", label: "Chat Prompt" },
+  { value: "editor", label: "Report Editor" },
   { value: "saved", label: "Saved Reports" },
-  { value: "markdownTemplates", label: "Markdown Templates" },
   { value: "htmlTemplates", label: "HTML Templates" },
-  { value: "templateGuide", label: "Template Guide" },
 ];
 
 function messageFromError(error: unknown, fallback: string) {
@@ -37,7 +37,7 @@ export default function ReportsPage() {
   const llmQuery = useLlmSettings();
   const pdfTemplatesQuery = usePdfTemplates();
   const exportHtml = useExportReportHtml();
-  const [activeTab, setActiveTab] = useState<ReportsTab>("generate");
+  const [activeTab, setActiveTab] = useState<ReportsTab>("chat");
   const [openedReportRequest, setOpenedReportRequest] = useState<{ report: IncidentReport; token: number } | null>(null);
   const [exportTarget, setExportTarget] = useState<IncidentReport | null>(null);
   const [exportTemplateId, setExportTemplateId] = useState("");
@@ -54,7 +54,7 @@ export default function ReportsPage() {
 
   function openSavedReport(report: IncidentReport) {
     setOpenedReportRequest({ report, token: Date.now() });
-    setActiveTab("generate");
+    setActiveTab("editor");
   }
 
   function requestExport(report: IncidentReport) {
@@ -79,7 +79,7 @@ export default function ReportsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">Reports</h2>
-          <p className="text-sm text-[var(--color-text-muted)]">Generate reports, manage templates, and export HTML reports.</p>
+          <p className="text-sm text-[var(--color-text-muted)]">Chat with the AI to draft reports, edit them, and export HTML.</p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2" data-report-toolbar>
           <span className="min-w-0 max-w-full truncate rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
@@ -109,12 +109,16 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {activeTab === "generate" ? (
-        <GenerateReportWorkspace
+      {/* Stays mounted (just hidden) so switching tabs keeps the conversation and any running stream. */}
+      <div hidden={activeTab !== "chat"}>
+        <ReportChatWorkspace incidentId={incidentId} llmConfigured={Boolean(llmStatus?.configured)} onOpenReport={openSavedReport} />
+      </div>
+
+      {activeTab === "chatPrompt" ? <ReportChatPromptWorkspace /> : null}
+
+      {activeTab === "editor" ? (
+        <ReportEditorWorkspace
           incidentId={incidentId}
-          timezone={timezone}
-          templates={templates}
-          llmStatus={llmStatus}
           pdfTemplates={pdfTemplates}
           openedReportRequest={openedReportRequest}
           onRequestExport={requestExport}
@@ -125,11 +129,7 @@ export default function ReportsPage() {
         <SavedReportsWorkspace reports={reports} templates={templates} onOpenReport={openSavedReport} onRequestExport={requestExport} />
       ) : null}
 
-      {activeTab === "markdownTemplates" ? <MarkdownTemplateWorkspace incidentId={incidentId} templates={templates} /> : null}
-
       {activeTab === "htmlTemplates" ? <PdfTemplateWorkspace /> : null}
-
-      {activeTab === "templateGuide" ? <TemplateGuideWorkspace /> : null}
 
       <Dialog open={Boolean(exportTarget)} onOpenChange={(open) => { if (!open) setExportTarget(null); }}>
         <DialogContent>

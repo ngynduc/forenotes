@@ -56,7 +56,8 @@ export function createApp(
 
   const requestDatabase = createRequestScopedDatabase(database);
   app.use(async (request, response, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    // The chat stream is read-only and long-lived; holding a transaction open for it would pin a connection.
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method) || request.path.endsWith("/reports/chat")) {
       next();
       return;
     }

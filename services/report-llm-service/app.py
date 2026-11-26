@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import litellm
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 
@@ -169,15 +170,81 @@ def validate_custom_headers(headers: dict[str, str]) -> dict[str, str]:
     return safe_headers
 
 
-@app.post("/generate-report")
-def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
+class LlmCallConfig(BaseModel):
+    provider: str = "openai"
+    model: str
+    systemPrompt: str | None = None
+    apiKey: str | None = None
+    apiBase: str | None = None
+    customHeaders: dict[str, str] = Field(default_factory=dict)
+
+
+class ChatStreamRequest(LlmCallConfig):
+    messages: list[dict[str, Any]]
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+
+
+def resolve_call(req: Any) -> dict[str, Any]:
     if req.apiBase and not req.apiKey:
         raise HTTPException(status_code=400, detail="A custom LLM endpoint requires a provider API key.")
     api_key = req.apiKey or os.getenv("LLM_API_KEY")
     api_base = req.apiBase or os.getenv("LLM_API_ENDPOINT")
-    system_prompt = (req.systemPrompt or os.getenv("LLM_SYSTEM_PROMPT") or SYSTEM_PROMPT).strip()
-    model = validate_provider_config(req.provider, req.model, api_key, api_base)
-    custom_headers = validate_custom_headers(req.customHeaders or {})
+    return {
+        "system_prompt": (req.systemPrompt or os.getenv("LLM_SYSTEM_PROMPT") or SYSTEM_PROMPT).strip(),
+        "model": validate_provider_config(req.provider, req.model, api_key, api_base),
+        "api_key": api_key,
+        "api_base": api_base,
+        "extra_headers": validate_custom_headers(req.customHeaders or {}) or None,
+    }
+
+
+def sse(event: dict[str, Any]) -> str:
+    return f"data: {json.dumps(event, separators=(',', ':'))}\n\n"
+
+
+@app.post("/chat-stream")
+def chat_stream(req: ChatStreamRequest) -> StreamingResponse:
+    call = resolve_call(req)  # validate before the stream starts so bad config is a normal HTTP error
+
+    def events():
+        try:
+            stream = litellm.completion(
+                model=call["model"],
+                api_key=call["api_key"],
+                api_base=call["api_base"],
+                extra_headers=call["extra_headers"],
+                messages=[{"role": "system", "content": call["system_prompt"]}, *req.messages],
+                tools=req.tools or None,
+                stream=True,
+            )
+            calls: dict[int, dict[str, str]] = {}
+            finish_reason = None
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                text = getattr(choice.delta, "content", None)
+                if text:
+                    yield sse({"type": "text", "delta": text})
+                for tool_call in getattr(choice.delta, "tool_calls", None) or []:
+                    slot = calls.setdefault(tool_call.index or 0, {"id": "", "name": "", "arguments": ""})
+                    if tool_call.id:
+                        slot["id"] = tool_call.id
+                    if tool_call.function:
+                        # shortcut: assumes the name arrives whole in one chunk, true for OpenAI-style providers.
+                        slot["name"] = slot["name"] or (tool_call.function.name or "")
+                        slot["arguments"] += tool_call.function.arguments or ""
+                finish_reason = choice.finish_reason or finish_reason
+            yield sse({"type": "done", "finishReason": finish_reason, "toolCalls": [calls[i] for i in sorted(calls)]})
+        except Exception as exc:
+            yield sse({"type": "error", "message": f"LLM provider generation failed: {exc}"})
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/generate-report")
+def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
+    call = resolve_call(req)
 
     try:
         user_payload = {
@@ -187,12 +254,12 @@ def generate_report(req: GenerateReportRequest) -> dict[str, Any]:
             "incidentContext": req.incidentContext,
         }
         response = litellm.completion(
-            model=model,
-            api_key=api_key,
-            api_base=api_base,
-            extra_headers=custom_headers or None,
+            model=call["model"],
+            api_key=call["api_key"],
+            api_base=call["api_base"],
+            extra_headers=call["extra_headers"],
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": call["system_prompt"]},
                 {"role": "user", "content": json.dumps(user_payload, separators=(",", ":"))},
             ],
         )

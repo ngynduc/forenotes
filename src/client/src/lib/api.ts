@@ -414,6 +414,12 @@ export interface GenerateReportInput {
   useLlm?: boolean;
 }
 
+export type ReportChatEvent =
+  | { type: "text"; delta: string }
+  | { type: "tool"; id: string; name: string; args: unknown; status: "done" | "error"; summary: string }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
 export interface CreateReportInput {
   templateId?: string;
   title: string;
@@ -1521,6 +1527,47 @@ class ApiClient {
 
   generateReport = async (incidentId: string, data: GenerateReportInput) =>
     this.request<{ preview: CreateReportInput }>(`/incidents/${incidentId}/reports/generate`, "POST", data);
+
+  getReportChatPrompt = () => this.request<{ prompt: string; builtIn: string }>("/me/report-chat-prompt");
+
+  saveReportChatPrompt = (prompt: string) =>
+    this.request<{ prompt: string; builtIn: string }>("/me/report-chat-prompt", "PUT", { prompt });
+
+  getReportContext = async (incidentId: string) =>
+    (await this.request<{ context: ReportContext }>(`/incidents/${incidentId}/reports/context?type=incident`)).context;
+
+  /** Streams SSE events from the report chat agent; resolves when the stream ends. */
+  streamReportChat = async (
+    incidentId: string,
+    messages: Array<{ role: "user" | "assistant"; content: string }>,
+    onEvent: (event: ReportChatEvent) => void,
+    signal: AbortSignal
+  ) => {
+    const res = await fetchWithSession(`${BASE}/incidents/${incidentId}/reports/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...this.headers() },
+      credentials: "include",
+      body: JSON.stringify({ messages }),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      const payload = await res.json().catch(() => ({}));
+      throw new Error(payload?.error ?? "Report chat failed");
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const line = buffer.slice(0, end).replace(/^data: /, "");
+        buffer = buffer.slice(end + 2);
+        if (line) onEvent(JSON.parse(line) as ReportChatEvent);
+      }
+    }
+  };
 
   listReports = async (incidentId: string) => {
     const payload = await this.request<{ reports: RawIncidentReport[] }>(`/incidents/${incidentId}/reports`);
