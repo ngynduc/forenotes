@@ -6,6 +6,7 @@ import {
   completeInvestigationRun,
   createObservation,
   createHypothesis,
+  listInvestigationRuns,
   registerEvidence,
   startInvestigationRun,
   updateEvidence
@@ -66,6 +67,17 @@ describe("investigation provenance", () => {
     await expect(registerEvidence(pool, user, {
       runId: run.id, evidenceType: "log", title: "Late evidence"
     })).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("filters runs by incident through their evidence", async () => {
+    const withEvidence = await startInvestigationRun(pool, user, { caseId, objective: "Has incident evidence" });
+    await registerEvidence(pool, user, { runId: withEvidence.id, incidentId, evidenceType: "log", title: "Scoped log" });
+    await startInvestigationRun(pool, user, { caseId, objective: "No incident records" });
+
+    const all = await listInvestigationRuns(pool, user, { caseId });
+    const scoped = await listInvestigationRuns(pool, user, { caseId, incidentId });
+    expect(all.items).toHaveLength(2);
+    expect(scoped.items.map((run) => run.id)).toEqual([withEvidence.id]);
   });
 
   it("rejects observations without evidence support", async () => {
